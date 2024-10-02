@@ -1,1 +1,6 @@
 # Add your Python dependencies here
+alpaca-trade-api
+pandas
+numpy
+ta
+schedule
