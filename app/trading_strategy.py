@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from ta import trend, volatility
 import logging
+from alpaca_client import get_latest_price
 
 def get_indicators(api, symbol, timeframe='5Sec', limit=100):
     logging.info(f"Getting indicators for {symbol}")
@@ -62,10 +63,15 @@ class TradingState:
         self.in_position = False
         self.sold_in_current_run = False
 
-def execute_strategy(api, symbol, current_position, minimum_amount, latest_price, trading_state):
+def execute_strategy(api, symbol, current_position, minimum_amount, trading_state):
     df = get_indicators(api, symbol)
     signal = generate_signals(df)
     
+    latest_price = get_latest_price(symbol)
+    if latest_price is None:
+        logging.error("Unable to get latest price. Skipping trade.")
+        return None, 0
+
     if signal == 'buy':
         if not trading_state.in_position:
             # Buy the minimum amount
