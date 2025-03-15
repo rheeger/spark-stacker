@@ -1,0 +1,45 @@
+{
+  "log_level": "INFO",
+  "webhook_enabled": false,
+  "webhook_port": 8080,
+  "webhook_host": "0.0.0.0",
+  "max_parallel_trades": 1,
+  "polling_interval": 60,
+  "dry_run": true,
+  "exchanges": [
+    {
+      "name": "hyperliquid",
+      "wallet_address": "",
+      "private_key": "",
+      "testnet": true,
+      "use_as_main": true,
+      "use_as_hedge": true
+    }
+  ],
+  "strategies": [
+    {
+      "name": "rsi_eth_strategy",
+      "market": "ETH",
+      "enabled": true,
+      "main_leverage": 5.0,
+      "hedge_leverage": 2.0,
+      "hedge_ratio": 0.2,
+      "stop_loss_pct": 10.0,
+      "take_profit_pct": 20.0,
+      "max_position_size": 100.0
+    }
+  ],
+  "indicators": [
+    {
+      "name": "eth_rsi",
+      "type": "rsi",
+      "enabled": true,
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    }
+  ]
+} 

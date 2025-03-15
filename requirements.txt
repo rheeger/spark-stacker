@@ -1,6 +1,44 @@
-# Add your Python dependencies here
-alpaca-trade-api
-pandas
-numpy
-ta
-schedule
+# Core dependencies
+pandas==2.1.4
+numpy==1.26.0
+flask==2.3.3
+waitress==2.1.2
+
+# Exchange interaction
+requests==2.31.0
+websocket-client==1.6.3
+eth-account==0.10.0
+web3==6.10.0
+
+# For hyperliquid connector
+hyperliquid-python-sdk==0.10.1
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.3.0
+PyYAML==6.0.1
+
+# Technical analysis
+# ta-lib is not included here as it requires separate binary installation
+# Instead, we use pandas-ta which is a pure Python implementation
+pandas-ta==0.3.14b0
+
+# Visualization and monitoring (optional)
+matplotlib==3.7.3
+seaborn==0.12.2
+
+# For progress bars in CLI
+tqdm==4.66.1
+yaspin==2.3.0
+
+# Testing dependencies
+pytest==7.4.2
+pytest-mock==3.11.1
+pytest-cov==4.1.0
+coverage==7.3.1
+
+# Development tools
+watchdog==3.0.0  # For file watching
+black==23.9.1    # Code formatting
+pylint==2.17.5   # Linting
+mypy==1.5.1      # Type checking
