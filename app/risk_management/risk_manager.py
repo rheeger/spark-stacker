@@ -211,6 +211,12 @@ class RiskManager:
             ticker = exchange.get_ticker(symbol)
             price = ticker.get('last_price', 0.0)
             
+            # Ensure price is valid
+            if price <= 0:
+                logger.warning(f"Invalid price for {symbol}: {price}, using dummy price for validation")
+                # Use a placeholder price to avoid division by zero
+                price = 1.0
+            
             # Fetch market info for min/max position constraints
             markets = exchange.get_markets()
             market_info = next((m for m in markets if m.get('symbol') == symbol), None)
@@ -222,6 +228,9 @@ class RiskManager:
                 
                 if base_units < min_size:
                     return False, f"Position size {base_units} {symbol} is below minimum {min_size}"
+        except ZeroDivisionError:
+            logger.warning(f"Division by zero error validating position size for {symbol}, using placeholder value")
+            # Skip this validation step but continue
         except Exception as e:
             logger.warning(f"Failed to validate position size against market constraints: {e}")
             # Continue validation, this is not critical

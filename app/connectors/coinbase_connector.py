@@ -210,113 +210,96 @@ class CoinbaseConnector(BaseConnector):
     
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
         """
-        Get current ticker information for a specific market.
-        Uses /api/v3/brokerage/products/{product_id}/ticker endpoint.
+        Get ticker data for a symbol.
         
         Args:
-            symbol: The market symbol (e.g., 'ETH')
+            symbol: Market symbol (e.g., 'BTC-USD')
             
         Returns:
-            Dict[str, Any]: Ticker information including price, volume, etc.
+            Dictionary with ticker data
         """
         try:
-            # Special case for USDT-USD as it might not be available on Coinbase
-            if symbol == "USDT" and self.use_sandbox:
-                logger.info(f"Using fixed price for {symbol} in sandbox mode")
-                return {
-                    "symbol": symbol,
-                    "price": 1.0,     # USDT is a stablecoin, so approximately 1 USD
-                    "bid": 0.999,     # Slightly below 1
-                    "ask": 1.001,     # Slightly above 1
-                    "volume": 1000.0,
-                    "timestamp": int(time.time() * 1000)
-                }
-                
             if not self.client:
                 self.connect()
-                
+            
+            # Ensure symbol format is correct (BTC-USD)
+            if '/' in symbol:
+                symbol = symbol.replace('/', '-')
+            
+            # Try to find the product
             product_id = self._get_product_id(symbol)
-            logger.debug(f"Fetching ticker for {symbol} using product ID {product_id}")
             
-            # Get the product book for bid/ask
-            product_book = self.client.get_product_book(product_id=product_id)
+            if not product_id:
+                logger.warning(f"Product ID not found for {symbol}, using symbol directly")
+                product_id = symbol
             
-            # Log the response structure for debugging
-            self._debug_response(product_book, f"ProductBook for {product_id}")
+            # Get ticker data
+            ticker = self.client.get_product(product_id=product_id)
             
-            # Get the market trades for volume information
-            trades = self.client.get_market_trades(product_id=product_id, limit=1)
+            # For some reason, the get_product method may not return price data
+            # so we need to make a separate call to get the latest price
+            price_data = None
+            try:
+                # Try to get the latest candle for price data
+                candles = self.client.get_candles(
+                    product_id=product_id,
+                    granularity="ONE_MINUTE", 
+                    start=None,
+                    end=None,
+                    limit=1
+                )
+                
+                if candles and len(candles) > 0:
+                    # Latest candle should have closing price
+                    price_data = candles[0].close
+                    logger.info(f"Got price data from candles for {symbol}: {price_data}")
+            except Exception as e:
+                logger.warning(f"Could not get candle data for {symbol}: {e}")
             
-            if not product_book:
-                raise ValueError(f"No price data available for {symbol}")
+            # As a fallback, try to get product ticker data
+            if not price_data:
+                try:
+                    ticker_data = self.client.get_product_ticker(product_id=product_id)
+                    if ticker_data:
+                        price_data = float(ticker_data.price)
+                        logger.info(f"Got price data from ticker for {symbol}: {price_data}")
+                except Exception as e:
+                    logger.warning(f"Could not get ticker data for {symbol}: {e}")
             
-            # Extract bid and ask from the response
-            bid = 0.0
-            ask = 0.0
-            
-            # Handle different response structures
-            if hasattr(product_book, 'bids') and product_book.bids:
-                bid = float(product_book.bids[0].price) if product_book.bids else 0.0
-            elif hasattr(product_book, 'pricebook') and hasattr(product_book.pricebook, 'bids') and product_book.pricebook.bids:
-                bid = float(product_book.pricebook.bids[0].price) if product_book.pricebook.bids else 0.0
-            
-            if hasattr(product_book, 'asks') and product_book.asks:
-                ask = float(product_book.asks[0].price) if product_book.asks else 0.0
-            elif hasattr(product_book, 'pricebook') and hasattr(product_book.pricebook, 'asks') and product_book.pricebook.asks:
-                ask = float(product_book.pricebook.asks[0].price) if product_book.pricebook.asks else 0.0
-            
-            # Calculate mid price if we have both bid and ask
-            price = (bid + ask) / 2 if bid > 0 and ask > 0 else (bid or ask or 0.0)
-            
-            # Get volume from trades if available
-            volume = 0.0
-            if trades and hasattr(trades, 'trades') and trades.trades:
-                if hasattr(trades.trades[0], 'size'):
-                    volume = float(trades.trades[0].size)
-            
-            logger.debug(f"Ticker for {symbol}: price={price}, bid={bid}, ask={ask}")
-            
-            if price <= 0.0:
-                # For stablecoins like USDT/USDC, use a default value of 1.0 if no price available
-                if symbol in ["USDT", "USDC"]:
-                    price = 1.0
-                    bid = 0.999
-                    ask = 1.001
-                    logger.info(f"Using default stablecoin price for {symbol}: {price}")
+            # If still no price, use a default for stablecoins
+            if not price_data and ('USDC' in symbol or 'USDT' in symbol or 'PYUSD' in symbol):
+                price_data = 1.0
+                logger.warning(f"Using default price of 1.0 for stablecoin {symbol}")
             
             return {
                 "symbol": symbol,
-                "price": price,
-                "bid": bid,
-                "ask": ask,
-                "volume": volume,
-                "timestamp": int(time.time() * 1000)  # Current timestamp in milliseconds
+                "last_price": price_data or 0.0,
+                "bid": getattr(ticker, "bid", 0.0),
+                "ask": getattr(ticker, "ask", 0.0),
+                "volume": getattr(ticker, "volume", 0.0),
+                "timestamp": int(time.time() * 1000)
             }
             
         except Exception as e:
-            logger.error(f"Error fetching ticker for {symbol} from Coinbase: {e}")
+            logger.error(f"Error fetching ticker for {symbol}: {e}")
             
-            # Special handling for stablecoins
-            if symbol in ["USDT", "USDC"]:
-                logger.info(f"Using default price for stablecoin {symbol}")
+            # For stablecoins, use a default price of 1.0
+            if 'USDC' in symbol or 'USDT' in symbol or 'PYUSD' in symbol:
                 return {
                     "symbol": symbol,
-                    "price": 1.0,     # Stablecoins are pegged to 1 USD
-                    "bid": 0.999,
-                    "ask": 1.001,
-                    "volume": 1000.0,
+                    "last_price": 1.0,
+                    "bid": 1.0,
+                    "ask": 1.0,
+                    "volume": 0.0,
                     "timestamp": int(time.time() * 1000)
                 }
             
-            # Return a default response for other tokens
-            default_price = 2000.0 if symbol == "ETH" else (45000.0 if symbol == "BTC" else 100.0)
-            
             return {
                 "symbol": symbol,
-                "price": default_price,
-                "bid": default_price * 0.999,  # Slightly lower than price
-                "ask": default_price * 1.001,  # Slightly higher than price
-                "volume": 1000.0,
+                "last_price": 0.0,
+                "bid": 0.0,
+                "ask": 0.0,
+                "volume": 0.0,
                 "timestamp": int(time.time() * 1000)
             }
     
@@ -546,38 +529,85 @@ class CoinbaseConnector(BaseConnector):
                     )
             else:  # LIMIT order
                 if price is None:
-                    raise ValueError("Price is required for limit orders")
+                    logger.error("Price is required for LIMIT orders but was not provided")
+                    return {"error": "Price is required for LIMIT orders"}
+                
+                # Ensure price is a valid float
+                try:
+                    price_float = float(price)
+                    if price_float <= 0:
+                        logger.error(f"Invalid price for LIMIT order: {price_float}")
+                        return {"error": f"Invalid price for LIMIT order: {price_float}"}
                     
-                if side == OrderSide.BUY:
-                    response = self.client.limit_order_buy(
-                        client_order_id=client_order_id,
-                        product_id=product_id,
-                        base_size=str(amount),
-                        limit_price=str(price)
-                    )
-                else:
-                    response = self.client.limit_order_sell(
-                        client_order_id=client_order_id,
-                        product_id=product_id,
-                        base_size=str(amount),
-                        limit_price=str(price)
-                    )
+                    # Format price with proper precision
+                    price_str = str(price_float)
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Invalid price format: {price}")
+                    return {"error": f"Invalid price format: {price}"}
+                    
+                try:
+                    if side == OrderSide.BUY:
+                        response = self.client.limit_order_buy(
+                            client_order_id=client_order_id,
+                            product_id=product_id,
+                            base_size=str(amount),
+                            limit_price=price_str
+                        )
+                    else:
+                        response = self.client.limit_order_sell(
+                            client_order_id=client_order_id,
+                            product_id=product_id,
+                            base_size=str(amount),
+                            limit_price=price_str
+                        )
+                except AttributeError:
+                    # If limit_order_buy/sell don't exist, try to use create_order with limit type
+                    try:
+                        order_config = {
+                            'client_order_id': client_order_id,
+                            'product_id': product_id,
+                            'side': cb_side,
+                            'order_configuration': {
+                                'limit_limit_gtc': {
+                                    'base_size': str(amount),
+                                    'limit_price': price_str,
+                                    'post_only': False
+                                }
+                            }
+                        }
+                        logger.info(f"Placing limit order with config: {order_config}")
+                        response = self.client.create_order(**order_config)
+                    except Exception as create_order_error:
+                        logger.error(f"Error using fallback create_order for LIMIT: {str(create_order_error)}")
+                        return {"error": f"Error placing LIMIT order via create_order: {str(create_order_error)}"}
+                except Exception as e:
+                    logger.error(f"Error placing LIMIT order: {str(e)}")
+                    return {"error": f"Error placing LIMIT order: {str(e)}"}
             
             if not response or not hasattr(response, 'success_response'):
-                raise ValueError("Invalid order response from Coinbase")
+                error_msg = "Invalid order response from Coinbase"
+                if hasattr(response, 'error_response'):
+                    error_msg = f"Coinbase API error: {response.error_response}"
+                logger.error(error_msg)
+                return {"error": error_msg}
             
             order_details = response.success_response
             
+            # Extract order_id from the response
+            order_id = None
+            if hasattr(order_details, 'order_id'):
+                order_id = order_details.order_id
+            
             return {
-                "order_id": order_details.order_id,
-                "client_order_id": order_details.client_order_id,
+                "order_id": order_id,
+                "client_order_id": getattr(order_details, 'client_order_id', None),
                 "symbol": symbol,
                 "side": side.value,
                 "type": order_type.value,
                 "amount": amount,
                 "price": price,
-                "status": self._map_order_status(order_details.status),
-                "timestamp": order_details.created_time
+                "status": self._map_order_status(getattr(order_details, 'status', 'open')),
+                "timestamp": getattr(order_details, 'created_time', int(time.time() * 1000))
             }
             
         except Exception as e:

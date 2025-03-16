@@ -24,11 +24,14 @@ class LivenessTestIndicator(BaseIndicator):
         Args:
             name: Indicator name
             params: Optional parameters:
-                symbol: The trading pair to use (default: "PYUSD/USDT")
+                symbol: The trading pair to use (default: "PYUSD-USD")
                 confidence: Signal confidence level (default: 0.7)
         """
         super().__init__(name, params)
-        self.symbol = self.params.get('symbol', 'PYUSD/USDT')
+        self.symbol = self.params.get('symbol', 'PYUSD-USD')
+        # Ensure symbol format is correct for Coinbase (PYUSD-USD)
+        if '/' in self.symbol:
+            self.symbol = self.symbol.replace('/', '-')
         self.confidence = self.params.get('confidence', 0.7)
         
         logger.info(f"Initialized LivenessTestIndicator: Using symbol {self.symbol}")
@@ -57,7 +60,11 @@ class LivenessTestIndicator(BaseIndicator):
         df['is_even_minute'] = is_even_minute
         
         # Get price from data if available
-        current_price = df['close'].iloc[-1] if 'close' in df.columns and len(df) > 0 else 0.0
+        current_price = df['close'].iloc[-1] if 'close' in df.columns and len(df) > 0 else 1.0
+        
+        # Ensure we have a valid price
+        if current_price <= 0:
+            current_price = 1.0
         
         # Log for debugging
         logger.info(f"LivenessTest calculation: Current minute is {current_minute} ({is_even_minute=}), symbol={self.symbol}, price={current_price}")
@@ -87,6 +94,11 @@ class LivenessTestIndicator(BaseIndicator):
         
         # Get current price from data
         current_price = data['close'].iloc[-1] if 'close' in data.columns and len(data) > 0 else 1.0
+        
+        # If this is PYUSD (stablecoin), always use 1.0 as the price
+        if 'PYUSD' in self.symbol:
+            logger.info(f"Using fixed price of 1.0 for PYUSD stablecoin")
+            current_price = 1.0
         
         # Generate appropriate signal based on even/odd minute
         if is_even_minute:
