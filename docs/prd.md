@@ -10,13 +10,16 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 
 - Support for **DEXs**:
   - **Primary Focus:** Synthetix Perps (Optimism/Base), Hyperliquid DEX (Layer-1 chain)
+  - **CEX Support:** Coinbase Exchange
   - **Future Expansion:** dYdX, GMX
 - Integration Methods:
   - **Synthetix:** Web3 for contract interaction with Perps V2/V3, Synthetix SDK
   - **Hyperliquid:** HTTP API authenticated with ECDSA signatures, Python SDK, WebSocket API
+  - **Coinbase:** REST and WebSocket APIs with HMAC authentication, Advanced Trade API for futures
 - Key Features by Exchange:
   - **Synthetix:** Deep liquidity pool, oracle-based pricing, up to 50× leverage
   - **Hyperliquid:** On-chain order book, ~100k orders/sec throughput, ~30+ crypto assets
+  - **Coinbase:** High liquidity, advanced order types, reliable infrastructure, futures markets
 
 ### 2. **Indicator Support & Trade Execution**
 

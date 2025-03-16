@@ -13,6 +13,7 @@ The system follows a modular architecture with clearly separated components for 
 - **Supported Exchanges:**
   - **Synthetix Perps (Optimism/Base)** - Smart contract-based DEX with deep liquidity
   - **Hyperliquid DEX** - High-performance on-chain orderbook exchange
+  - **Coinbase Exchange** - Major centralized exchange with robust API and high liquidity
 
 - **Integration Methods:**
   - **Synthetix:**
@@ -23,6 +24,11 @@ The system follows a modular architecture with clearly separated components for 
     - Hyperliquid Python SDK for API access
     - HTTP API with ECDSA signature authentication
     - WebSocket API for real-time data
+  - **Coinbase:**
+    - Official Coinbase Pro Python client
+    - REST API with HMAC authentication
+    - WebSocket API for real-time market data
+    - FIX API for high-throughput trading (optional)
 
 - **Exchange Adaptor Interface:**
   - Generic methods (place_order, get_market_data, get_position)
@@ -145,6 +151,24 @@ The system follows a modular architecture with clearly separated components for 
   - REST API endpoints for order placement
   - WebSocket connections for real-time order status
   - Market data streaming for order book depth
+
+#### Coinbase Integration
+
+- **API Authentication:**
+  - HMAC-SHA256 based request signing
+  - API key, secret, and passphrase management
+  - Rate limit management and backoff strategies
+
+- **Order Execution:**
+  - REST API endpoints for order execution and management
+  - WebSocket feeds for real-time market data
+  - Support for market, limit, and stop orders
+  - Position management via the Advanced Trade API
+
+- **Data Integration:**
+  - Market data polling for indicators
+  - Candle data retrieval for technical analysis
+  - Account balance and position monitoring
 
 ### Hedging Implementation
 

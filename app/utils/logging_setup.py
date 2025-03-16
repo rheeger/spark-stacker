@@ -138,6 +138,15 @@ def setup_logging(
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("web3").setLevel(logging.WARNING)
+    logging.getLogger("coinbase").setLevel(logging.WARNING)
+    logging.getLogger("websocket").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("pytz").setLevel(logging.WARNING)
+    # Set internal loggers to a higher level if not in debug mode
+    if log_level > logging.DEBUG:
+        # Reduce connector logs unless we're in debug mode
+        logging.getLogger("app.connectors").setLevel(logging.INFO)
     
     logging.info(f"Logging initialized at level {logging.getLevelName(log_level)}")
     if log_to_file:

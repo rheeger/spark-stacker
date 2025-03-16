@@ -5,6 +5,7 @@ import time
 from typing import Dict, Any, Optional, Callable, List
 from flask import Flask, request, jsonify
 from waitress import serve
+from waitress.server import create_server
 
 from app.indicators.base_indicator import Signal, SignalDirection
 
@@ -40,8 +41,10 @@ class WebhookServer:
         self.auth_token = auth_token
         
         self.app = Flask(__name__)
+        self.server = None
         self.server_thread = None
         self.is_running = False
+        self.stop_event = threading.Event()
         
         # Register routes
         self.register_routes()
@@ -302,12 +305,15 @@ class WebhookServer:
         def run_server():
             logger.info(f"Starting webhook server on {self.host}:{self.port}")
             try:
-                serve(self.app, host=self.host, port=self.port)
+                self.server = create_server(self.app, host=self.host, port=self.port)
+                self.server.run()
             except Exception as e:
                 logger.error(f"Webhook server error: {e}")
                 self.is_running = False
+                self.stop_event.set()
         
         try:
+            self.stop_event.clear()
             self.server_thread = threading.Thread(target=run_server, daemon=True)
             self.server_thread.start()
             self.is_running = True
@@ -328,8 +334,24 @@ class WebhookServer:
             logger.warning("Webhook server is not running")
             return True
         
-        # Flask doesn't have a clean shutdown mechanism in this context
-        # We'll set the flag to indicate the server should be considered stopped
-        self.is_running = False
-        logger.info("Webhook server stopped")
-        return True 
+        try:
+            logger.info("Stopping webhook server...")
+            self.is_running = False
+            self.stop_event.set()
+            
+            # Close the server if it exists
+            if self.server:
+                self.server.close()
+            
+            # Wait for the server thread to finish
+            if self.server_thread and self.server_thread.is_alive():
+                self.server_thread.join(timeout=5)
+                if self.server_thread.is_alive():
+                    logger.warning("Webhook server thread did not stop gracefully")
+            
+            logger.info("Webhook server stopped")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error stopping webhook server: {e}")
+            return False 

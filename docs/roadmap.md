@@ -6,6 +6,7 @@
 
 ✅ Define system architecture and components.
 ✅ Research and document API specifications for exchanges (Synthetix, Hyperliquid).
+✅ Research and document API specifications for Coinbase Exchange.
 ✅ Outline indicator framework and Pine Script integration.
 ✅ Design risk management module structure.
 ✅ Finalize core product requirements and user workflows.
@@ -20,12 +21,14 @@
 ### References:
 - [Synthetix Perps Docs](https://docs.synthetix.io/perpetual-futures)
 - [Hyperliquid API Docs](https://hyperliquid.gitbook.io/hyperliquid-docs/)
+- [Coinbase API Documentation](https://docs.cloud.coinbase.com/advanced-trade-api/docs/welcome)
 
 ## **Phase 2: Core Development & Backtesting**
 
 ### Tasks:
 
 ✅ Implement exchange connectors (Hyperliquid, Synthetix pending).
+🟡 Implement Coinbase exchange connector.
 ✅ Develop order execution logic (market/limit orders, leverage handling).
 ✅ Implement technical indicators (RSI implemented, more pending).
 ✅ Integrate Pine Script support for user-defined strategies.
@@ -36,6 +39,7 @@
 ### Implementation Details:
 - ✅ Indicator Module Development with Pandas (RSI implemented)
 - ✅ Hedging Logic implementation with parameterized hedge ratios
+- 🟡 Coinbase Connector with API key authentication
 - 🔲 Backtesting Framework development for historical validation
 - 🔲 Historical Data Collection for accurate backtests
 - 🔲 Parameter Optimization based on backtesting results
@@ -45,6 +49,7 @@
 - [TA-Lib Documentation](https://ta-lib.org/function.html)
 - [Pandas-TA GitHub](https://github.com/twopirllc/pandas-ta)
 - [Synthetix Testnet (Optimistic Sepolia)](https://docs.synthetix.io/integrations/testnet)
+- [Coinbase Advanced Trade API](https://docs.cloud.coinbase.com/advanced-trade-api/reference)
 
 ## **Phase 3: Integration & Dry Run**
 
@@ -117,6 +122,7 @@
 | Core Architecture Implementation                  | ✅ Complete |
 | Indicator Framework & Initial Indicators          | ✅ Complete |
 | Connector Interface & Hyperliquid Implementation  | ✅ Complete |
+| Coinbase Connector Implementation                 | 🟡 In Progress |
 | Risk Management System                            | ✅ Complete |
 | Trading Engine with Hedging Support               | ✅ Complete |
 | Webhook Integration for TradingView               | ✅ Complete |

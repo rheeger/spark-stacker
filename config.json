@@ -1,17 +1,36 @@
 {
   "log_level": "INFO",
-  "webhook_enabled": false,
-  "webhook_port": 8080,
-  "webhook_host": "0.0.0.0",
+  "logging": {
+    "log_to_file": true,
+    "enable_console": true,
+    "connector_log_level": "WARNING",
+    "show_market_details": false,
+    "show_zero_balances": false
+  },
+  "webhook_enabled": true,
+  "webhook_port": 8000,
+  "webhook_host": "127.0.0.1",
   "max_parallel_trades": 1,
-  "polling_interval": 60,
+  "polling_interval": 30,
   "dry_run": true,
   "exchanges": [
     {
       "name": "hyperliquid",
-      "wallet_address": "",
-      "private_key": "",
-      "testnet": true,
+      "exchange_type": "hyperliquid",
+      "wallet_address": "${WALLET_ADDRESS}",
+      "private_key": "${PRIVATE_KEY}",
+      "testnet": "${HYPERLIQUID_TESTNET}",
+      "enabled": false,
+      "use_as_main": false,
+      "use_as_hedge": false
+    },
+    {
+      "name": "coinbase",
+      "exchange_type": "coinbase",
+      "api_key": "${COINBASE_API_KEY}",
+      "api_secret": "${COINBASE_API_SECRET}",
+      "use_sandbox": "${COINBASE_USE_SANDBOX}",
+      "enabled": true,
       "use_as_main": true,
       "use_as_hedge": true
     }
@@ -20,25 +39,34 @@
     {
       "name": "rsi_eth_strategy",
       "market": "ETH",
-      "enabled": true,
-      "main_leverage": 5.0,
-      "hedge_leverage": 2.0,
+      "enabled": false,
+      "main_leverage": 2.0,
+      "hedge_leverage": 1.0,
       "hedge_ratio": 0.2,
-      "stop_loss_pct": 10.0,
-      "take_profit_pct": 20.0,
-      "max_position_size": 100.0
+      "stop_loss_pct": 5.0,
+      "take_profit_pct": 10.0,
+      "max_position_size": 50.0
     }
   ],
   "indicators": [
     {
       "name": "eth_rsi",
       "type": "rsi",
-      "enabled": true,
+      "enabled": false,
       "parameters": {
         "period": 14,
         "overbought": 70,
         "oversold": 30,
         "signal_period": 1
+      }
+    },
+    {
+      "name": "LivenessTest",
+      "type": "liveness_test",
+      "enabled": true,
+      "parameters": {
+        "symbol": "PYUSD-USD",
+        "confidence": 0.8
       }
     }
   ]

@@ -208,8 +208,19 @@ class TradingEngine:
                 logger.warning(f"Neutral signal received, no action taken")
                 return False
             
-            # Execute the trade strategy
-            return self._execute_hedged_trade(symbol, main_side, hedge_side, signal.confidence)
+            # Extract price from signal parameters if available
+            price = signal.params.get('price')
+            if price:
+                logger.info(f"Using price from signal: {price}")
+            
+            # Execute the trade strategy with price from signal
+            return self._execute_hedged_trade(
+                symbol=symbol, 
+                main_side=main_side, 
+                hedge_side=hedge_side, 
+                confidence=signal.confidence,
+                price=price
+            )
         
         except Exception as e:
             logger.error(f"Error processing signal: {e}")
@@ -225,7 +236,8 @@ class TradingEngine:
         hedge_leverage: float = 5.0,
         hedge_ratio: float = 0.2,
         stop_loss_pct: float = 10.0,
-        take_profit_pct: float = 20.0
+        take_profit_pct: float = 20.0,
+        price: Optional[float] = None
     ) -> bool:
         """
         Execute a hedged trade with a main position and smaller opposite hedge.
@@ -240,6 +252,7 @@ class TradingEngine:
             hedge_ratio: Ratio of hedge notional to main notional (0-1)
             stop_loss_pct: Stop loss percentage
             take_profit_pct: Take profit percentage
+            price: Price for the trade (optional)
             
         Returns:
             bool: True if trade was executed, False otherwise
@@ -261,7 +274,8 @@ class TradingEngine:
                 confidence=confidence,
                 signal_side=main_side,
                 leverage=main_leverage,
-                stop_loss_pct=stop_loss_pct
+                stop_loss_pct=stop_loss_pct,
+                price=price
             )
             
             if main_size <= 0:
@@ -646,4 +660,138 @@ class TradingEngine:
         
         except Exception as e:
             logger.error(f"Error closing all positions: {e}")
-            return False 
+            return False
+    
+    def _generate_test_data(self, symbol: str, intervals: int = 60) -> pd.DataFrame:
+        """
+        Generate mock price data for testing indicators.
+        
+        Args:
+            symbol: Market symbol
+            intervals: Number of data points to generate
+            
+        Returns:
+            DataFrame with OHLCV data
+        """
+        import random
+        import numpy as np
+        
+        logger.info(f"Generating test data for {symbol} ({intervals} points)")
+        
+        # Get current price from exchange
+        try:
+            ticker = self.main_connector.get_ticker(symbol)
+            start_price = ticker.get("price") or ticker.get("last_price")
+            
+            if not start_price and hasattr(self.main_connector, "get_current_price"):
+                # Try alternative method if available
+                start_price = self.main_connector.get_current_price(symbol)
+            
+            # Fallback to mock price if needed
+            if not start_price:
+                start_price = 2000.0  # Default value for testing
+                logger.warning(f"Could not get current price for {symbol}, using mock price: {start_price}")
+        except Exception as e:
+            logger.warning(f"Error getting current price: {e}, using mock price")
+            start_price = 2000.0  # Default value for testing
+            
+        # Generate more volatile price data with a trend
+        timestamp = int(time.time()) - intervals * 60  # Start intervals minutes ago
+        
+        data = []
+        price = float(start_price)
+        trend = random.choice([-1, 1])  # Random initial trend
+        trend_strength = random.uniform(0.3, 0.7)  # How strong the trend is
+        
+        for i in range(intervals):
+            # Occasionally change trend
+            if random.random() < 0.1:  # 10% chance to change trend
+                trend = -trend
+            
+            # Generate more volatile price changes (-2% to +2%) with trend bias
+            price_change = price * (random.uniform(-0.02, 0.02) + (trend * trend_strength * 0.01))
+            price += price_change
+            
+            # Generate OHLCV data with more volatility
+            open_price = price - price * random.uniform(-0.01, 0.01)
+            high_price = max(price, open_price) + price * random.uniform(0, 0.015)
+            low_price = min(price, open_price) - price * random.uniform(0, 0.015)
+            close_price = price + price * random.uniform(-0.01, 0.01)
+            volume = random.uniform(10, 1000)  # More realistic volume range
+            
+            # Create the data point
+            data.append({
+                "timestamp": (timestamp + i * 60) * 1000,  # Convert to milliseconds
+                "open": open_price,
+                "high": high_price,
+                "low": low_price,
+                "close": close_price,
+                "volume": volume,
+                "symbol": symbol
+            })
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(data)
+        
+        return df
+    
+    def run_test_signal_generation(self, indicator_name: str, symbol: str) -> Optional[Signal]:
+        """
+        Generate test data and run an indicator to get a signal for testing.
+        
+        Args:
+            indicator_name: Name of the registered indicator
+            symbol: Market symbol to use
+            
+        Returns:
+            Signal object if generated, None otherwise
+        """
+        from app.indicators.indicator_factory import IndicatorFactory
+        
+        logger.info(f"Running test signal generation for {indicator_name} on {symbol}")
+        
+        # Get the indicators from the factory
+        indicator_config = {
+            "name": indicator_name,
+            "enabled": True,
+            "parameters": {
+                "min_spread": 0.0002,
+                "max_spread": 0.01
+            } if "usdc" in indicator_name.lower() else {
+                "short_period": 5,
+                "long_period": 20,
+                "min_points": 30
+            }
+        }
+        
+        indicators = IndicatorFactory.create_indicators_from_config([indicator_config])
+        
+        if not indicators or indicator_name not in indicators:
+            logger.error(f"Indicator {indicator_name} not found or could not be created")
+            return None
+        
+        indicator = indicators[indicator_name]
+        logger.info(f"Using indicator: {indicator}")
+        
+        # Generate test data
+        data = self._generate_test_data(symbol, intervals=60)
+        
+        if data.empty:
+            logger.error("Failed to generate test data")
+            return None
+        
+        # Process the data with the indicator
+        try:
+            processed_data, signal = indicator.process(data)
+            
+            if signal:
+                logger.info(f"Generated signal: {signal}")
+                # Process the signal
+                self.process_signal(signal)
+                return signal
+            else:
+                logger.info("No signal generated")
+                return None
+        except Exception as e:
+            logger.error(f"Error processing indicator data: {e}")
+            return None 
