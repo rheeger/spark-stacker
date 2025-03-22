@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 from app.connectors.base_connector import BaseConnector, OrderSide, OrderType
 
 
-class TestConnector(BaseConnector):
-    """Test implementation of BaseConnector for testing purposes."""
+class MockConnector(BaseConnector):
+    """Mock implementation of BaseConnector for testing purposes."""
     
     def __init__(self, wallet_address=None, private_key=None, rpc_url=None):
         super().__init__(name="test_connector", exchange_type="test")
@@ -138,7 +138,7 @@ def test_base_connector_abstract_methods():
 def test_connector_implementation():
     """Test that TestConnector properly implements BaseConnector."""
     # Create an instance of TestConnector
-    connector = TestConnector(wallet_address="0x123", private_key="abc", rpc_url="http://test")
+    connector = MockConnector(wallet_address="0x123", private_key="abc", rpc_url="http://test")
     
     # Verify instance attributes
     assert connector.name == "test_connector"
@@ -161,14 +161,14 @@ def test_connector_implementation():
 
 def test_get_account_balance():
     """Test getting account balance."""
-    connector = TestConnector()
+    connector = MockConnector()
     balance = connector.get_account_balance()
     assert balance == {"USD": 10000.0, "ETH": 5.0, "BTC": 0.5}
 
 
 def test_get_markets():
     """Test getting markets."""
-    connector = TestConnector()
+    connector = MockConnector()
     markets = connector.get_markets()
     assert len(markets) == 2
     assert markets[0]["symbol"] == "ETH"
@@ -177,7 +177,7 @@ def test_get_markets():
 
 def test_get_ticker():
     """Test getting ticker information."""
-    connector = TestConnector()
+    connector = MockConnector()
     
     # Test valid symbol
     ticker = connector.get_ticker("ETH")
@@ -191,7 +191,7 @@ def test_get_ticker():
 
 def test_get_positions():
     """Test getting positions."""
-    connector = TestConnector()
+    connector = MockConnector()
     positions = connector.get_positions()
     assert len(positions) == 1
     assert positions[0]["symbol"] == "ETH"
@@ -201,7 +201,7 @@ def test_get_positions():
 
 def test_place_order():
     """Test placing orders."""
-    connector = TestConnector()
+    connector = MockConnector()
     
     # Test market buy order
     order = connector.place_order(
@@ -240,7 +240,7 @@ def test_place_order():
 
 def test_cancel_order():
     """Test cancelling an order."""
-    connector = TestConnector()
+    connector = MockConnector()
     result = connector.cancel_order("test_order_123")
     assert result["order_id"] == "test_order_123"
     assert result["status"] == "cancelled"
@@ -248,7 +248,7 @@ def test_cancel_order():
 
 def test_get_order():
     """Test getting order details."""
-    connector = TestConnector()
+    connector = MockConnector()
     order = connector.get_order("test_order_456")
     assert order["order_id"] == "test_order_456"
     assert order["status"] == "filled"
@@ -256,7 +256,7 @@ def test_get_order():
 
 def test_close_position():
     """Test closing a position."""
-    connector = TestConnector()
+    connector = MockConnector()
     result = connector.close_position("ETH")
     assert result["symbol"] == "ETH"
     assert result["status"] == "closed"
@@ -264,7 +264,7 @@ def test_close_position():
 
 def test_set_leverage():
     """Test setting leverage for a symbol."""
-    connector = TestConnector()
+    connector = MockConnector()
     result = connector.set_leverage("ETH", 10.0)
     assert result["symbol"] == "ETH"
     assert result["leverage"] == 10.0

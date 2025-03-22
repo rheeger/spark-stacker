@@ -95,10 +95,13 @@ class ConnectorFactory:
             else:
                 # Generic case for other exchange types
                 connector = cls._connector_registry[exchange_type](
+                    wallet_address=wallet_address,
+                    private_key=private_key,
                     api_key=api_key,
                     api_secret=api_secret,
                     api_passphrase=api_passphrase,
-                    testnet=testnet
+                    testnet=testnet,
+                    use_sandbox=use_sandbox
                 )
                 
             return connector
