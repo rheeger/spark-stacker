@@ -463,17 +463,9 @@ class CoinbaseConnector(BaseConnector):
                 
                 try:
                     response = self.client.get_accounts(**kwargs)
-                    # Add detailed debug logging
-                    self.balance_logger.debug(f"RAW response from get_accounts: {response}")
+                    # Log total number of accounts without detailed response data
                     if hasattr(response, 'accounts'):
                         self.balance_logger.debug(f"Number of accounts returned: {len(response.accounts)}")
-                        # Log the first few accounts for debugging
-                        for i, acct in enumerate(response.accounts[:5]):
-                            self.balance_logger.debug(f"Account {i}: {acct}")
-                            # Log all attributes
-                            for attr in dir(acct):
-                                if not attr.startswith('_') and not callable(getattr(acct, attr)):
-                                    self.balance_logger.debug(f"  {attr}: {getattr(acct, attr)}")
                 except Exception as e:
                     self.balance_logger.error(f"Error fetching accounts from Coinbase API: {e}")
                     return {}
@@ -516,12 +508,10 @@ class CoinbaseConnector(BaseConnector):
                                 except (ValueError, TypeError):
                                     self.balance_logger.warning(f"Could not convert balance to float for {currency}")
                         
-                        self.balance_logger.debug(f"Found balance for {currency}: {available}")
-                        
-                        # Only add to balances dict if balance is positive
+                        # Only add to balances dict if balance is positive and only log at debug level
                         if available > 0:
                             balances[currency] = available
-                            self.balance_logger.info(f"Adding non-zero balance for {currency}: {available}")
+                            self.balance_logger.debug(f"Found non-zero balance for {currency}: {available}")
                     except Exception as acct_err:
                         self.balance_logger.warning(f"Error processing account data: {acct_err}")
                         continue

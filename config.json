@@ -3,7 +3,7 @@
   "logging": {
     "log_to_file": true,
     "enable_console": true,
-    "connector_log_level": "DEBUG",
+    "connector_log_level": "INFO",
     "show_market_details": false,
     "show_zero_balances": false
   },

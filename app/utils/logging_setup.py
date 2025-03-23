@@ -130,8 +130,8 @@ def setup_connector_balance_logger(connector_name: str, log_level: Union[str, in
     
     connector_file_handler = RotatingFileHandler(
         connector_log_file, 
-        maxBytes=10 * 1024 * 1024,  # 10 MB
-        backupCount=5
+        maxBytes=2 * 1024 * 1024,  # 2 MB instead of 10 MB
+        backupCount=3              # 3 backups instead of 5
     )
     formatter = logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
     connector_file_handler.setFormatter(formatter)
