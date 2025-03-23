@@ -31,6 +31,9 @@ def test_trading_engine_initialization(mock_connector, mock_risk_manager):
 
 def test_start_stop_engine(trading_engine, mock_connector):
     """Test starting and stopping the trading engine."""
+    # Configure mock
+    mock_connector.is_connected = False
+    
     # Test starting the engine
     result = trading_engine.start()
     assert result is True
@@ -368,7 +371,14 @@ def test_close_all_positions(trading_engine, mock_connector):
     assert mock_connector.close_position.call_count == 2  # Should close both positions
     
     # Test with error in closing
+    mock_connector.close_position.reset_mock()
     mock_connector.close_position.side_effect = Exception("Test error")
+    
+    # Reset the active trades
+    trading_engine.active_trades = {
+        'ETH': {'symbol': 'ETH', 'status': 'open'},
+        'BTC': {'symbol': 'BTC', 'status': 'open'}
+    }
     
     result = trading_engine.close_all_positions()
     assert result is False  # Should return failure due to error

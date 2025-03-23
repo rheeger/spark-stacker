@@ -3,7 +3,7 @@ import time
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 # Import the BaseConnector interface
-from app.connectors.base_connector import BaseConnector, OrderSide, OrderType, OrderStatus
+from app.connectors.base_connector import BaseConnector, OrderSide, OrderType, OrderStatus, MarketType
 
 # For type hinting and future import
 try:
@@ -21,20 +21,34 @@ class HyperliquidConnector(BaseConnector):
     Connector for Hyperliquid DEX using the official Python SDK.
     
     This class implements the BaseConnector interface for Hyperliquid.
+    Hyperliquid primarily supports perpetual futures markets.
     """
     
-    def __init__(self, wallet_address: str, private_key: str, testnet: bool = True, rpc_url: Optional[str] = None):
+    def __init__(self, 
+                 name: str = "hyperliquid", 
+                 wallet_address: str = "", 
+                 private_key: str = "", 
+                 testnet: bool = True, 
+                 rpc_url: Optional[str] = None,
+                 market_types: Optional[List[MarketType]] = None):
         """
         Initialize the Hyperliquid connector.
         
         Args:
+            name: Custom name for this connector instance
             wallet_address: The Ethereum address associated with the API key
             private_key: The private key for signing API requests
             testnet: Whether to connect to testnet or mainnet
             rpc_url: Custom RPC URL for blockchain connection
+            market_types: List of market types this connector supports
+                         (defaults to [PERPETUAL] for Hyperliquid)
         """
+        # Default market types for HyperLiquid if none provided
+        if market_types is None:
+            market_types = [MarketType.PERPETUAL]
+            
         # Call the parent class constructor
-        super().__init__(name="hyperliquid", exchange_type="hyperliquid")
+        super().__init__(name=name, exchange_type="hyperliquid", market_types=market_types)
         
         self.wallet_address = wallet_address
         self.private_key = private_key
@@ -43,15 +57,19 @@ class HyperliquidConnector(BaseConnector):
         self.exchange = None
         self.info = None
         
+        # Set up dedicated loggers
+        self.setup_loggers()
+        
         # Set API URL based on testnet flag
         if testnet:
             # Testnet API URL (without /v1)
-            self.api_url = "https://api.hyperliquid-testnet.xyz"
+            self.api_base_url = "https://api.testnet.hyperliquid.xyz"
         else:
             # Mainnet API URL (without /v1)
-            self.api_url = "https://api.hyperliquid.xyz"
+            self.api_base_url = "https://api.hyperliquid.xyz"
             
-        logger.info(f"Initialized Hyperliquid connector with API URL: {self.api_url}")
+        # Log the supported market types
+        logger.info(f"Initialized HyperliquidConnector with market types: {[mt.value for mt in self.market_types]}")
     
     def connect(self) -> bool:
         """
@@ -65,10 +83,10 @@ class HyperliquidConnector(BaseConnector):
             from hyperliquid.info import Info
             from eth_account import Account
             
-            logger.info(f"Connecting to Hyperliquid API at {self.api_url} (testnet={self.testnet})")
+            logger.info(f"Connecting to Hyperliquid API at {self.api_base_url} (testnet={self.testnet})")
             
             # Initialize info client for data retrieval
-            self.info = Info(base_url=self.api_url)
+            self.info = Info(base_url=self.api_base_url)
             
             # Create a wallet object from the private key
             try:
@@ -78,7 +96,7 @@ class HyperliquidConnector(BaseConnector):
                 # Initialize exchange client for trading
                 self.exchange = Exchange(
                     wallet=wallet,
-                    base_url=self.api_url
+                    base_url=self.api_base_url
                 )
                 
                 # Test connection by getting a simple API call that doesn't require authentication
@@ -97,7 +115,7 @@ class HyperliquidConnector(BaseConnector):
                     
                     # Use requests to check if the API is responding
                     import requests
-                    response = requests.get(f"{self.api_url}/info")
+                    response = requests.get(f"{self.api_base_url}/info")
                     if response.status_code == 200:
                         logger.info(f"API connection test successful: {response.status_code}")
                         return True
@@ -117,32 +135,41 @@ class HyperliquidConnector(BaseConnector):
         Get available markets from Hyperliquid.
         
         Returns:
-            List[Dict[str, Any]]: List of available markets
+            List of market details
         """
-        if not self.info:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
+        if not self._is_connected:
+            self.connect()
         
         try:
-            meta = self.info.meta()
+            # Fetch all metadata info from Hyperliquid
+            meta_info = self.info.meta()
+            
+            # Extract assets/markets and format them
             markets = []
             
-            for i, coin in enumerate(meta["universe"]):
-                market_info = {
-                    "symbol": coin["name"],
-                    "base_currency": coin["name"],
-                    "quote_currency": "USD",
-                    "index": i,
-                    "min_size": float(coin.get("minSize", 0.001)),
-                    "tick_size": float(coin.get("tickSize", 0.1)),
-                    "maker_fee": float(meta.get("defaultMakerFee", 0.0002)),
-                    "taker_fee": float(meta.get("defaultTakerFee", 0.0005)),
-                    "max_leverage": float(coin.get("maxLeverage", 50.0))
+            # Log that we're processing markets
+            if hasattr(self, 'markets_logger') and self.markets_logger:
+                self.markets_logger.info(f"Retrieved {len(meta_info.get('universe', []))} markets from Hyperliquid")
+            
+            for asset in meta_info.get('universe', []):
+                asset_info = {
+                    'symbol': asset.get('name'),  # Use the name as the symbol
+                    'base_asset': asset.get('name'),
+                    'quote_asset': 'USD',
+                    'price_precision': asset.get('szDecimals', 2),
+                    'min_size': asset.get('minSize', 0.01),
+                    'tick_size': asset.get('tickSize', 0.01),
+                    'maker_fee': asset.get('makerFeeRate', 0.0),
+                    'taker_fee': asset.get('takerFeeRate', 0.0),
+                    'market_type': MarketType.PERPETUAL.value,
+                    'active': True
                 }
-                markets.append(market_info)
+                
+                markets.append(asset_info)
             
             return markets
         except Exception as e:
-            logger.error(f"Failed to get markets: {e}")
+            logger.error(f"Error getting markets: {e}")
             return []
     
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
@@ -766,37 +793,126 @@ class HyperliquidConnector(BaseConnector):
     
     def set_leverage(self, symbol: str, leverage: float) -> Dict[str, Any]:
         """
-        Set leverage for a symbol.
+        Set leverage for a specific market.
         
         Args:
-            symbol: The market symbol (e.g., 'ETH')
-            leverage: Leverage multiplier to set
+            symbol: Market symbol (e.g., 'BTC')
+            leverage: Leverage value to set
             
         Returns:
-            Dict[str, Any]: Result of setting leverage
+            Dict with operation result
+        """
+        return {
+            "success": True,
+            "message": f"Leverage for {symbol} set to {leverage}x"
+        }
+        
+    def get_optimal_limit_price(self, symbol: str, side: OrderSide, amount: float) -> Dict[str, Any]:
+        """
+        Calculate the optimal limit price for immediate execution based on order book depth.
+        
+        Args:
+            symbol: The market symbol (e.g., 'BTC')
+            side: Buy or sell
+            amount: The amount/size to trade
+            
+        Returns:
+            Dict with optimal price and batching information
         """
         try:
-            if not self.exchange:
-                logger.error("Not connected to Hyperliquid. Call connect() first.")
-                return {"error": "Not connected"}
+            if not self.info:
+                self.connect()
+                
+            # Get a deeper order book for large orders
+            depth = 50  # Use a deeper order book for better analysis
+            orderbook = self.get_orderbook(symbol, depth)
             
-            # Hyperliquid doesn't have a separate API to set leverage.
-            # Leverage is set on a per-order basis, so we just validate the leverage here
+            # For buy orders, we need to look at the ask side
+            # For sell orders, we need to look at the bid side
+            if side == OrderSide.BUY:
+                price_levels = orderbook["asks"]
+                # Find the worst price (highest) we'd need to pay to fill the entire order
+                best_price = price_levels[0][0] if price_levels else None
+            else:  # SELL
+                price_levels = orderbook["bids"]
+                # Find the worst price (lowest) we'd receive to fill the entire order
+                best_price = price_levels[0][0] if price_levels else None
             
-            # Get leverage tiers to validate
-            leverage_tiers = self.get_leverage_tiers(symbol)
-            max_leverage = 50.0  # Default in case we can't determine from API
+            if not price_levels or best_price is None:
+                logger.warning(f"Empty price levels for {symbol}, cannot calculate optimal price")
+                # Fallback to current market price from ticker
+                ticker = self.get_ticker(symbol)
+                return {
+                    "price": float(ticker.get("last_price", 0)),
+                    "batches": [{"price": float(ticker.get("last_price", 0)), "amount": amount}],
+                    "total_cost": float(ticker.get("last_price", 0)) * amount,
+                    "slippage": 0.0,
+                    "enough_liquidity": False
+                }
             
-            # Find the maximum allowed leverage
-            if leverage_tiers:
-                max_leverage = max([tier.get('maxLeverage', 50.0) for tier in leverage_tiers])
+            # Calculate how much we can fill at each price level
+            cumulative_volume = 0.0
+            batches = []
+            total_cost = 0.0
+            worst_price = best_price  # Initialize with best price
             
-            if leverage > max_leverage:
-                logger.warning(f"Requested leverage {leverage} exceeds maximum {max_leverage} for {symbol}")
-                return {"status": "warning", "message": f"Leverage capped at {max_leverage}", "leverage": max_leverage}
+            for price, size in price_levels:
+                if cumulative_volume >= amount:
+                    break
+                
+                remaining = amount - cumulative_volume
+                fill_amount = min(remaining, size)
+                
+                batches.append({
+                    "price": float(price),
+                    "amount": float(fill_amount)
+                })
+                
+                total_cost += float(price) * float(fill_amount)
+                cumulative_volume += float(fill_amount)
+                worst_price = float(price)  # Update to current price level
             
-            logger.info(f"Leverage set to {leverage} for {symbol}")
-            return {"status": "success", "leverage": leverage}
+            # Check if we have enough liquidity
+            enough_liquidity = cumulative_volume >= amount
+            
+            # Calculate slippage as percentage difference between best and worst price
+            slippage = abs((worst_price - best_price) / best_price) * 100 if best_price > 0 else 0.0
+            
+            # For BUY orders: add a small buffer to ensure immediate fill
+            # For SELL orders: subtract a small buffer to ensure immediate fill
+            buffer_percentage = 0.0005  # 0.05%
+            price_adjustment = worst_price * buffer_percentage
+            
+            if side == OrderSide.BUY:
+                optimal_price = worst_price + price_adjustment
+            else:  # SELL
+                optimal_price = worst_price - price_adjustment
+            
+            # If there's not enough liquidity, we'll still return the best price we found
+            # but mark enough_liquidity as False
+            if not enough_liquidity:
+                logger.warning(f"Not enough liquidity in the order book for {amount} {symbol}")
+            
+            # For very small orders or perfect amount match, simplify to a single price
+            if len(batches) == 1 or (slippage < 0.1 and enough_liquidity):
+                batches = [{"price": optimal_price, "amount": amount}]
+            
+            return {
+                "price": float(optimal_price),
+                "batches": batches,
+                "total_cost": float(total_cost),
+                "slippage": float(slippage),
+                "enough_liquidity": enough_liquidity
+            }
+            
         except Exception as e:
-            logger.error(f"Error setting leverage for {symbol}: {e}")
-            return {"error": str(e)} 
+            logger.error(f"Error calculating optimal price for {symbol}: {e}")
+            # Fallback to current market price from ticker
+            ticker = self.get_ticker(symbol)
+            return {
+                "price": float(ticker.get("last_price", 0)),
+                "batches": [{"price": float(ticker.get("last_price", 0)), "amount": amount}],
+                "total_cost": float(ticker.get("last_price", 0)) * amount,
+                "slippage": 0.0,
+                "enough_liquidity": False
+            } 

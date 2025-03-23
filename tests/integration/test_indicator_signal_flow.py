@@ -62,7 +62,7 @@ def test_indicator_signal_to_engine(price_data, mock_connector, mock_risk_manage
         trading_engine.process_signal(signal)
         
         # Check that the trading engine processed the signal
-        assert len(trading_engine.active_trades) > 0 or len(trading_engine.trade_history) > 0
+        assert len(trading_engine.active_trades) > 0 or len(trading_engine.get_trade_history()) > 0
     else:
         # If no signal was generated, force a test signal to validate engine processing
         test_signal = Signal(
@@ -76,7 +76,7 @@ def test_indicator_signal_to_engine(price_data, mock_connector, mock_risk_manage
         trading_engine.process_signal(test_signal)
         
         # Check that the trading engine processed the signal
-        assert len(trading_engine.active_trades) > 0 or len(trading_engine.trade_history) > 0
+        assert len(trading_engine.active_trades) > 0 or len(trading_engine.get_trade_history()) > 0
     
     # Stop the trading engine
     trading_engine.stop()
@@ -140,7 +140,7 @@ def test_webhook_to_indicator_to_engine(trading_engine, webhook_server, mock_con
         time.sleep(1)
         
         # Check that the trading engine processed the signal
-        assert len(trading_engine.active_trades) > 0 or len(trading_engine.trade_history) > 0
+        assert len(trading_engine.active_trades) > 0 or len(trading_engine.get_trade_history()) > 0
     
     finally:
         # Stop the webhook server and trading engine

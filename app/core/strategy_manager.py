@@ -112,7 +112,7 @@ class StrategyManager:
             
             logger.info(f"Fetched current price for {symbol}: {last_price}")
             
-            # For liveness test, we'll use a simulated price of 1.0 if we can't get real data
+            # Use a simulated price if we can't get real data
             if last_price <= 0.0:
                 logger.warning(f"Invalid price {last_price} for {symbol}, using simulated price of 1.0")
                 last_price = 1.0

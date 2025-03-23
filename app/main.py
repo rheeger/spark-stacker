@@ -74,6 +74,7 @@ def initialize_logging(config: Dict[str, Any]) -> None:
         SHOW_ZERO_BALANCES = logging_config.get("show_zero_balances", False)
         
         logger.info("Logging initialized successfully")
+        logger.info("Connector balance debug logs will be redirected to dedicated log files")
     except Exception as e:
         logger.error(f"Failed to initialize logging: {str(e)}", exc_info=True)
         # Continue with basic logging already set up
@@ -236,14 +237,41 @@ def create_connector(factory: ConnectorFactory, exchange_config: Dict[str, Any])
     try:
         # Extract required parameters
         exchange_type = exchange_config.get('exchange_type', '').lower()
-        api_key = os.getenv(exchange_config.get('api_key', '').strip('${}'))
-        api_secret = os.getenv(exchange_config.get('api_secret', '').strip('${}'))
-        testnet = exchange_config.get('testnet', True)
-        use_sandbox = exchange_config.get('use_sandbox', True)
+        
+        # Process environment variables
+        def get_env_value(config_value):
+            if isinstance(config_value, str) and config_value.startswith('${') and config_value.endswith('}'):
+                # Extract environment variable name and get its value
+                env_var = config_value.strip('${}')
+                return os.getenv(env_var)
+            return config_value
+            
+        api_key = get_env_value(exchange_config.get('api_key', ''))
+        api_secret = get_env_value(exchange_config.get('api_secret', ''))
+        wallet_address = get_env_value(exchange_config.get('wallet_address', ''))
+        private_key = get_env_value(exchange_config.get('private_key', ''))
+        
+        # Convert boolean configs from strings if needed
+        def parse_bool_config(value):
+            if isinstance(value, str):
+                if value.startswith('${') and value.endswith('}'):
+                    env_var = value.strip('${}')
+                    env_value = os.getenv(env_var, 'false')
+                    return env_value.lower() in ('true', 'yes', '1', 't', 'y')
+                return value.lower() in ('true', 'yes', '1', 't', 'y')
+            return bool(value)
+            
+        testnet = parse_bool_config(exchange_config.get('testnet', True))
+        use_sandbox = parse_bool_config(exchange_config.get('use_sandbox', True))
+        
+        logger.debug(f"Creating connector for {exchange_type} with parsed config values, sandbox={use_sandbox}")
         
         # Create the connector with extracted parameters
         connector = factory.create_connector(
             exchange_type=exchange_type,
+            name=exchange_config.get('name', None),
+            wallet_address=wallet_address,
+            private_key=private_key,
             api_key=api_key,
             api_secret=api_secret,
             testnet=testnet,
@@ -297,7 +325,12 @@ def main():
                     # Get available markets
                     markets = connector.get_markets()
                     logger.info(f"Available markets on {exchange_config['name']}: {len(markets)} markets found")
-                    # Only log market details if flag is enabled
+                    
+                    # Always log markets to the dedicated markets logger
+                    for market in markets:
+                        connector.markets_logger.info(f"Market: {market['symbol']} - {market}")
+                    
+                    # Only log market details to main log if flag is enabled
                     if SHOW_MARKET_DETAILS:
                         for market in markets:
                             logger.info(f"  {market['symbol']}: {market}")
@@ -312,10 +345,12 @@ def main():
                         if SHOW_ZERO_BALANCES:
                             # Log all balances
                             for currency, amount in balances.items():
+                                connector.balance_logger.info(f"{currency}: {amount}")
                                 logger.info(f"  {currency}: {amount}")
                         else:
                             # Log only non-zero balances
                             for currency, amount in non_zero_balances.items():
+                                connector.balance_logger.info(f"{currency}: {amount}")
                                 logger.info(f"  {currency}: {amount}")
                     except Exception as e:
                         logger.error(f"Failed to get balances: {str(e)}", exc_info=True)

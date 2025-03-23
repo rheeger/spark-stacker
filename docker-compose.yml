@@ -9,15 +9,16 @@ services:
       - "${WEBHOOK_PORT:-8080}:8080"
     volumes:
       - ./logs:/app/logs
-      - ./config:/app/config
+      - ./config.json:/app/config.json
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - CONFIG_FILE=/app/config.json
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    command: python app/main.py --config /app/config/config.json
+    command: python app/main.py --config /app/config.json

@@ -1,9 +1,9 @@
 {
-  "log_level": "INFO",
+  "log_level": "DEBUG",
   "logging": {
     "log_to_file": true,
     "enable_console": true,
-    "connector_log_level": "WARNING",
+    "connector_log_level": "DEBUG",
     "show_market_details": false,
     "show_zero_balances": false
   },
@@ -12,7 +12,7 @@
   "webhook_host": "127.0.0.1",
   "max_parallel_trades": 5,
   "polling_interval": 30,
-  "dry_run": false,
+  "dry_run": true,
   "exchanges": [
     {
       "name": "hyperliquid",
@@ -58,15 +58,6 @@
         "overbought": 70,
         "oversold": 30,
         "signal_period": 1
-      }
-    },
-    {
-      "name": "LivenessTest",
-      "type": "liveness_test",
-      "enabled": true,
-      "parameters": {
-        "symbol": "PYUSD-USD",
-        "confidence": 0.8
       }
     }
   ]

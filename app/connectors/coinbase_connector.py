@@ -1,15 +1,22 @@
+import json
 import logging
 import time
-import json
+from datetime import datetime
 from io import StringIO
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Type, Tuple, Union
 
 # Import the BaseConnector interface
-from app.connectors.base_connector import BaseConnector, OrderSide, OrderType, OrderStatus
+from app.connectors.base_connector import BaseConnector, OrderSide, OrderType, OrderStatus, TimeInForce, MarketType
 
 # Import Coinbase Advanced API client
 from coinbase.rest import RESTClient
+from app.utils.logging_setup import (
+    setup_connector_balance_logger, 
+    setup_connector_markets_logger,
+    setup_connector_orders_logger
+)
 
+# Get the main logger
 logger = logging.getLogger(__name__)
 
 class CoinbaseConnector(BaseConnector):
@@ -19,31 +26,51 @@ class CoinbaseConnector(BaseConnector):
     This class implements the BaseConnector interface for Coinbase.
     """
     
-    def __init__(self, api_key: str, api_secret: str, api_passphrase: Optional[str] = None, use_sandbox: bool = True):
+    def __init__(self, 
+                 name: str = "coinbase", 
+                 api_key: str = "", 
+                 api_secret: str = "", 
+                 passphrase: str = "",
+                 testnet: bool = False,
+                 market_types: Optional[List[MarketType]] = None):
         """
         Initialize the Coinbase connector.
         
         Args:
-            api_key: The API key for authentication (format: organizations/{org_id}/apiKeys/{key_id})
-            api_secret: The API secret for request signing (EC private key)
-            api_passphrase: The API passphrase (not used in Advanced API but stored for compatibility)
-            use_sandbox: Whether to use the sandbox environment or production
+            name: Custom name for this connector instance
+            api_key: Coinbase API key
+            api_secret: Coinbase API secret
+            passphrase: Coinbase API passphrase
+            testnet: Whether to use sandbox mode (not fully supported by Coinbase Advanced)
+            market_types: List of market types this connector supports
+                        (defaults to [SPOT] for Coinbase)
         """
+        # Default market types for Coinbase if none provided
+        if market_types is None:
+            market_types = [MarketType.SPOT]
+        elif not isinstance(market_types, list):
+            market_types = [market_types]
+            
         # Call the parent class constructor
-        super().__init__(name="coinbase", exchange_type="coinbase")
+        super().__init__(name=name, exchange_type="coinbase", market_types=market_types)
         
         self.api_key = api_key
         self.api_secret = api_secret
-        self.api_passphrase = api_passphrase  # Store it even though not used
-        self.use_sandbox = use_sandbox
+        self.passphrase = passphrase
+        self.testnet = testnet
         self.client = None
         
-        # Set API URL based on environment
-        self.api_url = (
-            "https://api-public.sandbox.exchange.coinbase.com"
-            if use_sandbox
-            else "https://api.exchange.coinbase.com"
-        )
+        # Set API URL based on testnet flag
+        if testnet:
+            # Sandbox API URL
+            self.api_base_url = "https://api-public.sandbox.exchange.coinbase.com"
+            logger.warning("Coinbase Advanced API has limited sandbox support. Some features may not work in testnet mode.")
+        else:
+            # Production API URL
+            self.api_base_url = "https://api.exchange.coinbase.com"
+            
+        # Log the supported market types
+        logger.info(f"Initialized CoinbaseConnector with market types: {[mt.value for mt in self.market_types]}")
         
         # Map of Coinbase product IDs to our standard symbols
         self.symbol_map = {
@@ -87,7 +114,11 @@ class CoinbaseConnector(BaseConnector):
                     else:
                         attrs.append(f"{attr}: {value}")
             
-            logger.debug(f"{name} structure: {', '.join(attrs)}")
+            # Use the balance logger if this is a balance-related response
+            if "Balance" in name or "Account" in name or "Accounts Response" in name:
+                self.balance_logger.debug(f"{name} structure: {', '.join(attrs)}")
+            else:
+                logger.debug(f"{name} structure: {', '.join(attrs)}")
         except Exception as e:
             logger.debug(f"Failed to debug {name}: {e}")
     
@@ -98,67 +129,62 @@ class CoinbaseConnector(BaseConnector):
         Returns:
             bool: True if connection is successful, False otherwise
         """
+        # If already connected, return True without reconnecting
+        if self.is_connected and self.client is not None:
+            logger.debug("Already connected to Coinbase API, reusing existing connection")
+            return True
+            
         # For test environments with sandbox enabled but no keys, return mock connection
-        logger.debug(f"Connect called with use_sandbox={self.use_sandbox}, api_key={self.api_key}, test_connection_fails={hasattr(self, 'test_connection_fails')}")
+        logger.debug(f"Connect called with testnet={self.testnet}, api_key={self.api_key}, test_connection_fails={hasattr(self, 'test_connection_fails')}")
         
         # Check if test_connection_fails flag is set
         if hasattr(self, "test_connection_fails") and self.test_connection_fails:
             logger.debug("Test mode: connection failure detected")
+            self._is_connected = False
             return False
             
         # For test environments with sandbox enabled, use mock connection
-        if self.use_sandbox and (self.api_key == "test_key" or self.api_key is None):
+        if self.testnet and (self.api_key == "test_key" or self.api_key is None):
             logger.debug("Using mock connection for sandbox environment")
             # Set the client to a simple MagicMock() to indicate connection
             # This won't work for actual operations but passes connection check
             from unittest.mock import MagicMock
             self.client = MagicMock()
             logger.debug("Test mode: successful mock connection")
+            self._is_connected = True
             return True
             
         try:
             # Create the client with proper configuration
-            try:
-                # Try to initialize with key file first
-                logger.debug("Attempting to initialize with key file")
-                self.client = RESTClient(
-                    key_file=StringIO(json.dumps({
-                        "name": "test-key",
-                        "privateKey": self.api_secret
-                    })),
-                    verbose=False  # Disable verbose mode for production
+            self.client = RESTClient(
+                api_key=self.api_key,
+                api_secret=self.api_secret,
+                verbose=False  # Disable verbose mode for production
                 )
-                logger.debug("Successfully initialized with key file")
-            except Exception as key_file_error:
-                logger.debug(f"Failed to initialize with key file: {key_file_error}, trying direct initialization")
-                # Fall back to direct initialization
-                self.client = RESTClient(
-                    api_key=self.api_key,
-                    api_secret=self.api_secret,
-                    verbose=False  # Disable verbose mode for production
-                )
-                logger.debug("Successfully initialized with direct API credentials")
+            logger.debug("Successfully initialized with direct API credentials")
             
             # Test connection with a simple request
             try:
-                logger.debug("Testing connection with get_accounts()")
                 accounts = self.client.get_accounts()
-                logger.debug(f"Got accounts response: {accounts}")
+                logger.debug(f"Got accounts response from Coinbase API")
                 if accounts and hasattr(accounts, 'accounts') and len(accounts.accounts) > 0:
-                    logger.info(f"Successfully connected to Coinbase Advanced API")
+                    self._is_connected = True
                     return True
                 logger.error("No accounts found in Coinbase API response")
+                self._is_connected = False
                 return False
             except Exception as connection_error:
                 logger.error(f"Failed to connect to Coinbase API during test request: {connection_error}")
                 if "Could not deserialize key data" in str(connection_error):
                     logger.error("Are you sure you generated your key at https://cloud.coinbase.com/access/api ?")
                 self.client = None
+                self._is_connected = False
                 return False
             
         except Exception as e:
             logger.error(f"Failed to create Coinbase API client: {e}")
             self.client = None
+            self._is_connected = False
             return False
     
     def disconnect(self) -> bool:
@@ -169,78 +195,134 @@ class CoinbaseConnector(BaseConnector):
             bool: True if successfully disconnected, False otherwise
         """
         try:
-            if self.client:
-                # Close any underlying session/connection
-                if hasattr(self.client, 'session') and self.client.session:
-                    self.client.session.close()
-                # Reset the client
-                self.client = None
-                logger.info("Disconnected from Coinbase API")
-                return True
+            # Clean up resources if needed
+            self.client = None
+            self._is_connected = False
             return True
         except Exception as e:
             logger.error(f"Error disconnecting from Coinbase API: {e}")
             return False
     
+    def _make_request(self, method: str, endpoint: str, params: Dict = None) -> Any:
+        """
+        Make a request to the Coinbase API directly.
+        
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            endpoint: API endpoint path
+            params: Optional parameters for the request
+            
+        Returns:
+            Response data from the API
+        """
+        if not self.client:
+            self.connect()
+            
+        try:
+            if method == "GET":
+                if endpoint == "/products":
+                    # Use the SDK's get_products method
+                    response = self.client.get_products()
+                    # Convert the response to the expected format
+                    if hasattr(response, 'products'):
+                        return response.products
+                    else:
+                        logger.error(f"Unexpected response format from get_products: {response}")
+                        return []
+            
+            # Add more endpoints as needed
+            logger.warning(f"Unsupported endpoint in _make_request: {method} {endpoint}")
+            return None
+        except Exception as e:
+            logger.error(f"Error in _make_request ({method} {endpoint}): {e}")
+            return None
+    
     def get_markets(self) -> List[Dict[str, Any]]:
         """
-        Get available markets/trading pairs from Coinbase.
-        Uses /api/v3/brokerage/products endpoint.
+        Get available markets from Coinbase.
         
         Returns:
-            List[Dict[str, Any]]: List of available markets with their details
+            List of market details
         """
+        if not self._is_connected:
+            self.connect()
+        
         try:
-            if not self.client:
-                self.connect()
-                
-            # Use get_public_products() to get the product list
-            products_response = self.client.get_public_products()
-            result = []
+            markets = []
             
-            if not products_response or not hasattr(products_response, 'products'):
-                logger.error("No products returned from Coinbase API")
+            # Try different methods to get products based on what's available
+            response = None
+            
+            # Try get_public_products first (used in tests)
+            if hasattr(self.client, 'get_public_products'):
+                logger.debug("Using get_public_products method to fetch markets")
+                response = self.client.get_public_products()
+            # Fall back to get_products if available
+            elif hasattr(self.client, 'get_products'):
+                logger.debug("Using get_products method to fetch markets")
+                response = self.client.get_products()
+            else:
+                logger.error("No method available to fetch products")
                 return []
             
-            for product in products_response.products:
-                # Extract currency pair from product_id (e.g., "BTC-USD" -> "BTC", "USD")
-                base_currency = None
-                quote_currency = None
-                
-                if '-' in product.product_id:
-                    parts = product.product_id.split('-')
-                    base_currency = parts[0]
-                    quote_currency = parts[1]
-                
-                # Safely access attributes with fallbacks
-                min_size = 0.0
-                max_size = None
-                price_increment = 0.0
-                
-                if hasattr(product, 'base_min_size'):
-                    min_size = float(product.base_min_size)
-                
-                if hasattr(product, 'base_max_size') and product.base_max_size:
-                    max_size = float(product.base_max_size)
-                
-                if hasattr(product, 'quote_increment'):
-                    price_increment = float(product.quote_increment)
-                
-                result.append({
-                    "symbol": product.product_id,
-                    "base_currency": base_currency,
-                    "quote_currency": quote_currency,
-                    "min_size": min_size,
-                    "max_size": max_size,
-                    "price_increment": price_increment,
-                    "status": product.status if hasattr(product, 'status') else "unknown"
-                })
+            if not hasattr(response, 'products'):
+                logger.error("Response has no products attribute")
+                return []
             
-            return result
+            # Log that we're processing markets
+            if hasattr(self, 'markets_logger') and self.markets_logger:
+                self.markets_logger.info(f"Retrieved {len(response.products)} markets from Coinbase")
+                
+            # Only process the products returned in the response
+            for product in response.products:
+                try:
+                    # Extract product details
+                    product_id = getattr(product, 'product_id', None)
+                    if not product_id:
+                        continue
+                        
+                    # Split product_id to get base and quote currencies if not available directly
+                    parts = product_id.split('-') if '-' in product_id else [product_id, 'USD']
+                    base_currency = getattr(product, 'base_currency_id', None) or parts[0]
+                    quote_currency = getattr(product, 'quote_currency_id', None) or parts[1]
+                    
+                    # Get numeric values with safe defaults
+                    quote_increment = getattr(product, 'quote_increment', '0.01')
+                    base_min_size = getattr(product, 'base_min_size', '0.001')
+                    status = getattr(product, 'status', 'online')
+                    
+                    market_info = {
+                        'symbol': product_id,
+                        'base_asset': base_currency,
+                        'quote_asset': quote_currency,
+                        'price_precision': self._get_decimal_places(float(quote_increment)),
+                        'min_size': float(base_min_size),
+                        'tick_size': float(quote_increment),
+                        'maker_fee': 0.0,  # Default values, actual fees depend on trading volume
+                        'taker_fee': 0.001,
+                        'market_type': MarketType.SPOT.value,
+                        'active': status == 'online'
+                    }
+                    
+                    markets.append(market_info)
+                except Exception as product_err:
+                    logger.warning(f"Error processing product data: {product_err}")
+                    continue
+            
+            logger.info(f"Retrieved {len(markets)} markets from Coinbase")
+            return markets
             
         except Exception as e:
-            logger.error(f"Error fetching markets from Coinbase: {e}")
+            logger.error(f"Error getting markets: {e}")
             return []
+            
+    @staticmethod
+    def _get_decimal_places(value: float) -> int:
+        """Helper method to determine decimal precision from a float value"""
+        str_val = str(value)
+        if '.' in str_val:
+            return len(str_val) - str_val.index('.') - 1
+        return 0
     
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
         """
@@ -349,11 +431,10 @@ class CoinbaseConnector(BaseConnector):
             
         except Exception as e:
             logger.error(f"Error fetching orderbook for {symbol} from Coinbase: {e}")
-            # Return mock order book data for testing
-            mock_price = 2000.0
+            # Return empty order book on error
             return {
-                "bids": [[mock_price - i, 1.0] for i in range(depth)],
-                "asks": [[mock_price + i, 1.0] for i in range(depth)]
+                "bids": [],
+                "asks": []
             }
     
     def get_account_balance(self) -> Dict[str, float]:
@@ -366,48 +447,101 @@ class CoinbaseConnector(BaseConnector):
         """
         try:
             if not self.client:
-                logger.error("Client not connected")
+                self.balance_logger.error("Client not connected")
                 return {}
             
-            # In test mode, use the mock client
-            # This allows tests to mock the accounts response
-            if self.client and hasattr(self.client, 'get_accounts'):
-                response = self.client.get_accounts()
+            # Get account balances from the API
+            balances = {}
+            cursor = None
+            
+            # Handle pagination to get all accounts
+            while True:
+                # Get accounts with pagination
+                kwargs = {'limit': 100}
+                if cursor:
+                    kwargs['cursor'] = cursor
                 
-                if response and hasattr(response, 'accounts'):
-                    balances = {}
-                    for account in response.accounts:
-                        currency = account.currency
-                        # Get the available balance
-                        if hasattr(account, 'available_balance') and hasattr(account.available_balance, 'value'):
-                            available = float(account.available_balance.value)
+                try:
+                    response = self.client.get_accounts(**kwargs)
+                    # Add detailed debug logging
+                    self.balance_logger.debug(f"RAW response from get_accounts: {response}")
+                    if hasattr(response, 'accounts'):
+                        self.balance_logger.debug(f"Number of accounts returned: {len(response.accounts)}")
+                        # Log the first few accounts for debugging
+                        for i, acct in enumerate(response.accounts[:5]):
+                            self.balance_logger.debug(f"Account {i}: {acct}")
+                            # Log all attributes
+                            for attr in dir(acct):
+                                if not attr.startswith('_') and not callable(getattr(acct, attr)):
+                                    self.balance_logger.debug(f"  {attr}: {getattr(acct, attr)}")
+                except Exception as e:
+                    self.balance_logger.error(f"Error fetching accounts from Coinbase API: {e}")
+                    return {}
+                
+                if not hasattr(response, 'accounts'):
+                    self.balance_logger.error("Response has no accounts attribute")
+                    break
+                
+                # Process accounts in this page
+                for account in response.accounts:
+                    try:
+                        # Extract currency and balance
+                        currency = getattr(account, 'currency', None)
+                        if not currency:
+                            continue
+                        
+                        # Try to get available balance
+                        available = 0.0
+                        
+                        # Handle different response formats for available_balance
+                        if hasattr(account, 'available_balance'):
+                            if hasattr(account.available_balance, 'value'):
+                                available = float(account.available_balance.value)
+                            elif isinstance(account.available_balance, dict) and 'value' in account.available_balance:
+                                available = float(account.available_balance['value'])
+                            else:
+                                try:
+                                    available = float(account.available_balance)
+                                except (ValueError, TypeError):
+                                    self.balance_logger.warning(f"Could not convert available_balance to float for {currency}")
+                        # Fallback to balance if available_balance not found
+                        elif hasattr(account, 'balance'):
+                            if hasattr(account.balance, 'value'):
+                                available = float(account.balance.value)
+                            elif isinstance(account.balance, dict) and 'value' in account.balance:
+                                available = float(account.balance['value'])
+                            else:
+                                try:
+                                    available = float(account.balance)
+                                except (ValueError, TypeError):
+                                    self.balance_logger.warning(f"Could not convert balance to float for {currency}")
+                        
+                        self.balance_logger.debug(f"Found balance for {currency}: {available}")
+                        
+                        # Only add to balances dict if balance is positive
+                        if available > 0:
                             balances[currency] = available
-                    
-                    if balances:
-                        return balances
+                            self.balance_logger.info(f"Adding non-zero balance for {currency}: {available}")
+                    except Exception as acct_err:
+                        self.balance_logger.warning(f"Error processing account data: {acct_err}")
+                        continue
+                
+                # Check for more pages
+                if getattr(response, 'has_next', False) and getattr(response, 'cursor', None):
+                    cursor = response.cursor
+                    self.balance_logger.debug(f"Fetching next page of accounts with cursor: {cursor}")
+                else:
+                    break
             
-            # If client call doesn't work or returns no data, use fallback mock data for sandbox
-            if self.use_sandbox:
-                # Return mock balances for sandbox testing
-                return {
-                    "USD": 10000.0,
-                    "USDC": 10000.0,
-                    "BTC": 1.0,
-                    "ETH": 10.0
-                }
-            
-            return {}
+            if not balances:
+                self.balance_logger.warning("No non-zero balances found in Coinbase account")
+            else:
+                self.balance_logger.info(f"Retrieved {len(balances)} non-zero balances from Coinbase")
+                
+            return balances
             
         except Exception as e:
-            logger.error(f"Failed to get account balances: {e}")
-            if self.use_sandbox:
-                # Return mock balances on error in sandbox
-                return {
-                    "USD": 10000.0,
-                    "USDC": 10000.0,
-                    "BTC": 1.0,
-                    "ETH": 10.0
-                }
+            self.balance_logger.error(f"Failed to get account balances: {e}")
             return {}
     
     def get_positions(self) -> List[Dict[str, Any]]:
@@ -504,6 +638,10 @@ class CoinbaseConnector(BaseConnector):
             # Generate a unique client order ID
             client_order_id = str(int(time.time() * 1000))
             
+            # Log order details before placement
+            self.orders_logger.info(f"Placing {order_type.value} {cb_side} order for {amount} {symbol} " +
+                                   (f"at price {price}" if price else "at market price"))
+            
             # Place the order based on order type
             if order_type == OrderType.MARKET:
                 if side == OrderSide.BUY:
@@ -522,21 +660,27 @@ class CoinbaseConnector(BaseConnector):
                     )
             else:  # LIMIT order
                 if price is None:
-                    logger.error("Price is required for LIMIT orders but was not provided")
-                    return {"error": "Price is required for LIMIT orders"}
+                    error_msg = "Price is required for LIMIT orders but was not provided"
+                    logger.error(error_msg)
+                    self.orders_logger.error(error_msg)
+                    return {"error": error_msg}
                 
                 # Ensure price is a valid float
                 try:
                     price_float = float(price)
                     if price_float <= 0:
-                        logger.error(f"Invalid price for LIMIT order: {price_float}")
-                        return {"error": f"Invalid price for LIMIT order: {price_float}"}
+                        error_msg = f"Invalid price for LIMIT order: {price_float}"
+                        logger.error(error_msg)
+                        self.orders_logger.error(error_msg)
+                        return {"error": error_msg}
                     
                     # Format price with proper precision
                     price_str = str(price_float)
                 except (ValueError, TypeError) as e:
-                    logger.error(f"Invalid price format: {price}")
-                    return {"error": f"Invalid price format: {price}"}
+                    error_msg = f"Invalid price format: {price}"
+                    logger.error(error_msg)
+                    self.orders_logger.error(error_msg)
+                    return {"error": error_msg}
                     
                 try:
                     if side == OrderSide.BUY:
@@ -568,20 +712,25 @@ class CoinbaseConnector(BaseConnector):
                                 }
                             }
                         }
-                        logger.info(f"Placing limit order with config: {order_config}")
+                        self.orders_logger.info(f"Placing limit order with config: {order_config}")
                         response = self.client.create_order(**order_config)
                     except Exception as create_order_error:
-                        logger.error(f"Error using fallback create_order for LIMIT: {str(create_order_error)}")
-                        return {"error": f"Error placing LIMIT order via create_order: {str(create_order_error)}"}
+                        error_msg = f"Error using fallback create_order for LIMIT: {str(create_order_error)}"
+                        logger.error(error_msg)
+                        self.orders_logger.error(error_msg)
+                        return {"error": error_msg}
                 except Exception as e:
-                    logger.error(f"Error placing LIMIT order: {str(e)}")
-                    return {"error": f"Error placing LIMIT order: {str(e)}"}
+                    error_msg = f"Error placing LIMIT order: {str(e)}"
+                    logger.error(error_msg)
+                    self.orders_logger.error(error_msg)
+                    return {"error": error_msg}
             
             if not response or not hasattr(response, 'success_response'):
                 error_msg = "Invalid order response from Coinbase"
                 if hasattr(response, 'error_response'):
                     error_msg = f"Coinbase API error: {response.error_response}"
                 logger.error(error_msg)
+                self.orders_logger.error(error_msg)
                 return {"error": error_msg}
             
             order_details = response.success_response
@@ -591,7 +740,7 @@ class CoinbaseConnector(BaseConnector):
             if hasattr(order_details, 'order_id'):
                 order_id = order_details.order_id
             
-            return {
+            result = {
                 "order_id": order_id,
                 "client_order_id": getattr(order_details, 'client_order_id', None),
                 "symbol": symbol,
@@ -603,8 +752,15 @@ class CoinbaseConnector(BaseConnector):
                 "timestamp": getattr(order_details, 'created_time', int(time.time() * 1000))
             }
             
+            # Log successful order placement
+            self.orders_logger.info(f"Successfully placed order: {result}")
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Error placing order on Coinbase: {e}")
+            error_msg = f"Error placing order on Coinbase: {e}"
+            logger.error(error_msg)
+            self.orders_logger.error(error_msg)
             raise
     
     def _map_order_status(self, coinbase_status: str) -> str:
@@ -634,16 +790,27 @@ class CoinbaseConnector(BaseConnector):
             if not self.client:
                 self.connect()
                 
+            self.orders_logger.info(f"Attempting to cancel order {order_id}")
             response = self.client.cancel_orders(order_ids=[order_id])
             
             if not response:
+                self.orders_logger.error(f"Failed to cancel order {order_id}: Empty response")
                 return False
                 
             # Check if the order ID is in the succeeded orders
-            return order_id in response.success_response.order_ids
+            success = order_id in response.success_response.order_ids
+            
+            if success:
+                self.orders_logger.info(f"Successfully canceled order {order_id}")
+            else:
+                self.orders_logger.error(f"Failed to cancel order {order_id}")
+                
+            return success
             
         except Exception as e:
-            logger.error(f"Error canceling order {order_id} on Coinbase: {e}")
+            error_msg = f"Error canceling order {order_id} on Coinbase: {e}"
+            logger.error(error_msg)
+            self.orders_logger.error(error_msg)
             return False
     
     def get_order_status(self, order_id: str) -> Dict[str, Any]:
@@ -656,7 +823,9 @@ class CoinbaseConnector(BaseConnector):
         Returns:
             Dict[str, Any]: Order status and details
         """
-        return self.get_order(order_id)
+        result = self.get_order(order_id)
+        self.orders_logger.info(f"Order status for {order_id}: {result.get('status', 'unknown')}")
+        return result
     
     def get_order(self, order_id: str) -> Dict[str, Any]:
         """
@@ -889,8 +1058,12 @@ class CoinbaseConnector(BaseConnector):
         Returns:
             Dict with funding rate info (always 0 for spot)
         """
-        # Return just the rate as a float to match the test expectation
-        return 0.0
+        return {
+            "symbol": symbol,
+            "rate": 0.0,
+            "next_funding_time": None,
+            "message": "Spot markets do not have funding rates"
+        }
     
     def get_leverage_tiers(self, symbol: str) -> List[Dict[str, Any]]:
         """
@@ -946,3 +1119,113 @@ class CoinbaseConnector(BaseConnector):
         except Exception as e:
             logger.error(f"Error during Coinbase connector cleanup: {e}")
             return False
+    
+    def get_optimal_limit_price(self, symbol: str, side: OrderSide, amount: float) -> Dict[str, Any]:
+        """
+        Calculate the optimal limit price for immediate execution based on order book depth.
+        
+        Args:
+            symbol: The market symbol (e.g., 'ETH')
+            side: Buy or sell
+            amount: The amount/size to trade
+            
+        Returns:
+            Dict with optimal price and batching information
+        """
+        try:
+            if not self.client:
+                self.connect()
+                
+            # Get a deeper order book for large orders
+            depth = 50  # Use a deeper order book for better analysis
+            orderbook = self.get_orderbook(symbol, depth)
+            
+            # For buy orders, we need to look at the ask side
+            # For sell orders, we need to look at the bid side
+            if side == OrderSide.BUY:
+                price_levels = orderbook["asks"]
+                # Find the worst price (highest) we'd need to pay to fill the entire order
+                best_price = price_levels[0][0] if price_levels else None
+            else:  # SELL
+                price_levels = orderbook["bids"]
+                # Find the worst price (lowest) we'd receive to fill the entire order
+                best_price = price_levels[0][0] if price_levels else None
+            
+            if not price_levels or best_price is None:
+                logger.warning(f"Empty price levels for {symbol}, cannot calculate optimal price")
+                # Fallback to current market price from ticker
+                ticker = self.get_ticker(symbol)
+                return {
+                    "price": float(ticker.get("last_price", 0)),
+                    "batches": [{"price": float(ticker.get("last_price", 0)), "amount": amount}],
+                    "total_cost": float(ticker.get("last_price", 0)) * amount,
+                    "slippage": 0.0,
+                    "enough_liquidity": False
+                }
+            
+            # Calculate how much we can fill at each price level
+            cumulative_volume = 0.0
+            batches = []
+            total_cost = 0.0
+            worst_price = best_price  # Initialize with best price
+            
+            for price, size in price_levels:
+                if cumulative_volume >= amount:
+                    break
+                
+                remaining = amount - cumulative_volume
+                fill_amount = min(remaining, size)
+                
+                batches.append({
+                    "price": float(price),
+                    "amount": float(fill_amount)
+                })
+                
+                total_cost += float(price) * float(fill_amount)
+                cumulative_volume += float(fill_amount)
+                worst_price = float(price)  # Update to current price level
+            
+            # Check if we have enough liquidity
+            enough_liquidity = cumulative_volume >= amount
+            
+            # Calculate slippage as percentage difference between best and worst price
+            slippage = abs((worst_price - best_price) / best_price) * 100 if best_price > 0 else 0.0
+            
+            # For BUY orders: add a small buffer to ensure immediate fill
+            # For SELL orders: subtract a small buffer to ensure immediate fill
+            buffer_percentage = 0.0005  # 0.05%
+            price_adjustment = worst_price * buffer_percentage
+            
+            if side == OrderSide.BUY:
+                optimal_price = worst_price + price_adjustment
+            else:  # SELL
+                optimal_price = worst_price - price_adjustment
+            
+            # If there's not enough liquidity, we'll still return the best price we found
+            # but mark enough_liquidity as False
+            if not enough_liquidity:
+                logger.warning(f"Not enough liquidity in the order book for {amount} {symbol}")
+            
+            # For very small orders or perfect amount match, simplify to a single price
+            if len(batches) == 1 or (slippage < 0.1 and enough_liquidity):
+                batches = [{"price": optimal_price, "amount": amount}]
+            
+            return {
+                "price": float(optimal_price),
+                "batches": batches,
+                "total_cost": float(total_cost),
+                "slippage": float(slippage),
+                "enough_liquidity": enough_liquidity
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating optimal price for {symbol}: {e}")
+            # Fallback to current market price from ticker
+            ticker = self.get_ticker(symbol)
+            return {
+                "price": float(ticker.get("last_price", 0)),
+                "batches": [{"price": float(ticker.get("last_price", 0)), "amount": amount}],
+                "total_cost": float(ticker.get("last_price", 0)) * amount,
+                "slippage": 0.0,
+                "enough_liquidity": False
+            }

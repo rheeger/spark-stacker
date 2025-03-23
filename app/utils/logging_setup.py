@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import json
+import uuid
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,18 @@ logs_dir.mkdir(exist_ok=True)
 # Default log format
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# Generate a unique build ID for this container instance
+CONTAINER_BUILD_ID = str(uuid.uuid4())[:8]
+# Generate a timestamp for this build
+BUILD_TIMESTAMP = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
+# Create a build-specific directory for all logs
+BUILD_LOG_DIR = logs_dir / f"{BUILD_TIMESTAMP}_{CONTAINER_BUILD_ID}"
+BUILD_LOG_DIR.mkdir(exist_ok=True)
+
+# Dictionary to track connector-specific log directories
+CONNECTOR_LOG_DIRS = {}
 
 class StructuredLogRecord(logging.LogRecord):
     """Custom LogRecord that adds structured logging capabilities."""
@@ -57,6 +70,173 @@ class StructuredLogger(logging.Logger):
         """
         kwargs['_structured'] = True
         self.log(level, msg, kwargs)
+
+
+def setup_connector_log_directory(connector_name: str) -> Path:
+    """
+    Create a dedicated directory for a connector's logs.
+    
+    Args:
+        connector_name: Name of the connector (e.g., 'coinbase')
+        
+    Returns:
+        Path: Path to the connector's log directory
+    """
+    # Check if we already created this directory
+    if connector_name in CONNECTOR_LOG_DIRS:
+        return CONNECTOR_LOG_DIRS[connector_name]
+    
+    # Create a connector-specific directory in the build directory
+    connector_dir = BUILD_LOG_DIR / connector_name
+    connector_dir.mkdir(exist_ok=True)
+    
+    # Store the directory path
+    CONNECTOR_LOG_DIRS[connector_name] = connector_dir
+    
+    logging.info(f"Created connector log directory for {connector_name} at {connector_dir}")
+    
+    return connector_dir
+
+
+def setup_connector_balance_logger(connector_name: str, log_level: Union[str, int] = "DEBUG") -> logging.Logger:
+    """
+    Create a dedicated logger for connector balance operations.
+    
+    Args:
+        connector_name: Name of the connector (e.g., 'coinbase')
+        log_level: Logging level for the connector balance logger
+        
+    Returns:
+        logging.Logger: Configured logger for connector balance operations
+    """
+    # Convert string log level to integer if needed
+    if isinstance(log_level, str):
+        log_level = getattr(logging, log_level.upper(), logging.DEBUG)
+    
+    # Create a unique logger name for this connector's balance operations
+    logger_name = f"app.connectors.{connector_name}.balance"
+    
+    # Get or create the logger
+    balance_logger = logging.getLogger(logger_name)
+    balance_logger.setLevel(log_level)
+    
+    # Remove any existing handlers
+    for handler in balance_logger.handlers[:]:
+        balance_logger.removeHandler(handler)
+    
+    # Create connector-specific log directory and file
+    connector_dir = setup_connector_log_directory(connector_name)
+    connector_log_file = connector_dir / "balance.log"
+    
+    connector_file_handler = RotatingFileHandler(
+        connector_log_file, 
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5
+    )
+    formatter = logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
+    connector_file_handler.setFormatter(formatter)
+    balance_logger.addHandler(connector_file_handler)
+    
+    # Make sure this logger doesn't propagate to the root logger
+    balance_logger.propagate = False
+    
+    logging.info(f"Created dedicated balance logger for {connector_name} at {connector_log_file}")
+    
+    return balance_logger
+
+
+def setup_connector_markets_logger(connector_name: str, log_level: Union[str, int] = "DEBUG") -> logging.Logger:
+    """
+    Create a dedicated logger for connector market data operations.
+    
+    Args:
+        connector_name: Name of the connector (e.g., 'coinbase')
+        log_level: Logging level for the connector markets logger
+        
+    Returns:
+        logging.Logger: Configured logger for connector market data operations
+    """
+    # Convert string log level to integer if needed
+    if isinstance(log_level, str):
+        log_level = getattr(logging, log_level.upper(), logging.DEBUG)
+    
+    # Create a unique logger name for this connector's market operations
+    logger_name = f"app.connectors.{connector_name}.markets"
+    
+    # Get or create the logger
+    markets_logger = logging.getLogger(logger_name)
+    markets_logger.setLevel(log_level)
+    
+    # Remove any existing handlers
+    for handler in markets_logger.handlers[:]:
+        markets_logger.removeHandler(handler)
+    
+    # Create connector-specific log directory and file
+    connector_dir = setup_connector_log_directory(connector_name)
+    connector_log_file = connector_dir / "markets.log"
+    
+    connector_file_handler = RotatingFileHandler(
+        connector_log_file, 
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5
+    )
+    formatter = logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
+    connector_file_handler.setFormatter(formatter)
+    markets_logger.addHandler(connector_file_handler)
+    
+    # Make sure this logger doesn't propagate to the root logger
+    markets_logger.propagate = False
+    
+    logging.info(f"Created dedicated markets logger for {connector_name} at {connector_log_file}")
+    
+    return markets_logger
+
+
+def setup_connector_orders_logger(connector_name: str, log_level: Union[str, int] = "DEBUG") -> logging.Logger:
+    """
+    Create a dedicated logger for connector order operations.
+    
+    Args:
+        connector_name: Name of the connector (e.g., 'coinbase')
+        log_level: Logging level for the connector orders logger
+        
+    Returns:
+        logging.Logger: Configured logger for connector order operations
+    """
+    # Convert string log level to integer if needed
+    if isinstance(log_level, str):
+        log_level = getattr(logging, log_level.upper(), logging.DEBUG)
+    
+    # Create a unique logger name for this connector's order operations
+    logger_name = f"app.connectors.{connector_name}.orders"
+    
+    # Get or create the logger
+    orders_logger = logging.getLogger(logger_name)
+    orders_logger.setLevel(log_level)
+    
+    # Remove any existing handlers
+    for handler in orders_logger.handlers[:]:
+        orders_logger.removeHandler(handler)
+    
+    # Create connector-specific log directory and file
+    connector_dir = setup_connector_log_directory(connector_name)
+    connector_log_file = connector_dir / "orders.log"
+    
+    connector_file_handler = RotatingFileHandler(
+        connector_log_file, 
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5
+    )
+    formatter = logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
+    connector_file_handler.setFormatter(formatter)
+    orders_logger.addHandler(connector_file_handler)
+    
+    # Make sure this logger doesn't propagate to the root logger
+    orders_logger.propagate = False
+    
+    logging.info(f"Created dedicated orders logger for {connector_name} at {connector_log_file}")
+    
+    return orders_logger
 
 
 def setup_logging(
@@ -119,20 +299,19 @@ def setup_logging(
     
     # File handler
     if log_to_file:
-        if log_file is None:
-            # Default log file: logs/spark_stacker_YYYY-MM-DD.log
-            timestamp = datetime.now().strftime("%Y-%m-%d")
-            log_file = logs_dir / f"spark_stacker_{timestamp}.log"
+        # Create main log file in the build directory
+        build_log_file = BUILD_LOG_DIR / "spark_stacker.log"
         
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=max_bytes, backupCount=backup_count
+        # Create file handler for build-specific log
+        build_file_handler = RotatingFileHandler(
+            build_log_file, maxBytes=max_bytes, backupCount=backup_count
         )
-        file_handler.setLevel(log_level)
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+        build_file_handler.setLevel(log_level)
+        build_file_handler.setFormatter(formatter)
+        root_logger.addHandler(build_file_handler)
+        
+        # Set log_file to build log file for the message below
+        log_file = build_log_file
     
     # Set library loggers to WARNING to reduce noise
     logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -150,7 +329,9 @@ def setup_logging(
     
     logging.info(f"Logging initialized at level {logging.getLevelName(log_level)}")
     if log_to_file:
-        logging.info(f"Logs will be written to {log_file}")
+        logging.info(f"Logs will be written to directory {BUILD_LOG_DIR}")
+        logging.info(f"Container build ID: {CONTAINER_BUILD_ID}")
+        logging.info(f"Build timestamp: {BUILD_TIMESTAMP}")
 
 
 def get_structured_logger(name: str) -> StructuredLogger:

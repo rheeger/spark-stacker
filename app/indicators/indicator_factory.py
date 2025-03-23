@@ -3,7 +3,6 @@ from typing import Dict, Any, Optional, Type, List
 
 from app.indicators.base_indicator import BaseIndicator
 from app.indicators.rsi_indicator import RSIIndicator
-from app.indicators.liveness_test_indicator import LivenessTestIndicator
 
 # Import additional indicators as they are implemented
 # from app.indicators.macd_indicator import MACDIndicator
@@ -22,7 +21,6 @@ class IndicatorFactory:
     # Registry of available indicator types
     _indicator_registry: Dict[str, Type[BaseIndicator]] = {
         'rsi': RSIIndicator,
-        'liveness_test': LivenessTestIndicator,
         # Add more indicators as they are implemented
         # 'macd': MACDIndicator,
         # 'bollinger': BollingerBandsIndicator,

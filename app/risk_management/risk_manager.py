@@ -131,18 +131,18 @@ class RiskManager:
         max_hedge_leverage: Optional[float] = None
     ) -> Tuple[float, float]:
         """
-        Calculate the appropriate size and leverage for a hedge position.
+        Calculate hedge position size and leverage.
         
         Args:
-            main_position_size: Size of the main position (in USD)
+            main_position_size: Size of the main position
             main_leverage: Leverage of the main position
-            hedge_ratio: Hedge ratio (0-1) indicating what fraction to hedge
+            hedge_ratio: Ratio of hedge to main position (0-1)
             max_hedge_leverage: Maximum leverage for the hedge position
             
         Returns:
             Tuple of (hedge_position_size, hedge_leverage)
         """
-        if hedge_ratio <= 0 or hedge_ratio > 1:
+        if hedge_ratio < 0 or hedge_ratio > 1:
             logger.warning(f"Invalid hedge ratio {hedge_ratio}, using default of 0.2")
             hedge_ratio = 0.2
         

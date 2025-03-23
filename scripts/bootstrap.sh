@@ -5,7 +5,8 @@ set -e
 mkdir -p /app/logs
 
 # Process the config.json file and replace environment variables
-CONFIG_FILE="/app/config/config.json"
+CONFIG_FILE=${CONFIG_FILE:-"/app/config/config.json"}
+PROCESSED_CONFIG="/tmp/processed_config.json"
 echo "Processing config file: $CONFIG_FILE"
 
 # Print config file content for debugging
@@ -13,15 +14,10 @@ echo "Config file content before substitution:"
 cat "$CONFIG_FILE"
 
 # Use envsubst to replace environment variables in the config file
-# Create a temporary file
-TEMP_FILE=$(mktemp)
-envsubst < "$CONFIG_FILE" > "$TEMP_FILE"
-mv "$TEMP_FILE" "$CONFIG_FILE"
+# Create a temporary file that we can write to
+envsubst < "$CONFIG_FILE" > "$PROCESSED_CONFIG"
 
-echo "Config file content after substitution:"
-cat "$CONFIG_FILE"
-
-echo "Environment variables have been injected into the config file"
+echo "Config file processed successfully to $PROCESSED_CONFIG"
 
 # Print important env vars for debugging (without sensitive data)
 echo "Environment variables:"
@@ -32,6 +28,28 @@ echo "HYPERLIQUID_RPC_URL: $HYPERLIQUID_RPC_URL"
 echo "WALLET_ADDRESS set: $(if [ -n "$WALLET_ADDRESS" ]; then echo "yes"; else echo "no"; fi)"
 echo "PRIVATE_KEY set: $(if [ -n "$PRIVATE_KEY" ]; then echo "yes"; else echo "no"; fi)"
 
-# Execute the command passed to this script
-echo "Starting Spark Stacker..."
-exec "$@" 
+# Modify the command to use the processed config
+if [[ "$@" == *"--config"* ]]; then
+  # Replace the config path in the command
+  args=()
+  skip_next=false
+  for arg in "$@"; do
+    if $skip_next; then
+      skip_next=false
+      continue
+    elif [ "$arg" == "--config" ]; then
+      args+=("$arg")
+      args+=("$PROCESSED_CONFIG")
+      skip_next=true
+    else
+      args+=("$arg")
+    fi
+  done
+  # Execute with the modified arguments
+  echo "Starting Spark Stacker with processed config..."
+  exec "${args[@]}"
+else
+  # Append the config argument if not present
+  echo "Starting Spark Stacker..."
+  exec "$@" --config "$PROCESSED_CONFIG"
+fi 

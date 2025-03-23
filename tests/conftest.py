@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 # Import project components
 from app.utils.config import AppConfig, ExchangeConfig, TradingStrategyConfig, IndicatorConfig
-from app.connectors.base_connector import BaseConnector, OrderSide, OrderType
+from app.connectors.base_connector import BaseConnector, OrderSide, OrderType, MarketType
 from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 from app.risk_management.risk_manager import RiskManager
 from app.core.trading_engine import TradingEngine
@@ -119,6 +119,9 @@ def mock_connector():
         "price": 1500.0,
         "status": "FILLED"
     }
+    
+    # Add market_types property
+    connector.market_types = MarketType.SPOT
     
     return connector
 

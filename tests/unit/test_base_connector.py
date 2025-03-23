@@ -114,6 +114,16 @@ class MockConnector(BaseConnector):
             {"tier": 1, "min_notional": 0, "max_notional": 100000, "max_leverage": 50},
             {"tier": 2, "min_notional": 100000, "max_notional": 500000, "max_leverage": 20}
         ]
+        
+    def get_optimal_limit_price(self, symbol, side, amount):
+        """Get optimal limit price for a symbol."""
+        return {
+            "price": 1500.0 if symbol == "ETH" else 25000.0,
+            "batches": [{"price": 1500.0, "amount": amount}],
+            "total_cost": 1500.0 * amount,
+            "slippage": 0.0,
+            "enough_liquidity": True
+        }
 
 
 def test_base_connector_abstract_methods():
