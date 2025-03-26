@@ -336,24 +336,28 @@ def monitor_position_health(combined_position):
 ## Development Roadmap
 
 ### Phase 1: Design & Prototyping
+
 - Requirement finalization
 - Development environment setup
 - Basic prototype with dummy indicators
 - Initial exchange connectivity tests
 
 ### Phase 2: Core Development & Backtesting
+
 - Indicator module implementation
 - Hedging logic development
 - Backtesting framework construction
 - Strategy parameter optimization
 
 ### Phase 3: Integration & Dry Run
+
 - Full system integration
 - Paper trading on testnet
 - End-to-end testing
 - Performance and security review
 
 ### Phase 4: Deployment & Live Trading
+
 - Initial deployment with minimal capital
 - Performance monitoring and comparison to backtests
 - Gradual capital scaling

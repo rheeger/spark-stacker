@@ -8,11 +8,21 @@ from unittest.mock import MagicMock, patch
 from typing import Dict, Any, List, Optional
 
 # Add the app directory to the path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import project components
-from app.utils.config import AppConfig, ExchangeConfig, TradingStrategyConfig, IndicatorConfig
-from app.connectors.base_connector import BaseConnector, OrderSide, OrderType, MarketType
+from app.utils.config import (
+    AppConfig,
+    ExchangeConfig,
+    TradingStrategyConfig,
+    IndicatorConfig,
+)
+from app.connectors.base_connector import (
+    BaseConnector,
+    OrderSide,
+    OrderType,
+    MarketType,
+)
 from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 from app.risk_management.risk_manager import RiskManager
 from app.core.trading_engine import TradingEngine
@@ -23,20 +33,20 @@ def sample_price_data():
     """Sample price data for indicator testing."""
     # Create a DataFrame with typical OHLCV data
     data = {
-        'timestamp': pd.date_range(start='2023-01-01', periods=100, freq='1h'),
-        'symbol': 'ETH',
-        'open': np.random.normal(1500, 50, 100),
-        'high': np.random.normal(1550, 50, 100),
-        'low': np.random.normal(1450, 50, 100),
-        'close': np.random.normal(1500, 50, 100),
-        'volume': np.random.normal(1000, 200, 100)
+        "timestamp": pd.date_range(start="2023-01-01", periods=100, freq="1h"),
+        "symbol": "ETH",
+        "open": np.random.normal(1500, 50, 100),
+        "high": np.random.normal(1550, 50, 100),
+        "low": np.random.normal(1450, 50, 100),
+        "close": np.random.normal(1500, 50, 100),
+        "volume": np.random.normal(1000, 200, 100),
     }
-    
+
     # Make sure high is actually the highest and low is the lowest
-    for i in range(len(data['open'])):
-        data['high'][i] = max(data['open'][i], data['close'][i], data['high'][i])
-        data['low'][i] = min(data['open'][i], data['close'][i], data['low'][i])
-    
+    for i in range(len(data["open"])):
+        data["high"][i] = max(data["open"][i], data["close"][i], data["high"][i])
+        data["low"][i] = min(data["open"][i], data["close"][i], data["low"][i])
+
     return pd.DataFrame(data)
 
 
@@ -58,7 +68,7 @@ def sample_config():
                 private_key="0xabc",
                 testnet=True,
                 use_as_main=True,
-                use_as_hedge=True
+                use_as_hedge=True,
             )
         ],
         strategies=[
@@ -71,7 +81,7 @@ def sample_config():
                 hedge_ratio=0.2,
                 stop_loss_pct=10.0,
                 take_profit_pct=20.0,
-                max_position_size=100.0
+                max_position_size=100.0,
             )
         ],
         indicators=[
@@ -79,13 +89,9 @@ def sample_config():
                 name="test_rsi",
                 type="rsi",
                 enabled=True,
-                parameters={
-                    "period": 14,
-                    "overbought": 70,
-                    "oversold": 30
-                }
+                parameters={"period": 14, "overbought": 70, "oversold": 30},
             )
-        ]
+        ],
     )
     return config
 
@@ -94,7 +100,7 @@ def sample_config():
 def mock_connector():
     """Mock exchange connector."""
     connector = MagicMock(spec=BaseConnector)
-    
+
     # Set up basic methods
     connector.connect.return_value = True
     connector.get_markets.return_value = [
@@ -105,11 +111,11 @@ def mock_connector():
         "last_price": 1500.0,
         "bid": 1499.0,
         "ask": 1501.0,
-        "volume": 1000.0
+        "volume": 1000.0,
     }
     connector.get_account_balance.return_value = {"USD": 10000.0}
     connector.get_positions.return_value = []
-    
+
     # Mock the place_order method to return a successful order
     connector.place_order.return_value = {
         "order_id": "mock_order_123",
@@ -117,12 +123,12 @@ def mock_connector():
         "side": "BUY",
         "size": 1.0,
         "price": 1500.0,
-        "status": "FILLED"
+        "status": "FILLED",
     }
-    
+
     # Add market_types property
     connector.market_types = MarketType.SPOT
-    
+
     return connector
 
 
@@ -130,12 +136,12 @@ def mock_connector():
 def mock_risk_manager():
     """Mock risk manager."""
     risk_manager = MagicMock(spec=RiskManager)
-    
+
     # Set up basic methods
     risk_manager.calculate_position_size.return_value = (100.0, 5.0)  # size, leverage
     risk_manager.calculate_hedge_parameters.return_value = (20.0, 2.0)  # size, leverage
     risk_manager.validate_trade.return_value = (True, "Trade validated")
-    
+
     return risk_manager
 
 
@@ -148,7 +154,7 @@ def trading_engine(mock_connector, mock_risk_manager):
         risk_manager=mock_risk_manager,
         dry_run=True,
         polling_interval=1,
-        max_parallel_trades=1
+        max_parallel_trades=1,
     )
     return engine
 
@@ -162,5 +168,5 @@ def sample_signal():
         indicator="test_indicator",
         confidence=0.8,
         timestamp=1630000000000,
-        params={"reason": "test signal"}
-    ) 
+        params={"reason": "test signal"},
+    )

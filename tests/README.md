@@ -21,21 +21,25 @@ This directory contains the test suite for the Spark Stacker trading system. The
 ### Using pytest directly
 
 Run all tests:
+
 ```bash
 pytest
 ```
 
 Run tests with verbose output:
+
 ```bash
 pytest -v
 ```
 
 Run a specific test file:
+
 ```bash
 pytest tests/unit/test_rsi_indicator.py
 ```
 
 Run tests matching a specific name:
+
 ```bash
 pytest -k "test_rsi"
 ```

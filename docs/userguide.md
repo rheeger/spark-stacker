@@ -16,18 +16,21 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 ### 1.2 Installation Process
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/user/on-chain-perp-trading.git
    cd on-chain-perp-trading
    ```
 
 2. Create and activate a virtual environment:
+
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
 3. Install dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
@@ -61,6 +64,7 @@ Synthetix Perps is a decentralized perpetual futures platform running on Optimis
    - Properly configured RPC endpoint
 
 2. Verify connection:
+
    ```bash
    python test_connection.py --exchange synthetix
    ```
@@ -81,6 +85,7 @@ Hyperliquid is a high-performance on-chain orderbook exchange with its own L1 ch
    - Properly signed your API credentials
 
 2. Verify connection:
+
    ```bash
    python test_connection.py --exchange hyperliquid
    ```
@@ -100,12 +105,14 @@ The system supports two main ways to generate trading signals:
 #### a) Built-in Technical Indicators
 
 Configure the system to use internal calculations based on:
+
 - RSI (Relative Strength Index)
 - MACD (Moving Average Convergence Divergence)
 - Bollinger Bands
 - Moving Averages (EMA, SMA)
 
 Example configuration in `config.yml`:
+
 ```yaml
 strategy:
   type: "indicator"
@@ -128,6 +135,7 @@ Use your custom TradingView strategies by setting up webhook alerts:
 1. Create a Pine Script strategy in TradingView
 2. Set up an alert with webhook delivery to your system's endpoint
 3. Configure the message format in TradingView:
+
    ```
    {
      "passphrase": "YOUR_SECRET",
@@ -137,7 +145,9 @@ Use your custom TradingView strategies by setting up webhook alerts:
      "confidence": 0.8
    }
    ```
+
 4. Start the webhook receiver:
+
    ```bash
    python webhook_server.py
    ```
@@ -174,12 +184,14 @@ The system protects your principal through a strategic hedging approach:
 2. **Hedge Position**: Simultaneously, it opens a smaller position in the opposite direction.
 
 For example:
+
 - $100 available capital 
 - $80 (80%) used for main position at 10× leverage = $800 exposure
 - $20 (20%) used for hedge position at 5× leverage = $100 exposure
 - Net exposure: $700 in signal direction ($800 - $100)
 
 This approach:
+
 - Retains significant upside if the signal is correct
 - Provides protection if the signal is wrong
 - Reduces overall volatility of your account equity
@@ -203,6 +215,7 @@ python run_bot.py --mode backtest --strategy my_strategy --start-date 2023-01-01
 ```
 
 The backtesting engine will:
+
 - Load historical price data for your chosen assets
 - Apply the selected indicators and generate signals
 - Simulate trades including main and hedge positions
@@ -220,6 +233,7 @@ python run_bot.py --mode paper --strategy my_strategy
 ```
 
 This will:
+
 - Connect to live exchange APIs and receive current market data
 - Generate signals and simulate order execution
 - Track hypothetical positions and P&L
@@ -236,6 +250,7 @@ python run_bot.py --mode live --strategy my_strategy --capital 100
 ```
 
 The system will:
+
 1. Monitor markets and indicators in real-time
 2. Execute main and hedge positions when signals are triggered
 3. Actively manage risk through stop-losses and hedge adjustments
@@ -254,6 +269,7 @@ python dashboard.py
 ```
 
 The dashboard shows:
+
 - Current open positions (main and hedge)
 - Real-time P&L and margin utilization
 - Recent trade history and performance stats
@@ -268,6 +284,7 @@ python analyze_performance.py --start-date 2023-01-01 --end-date 2023-12-31
 ```
 
 This analysis includes:
+
 - Win/loss ratio and average trade P&L
 - Strategy performance by market conditions
 - Hedge effectiveness metrics
@@ -276,11 +293,13 @@ This analysis includes:
 ### 6.3 Logging and Alerts
 
 The system maintains comprehensive logs:
+
 - Trade execution logs: `logs/trades.log`
 - System event logs: `logs/system.log`
 - Error logs: `logs/error.log`
 
 Configure alerts via email or messaging services in `config.yml`:
+
 ```yaml
 alerts:
   enabled: true

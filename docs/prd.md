@@ -117,15 +117,18 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 ## Example Hedged Trade Scenario
 
 **Starting Conditions:**
+
 - Available Capital: $100
 - Indicator: RSI and MACD both signal Long on ETH
 
 **Trade Setup:**
+
 - Main Position: Long ETH with 10× leverage using $80 margin = $800 notional exposure
 - Hedge Position: Short ETH with 5× leverage using $20 margin = $100 notional exposure
 - Net Exposure: $700 long ($800 - $100)
 
 **Outcome Scenarios:**
+
 1. **Market rises 5%**: 
    - Long position: +$40 profit
    - Short hedge: -$5 loss

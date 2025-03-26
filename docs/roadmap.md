@@ -7,6 +7,7 @@ This roadmap provides an overview of the development phases for the Spark Stacke
 **Dependencies: None**
 
 Core activities:
+
 - Define system architecture and components
 - Research exchange APIs (Hyperliquid, Synthetix, Coinbase)
 - Design indicator framework and risk management
@@ -20,6 +21,7 @@ Core activities:
 **Critical Path: Backtesting Framework**
 
 Core activities:
+
 - Implement exchange connectors for Hyperliquid and Coinbase
 - Develop indicator framework and initial indicators (RSI)
 - Create risk management system with hedging capabilities
@@ -34,6 +36,7 @@ Core activities:
 **Parallel Work: Basic Monitoring Setup**
 
 Core activities:
+
 - Integrate all components into a cohesive system
 - Implement comprehensive testing
 - Add security features and error handling
@@ -49,6 +52,7 @@ Core activities:
 **Parallel Work: Basic Control Interface**
 
 Core activities:
+
 - Set up NX monorepo structure
 - Implement Grafana-based monitoring system
 - Create performance and health dashboards
@@ -63,6 +67,7 @@ Core activities:
 **Cannot Start Until: Dry Run Complete & Basic Monitoring Ready**
 
 Core activities:
+
 - Configure production environment
 - Implement CI/CD pipeline
 - Deploy with minimal initial capital
@@ -77,6 +82,7 @@ Core activities:
 **Parallel Work: Independent Features**
 
 Core activities:
+
 - Add advanced order types (trailing stops, OCO orders)
 - Implement additional exchange connectors
 - Create advanced risk management features

@@ -1,14 +1,17 @@
 # Phase 2: Core Development & Backtesting (PARTIALLY COMPLETED)
 
 ## Dependencies
+
 - Phase 1: System Design & Planning (✅ Completed)
 
 ## Critical Path Items
+
 - Backtesting Framework (🔲 Not Started)
 - Coinbase Connector Completion (🟡 In Progress)
 
 ## Exchange Connectors
-- ✅ Implemented BaseConnector abstract class 
+
+- ✅ Implemented BaseConnector abstract class
   - ✅ Defined common interface for all exchange connectors
   - ✅ Added error handling and retry logic
   - ✅ Implemented authentication template methods
@@ -31,6 +34,7 @@
   - ✅ Built environment variable substitution for secure credentials
 
 ## Technical Indicators
+
 - ✅ Built BaseIndicator abstract class (app/indicators/base_indicator.py)
   - ✅ Created standardized signal generation interface
   - ✅ Implemented data validation and preprocessing
@@ -48,6 +52,7 @@
 - 🔲 Additional indicators not yet implemented (MACD, Bollinger Bands, etc.)
 
 ## Order Execution
+
 - ✅ Implemented order placement logic
   - ✅ Support for market and limit orders
   - ✅ Added configurable leverage handling
@@ -64,6 +69,7 @@
   - ✅ Developed synchronized execution timing
 
 ## Risk Management
+
 - ✅ Implemented RiskManager class (app/risk_management/risk_manager.py)
   - ✅ Added leverage limit enforcement
   - ✅ Implemented position size constraints
@@ -80,6 +86,7 @@
   - ✅ Created automatic deleveraging when approaching limits
 
 ## Backtesting Framework (CRITICAL PATH)
+
 - 🔲 Historical data retrieval and storage not implemented
   - 🔲 Data source integration (CSV, API, database)
   - 🔲 Data cleaning and normalization
@@ -102,6 +109,7 @@
   - 🔲 Walk-forward analysis
 
 ## Current Implementation Status
+
 Phase 2 is approximately 75% complete. The core components for live trading functionality are operational, with robust exchange connectivity (particularly for Hyperliquid), basic indicator functionality (RSI), and comprehensive risk management.
 
 The Coinbase connector is partially implemented, focusing on data retrieval capabilities, but lacks full trading functionality. One technical indicator (RSI) is fully implemented with a well-designed framework that makes adding additional indicators straightforward.
@@ -111,6 +119,7 @@ The risk management system is fully operational, with thorough implementations o
 The main gap is the backtesting framework, which is entirely unimplemented. This prevents proper historical validation of trading strategies and parameter optimization before live deployment.
 
 ## Next Steps (Prioritized)
+
 1. Complete backtesting framework (CRITICAL PATH)
    - Start with historical data retrieval
    - Implement basic performance metrics
@@ -121,4 +130,4 @@ The main gap is the backtesting framework, which is entirely unimplemented. This
 3. Add additional technical indicators
    - MACD
    - Bollinger Bands
-   - Moving Averages 
+   - Moving Averages
