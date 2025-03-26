@@ -4,13 +4,15 @@ Spark Stacker is an advanced on-chain perpetual trading system with integrated h
 
 ## Features
 
-- **Multi-Exchange Support**: Currently supports Hyperliquid with planned expansion to Synthetix
+- **Multi-Exchange Support**: Supports Hyperliquid and Coinbase with planned expansion to Synthetix
 - **Technical Indicators**: RSI implementation with framework for custom indicators
 - **Risk Management**: Advanced position sizing, leverage control, and hedging
 - **Trading Webhooks**: Support for TradingView alerts integration
 - **Dry Run Mode**: Test strategies without deploying capital
 - **Structured Logging**: Comprehensive logging for monitoring and debugging
 - **Containerization**: Docker support for easy deployment
+- **Monitoring**: Grafana dashboards for real-time system and trading performance monitoring
+- **Control Interface**: Web-based UI for managing strategies and positions
 
 ## Architecture
 
@@ -21,6 +23,7 @@ Spark Stacker is built with a modular architecture:
 - **Risk Management**: Handles position sizing and risk control
 - **Trading Engine**: Core component that coordinates all operations
 - **Webhook Server**: Receives external signals via HTTP
+- **Monitoring System**: Grafana dashboards for performance tracking and analysis
 
 ## Setup
 
@@ -28,6 +31,7 @@ Spark Stacker is built with a modular architecture:
 
 - Python 3.11 or higher
 - Docker (optional, for containerized deployment)
+- Node.js 18+ (for the monitoring and control interface)
 
 ### Configuration
 
@@ -113,6 +117,39 @@ docker build -t spark-stacker .
 docker run -p 8080:8080 --name spark-stacker -v $(pwd)/config.json:/app/config.json spark-stacker
 ```
 
+## Monitoring & Control Interface
+
+Spark Stacker includes a comprehensive monitoring and control system based on Grafana and Prometheus:
+
+### Key Features
+
+- **Real-time Dashboards**: Monitor system health, trading performance, and exchange connectivity
+- **Position Management**: View, modify, and close positions through a web interface
+- **Strategy Control**: Enable/disable strategies and adjust parameters in real-time
+- **Performance Analysis**: Track historical performance with detailed metrics
+- **Alerting**: Receive notifications for critical events (liquidation risks, errors, etc.)
+
+### Monitoring Setup
+
+```bash
+# Start the monitoring stack
+cd packages/monitoring
+docker-compose up -d
+
+# Access the Grafana interface
+# Default credentials: admin/admin
+open http://localhost:3000
+```
+
+### Available Dashboards
+
+- **System Health**: Resource utilization, container status, and application health
+- **Trading Performance**: Active positions, P&L metrics, and trade history
+- **Exchange Integration**: API call rates, order execution metrics, and connection status
+- **Risk Management**: Margin utilization, liquidation risks, and position sizing metrics
+
+For more information, see the [Grafana Monitoring System](docs/grafana-monitoring-plan.md) documentation.
+
 ## Adding New Components
 
 ### Adding a New Indicator
@@ -126,6 +163,12 @@ docker run -p 8080:8080 --name spark-stacker -v $(pwd)/config.json:/app/config.j
 1. Create a new file in `app/connectors/` directory
 2. Implement the connector by extending the `BaseConnector` class
 3. Register your connector in the `ConnectorFactory`
+
+### Adding a New Dashboard
+
+1. Create a new dashboard in Grafana
+2. Export the dashboard to JSON
+3. Save the JSON file in `packages/monitoring/dashboards/`
 
 ## Development Roadmap
 
