@@ -2,7 +2,10 @@
 
 ## System Overview
 
-The **On-Chain Perpetual Trading System** is designed to execute high-leverage trades on decentralized perpetual futures exchanges while implementing sophisticated hedging strategies to protect your capital. The system follows technical indicators to enter trades and automatically manages risk through position sizing, stop-losses, and strategic hedge positions.
+The **On-Chain Perpetual Trading System** is designed to execute high-leverage trades on
+decentralized perpetual futures exchanges while implementing sophisticated hedging strategies to
+protect your capital. The system follows technical indicators to enter trades and automatically
+manages risk through position sizing, stop-losses, and strategic hedge positions.
 
 ## 1. **Setup & Installation**
 
@@ -36,18 +39,19 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
    ```
 
 4. Configure environment variables:
+
    - Create a `.env` file based on the provided `.env.example`
    - Add your exchange API keys, wallet details, and network endpoints
 
-   ```
+   ```env
    # Synthetix (Optimism) Configuration
    OPTIMISM_RPC_URL=https://optimism-mainnet.infura.io/v3/YOUR_KEY
    SYNTHETIX_WALLET_PRIVATE_KEY=your_private_key_here
-   
+
    # Hyperliquid Configuration
    HYPERLIQUID_API_KEY=your_api_key
    HYPERLIQUID_PRIVATE_KEY=your_signed_key
-   
+
    # TradingView Webhook (Optional)
    WEBHOOK_SECRET=your_webhook_secret
    ```
@@ -56,9 +60,11 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 
 ### 2.1 Connecting to Synthetix
 
-Synthetix Perps is a decentralized perpetual futures platform running on Optimism and Base networks. The trading system interacts with Synthetix through Web3 calls to its smart contracts.
+Synthetix Perps is a decentralized perpetual futures platform running on Optimism and Base networks.
+The trading system interacts with Synthetix through Web3 calls to its smart contracts.
 
 1. Ensure you have:
+
    - An Optimism L2 wallet with ETH for gas
    - sUSD (Synthetix USD) for margin/collateral
    - Properly configured RPC endpoint
@@ -80,6 +86,7 @@ Synthetix Perps is a decentralized perpetual futures platform running on Optimis
 Hyperliquid is a high-performance on-chain orderbook exchange with its own L1 chain.
 
 1. Ensure you have:
+
    - Generated API keys from the Hyperliquid interface
    - USDC for margin/collateral (transferred to Hyperliquid)
    - Properly signed your API credentials
@@ -136,7 +143,7 @@ Use your custom TradingView strategies by setting up webhook alerts:
 2. Set up an alert with webhook delivery to your system's endpoint
 3. Configure the message format in TradingView:
 
-   ```
+   ```json
    {
      "passphrase": "YOUR_SECRET",
      "asset": "{{ticker}}",
@@ -160,18 +167,18 @@ Configure these critical risk management settings:
 risk_management:
   # Position Sizing & Leverage
   max_leverage: 10
-  main_position_ratio: 0.8  # Percentage of capital for main position
-  hedge_position_ratio: 0.2  # Percentage of capital for hedge position
-  hedge_leverage_ratio: 0.5  # Hedge leverage as fraction of main leverage
-  
+  main_position_ratio: 0.8 # Percentage of capital for main position
+  hedge_position_ratio: 0.2 # Percentage of capital for hedge position
+  hedge_leverage_ratio: 0.5 # Hedge leverage as fraction of main leverage
+
   # Protection Mechanisms
-  stop_loss_percent: -10.0  # Close positions if drawdown exceeds 10%
-  take_profit_percent: 20.0  # Take profit at 20% gain
-  max_daily_loss_percent: -15.0  # Stop trading if daily loss exceeds 15%
-  
+  stop_loss_percent: -10.0 # Close positions if drawdown exceeds 10%
+  take_profit_percent: 20.0 # Take profit at 20% gain
+  max_daily_loss_percent: -15.0 # Stop trading if daily loss exceeds 15%
+
   # Liquidation Protection
-  liquidation_warning_threshold: 1.2  # 1.2× maintenance margin
-  hedge_profit_threshold: 5.0  # Close hedge when 5% profit to protect main
+  liquidation_warning_threshold: 1.2 # 1.2× maintenance margin
+  hedge_profit_threshold: 5.0 # Close hedge when 5% profit to protect main
 ```
 
 ## 4. **Understanding the Hedging Strategy**
@@ -180,12 +187,13 @@ risk_management:
 
 The system protects your principal through a strategic hedging approach:
 
-1. **Main Position**: When a signal is received, the system opens a larger position in the direction of the signal (long or short).
+1. **Main Position**: When a signal is received, the system opens a larger position in the direction
+   of the signal (long or short).
 2. **Hedge Position**: Simultaneously, it opens a smaller position in the opposite direction.
 
 For example:
 
-- $100 available capital 
+- $100 available capital
 - $80 (80%) used for main position at 10× leverage = $800 exposure
 - $20 (20%) used for hedge position at 5× leverage = $100 exposure
 - Net exposure: $700 in signal direction ($800 - $100)
@@ -200,7 +208,8 @@ This approach:
 
 The hedge isn't static - the system actively manages it:
 
-- If the main position becomes strongly profitable, the system may reduce the hedge to maximize returns
+- If the main position becomes strongly profitable, the system may reduce the hedge to maximize
+  returns
 - If the trade moves against the main position, the hedge generates profit to offset some losses
 - In extreme adverse moves, the hedge profit helps prevent liquidation of the main position
 
@@ -304,13 +313,13 @@ Configure alerts via email or messaging services in `config.yml`:
 alerts:
   enabled: true
   methods:
-    email: "your@email.com"
+    email: 'your@email.com'
     telegram: true
   events:
-    - "new_position_opened"
-    - "position_closed"
-    - "stop_loss_triggered"
-    - "error_occurred"
+    - 'new_position_opened'
+    - 'position_closed'
+    - 'stop_loss_triggered'
+    - 'error_occurred'
 ```
 
 ## 7. **Best Practices & Tips**
@@ -353,4 +362,5 @@ alerts:
 - Join the community Discord/Telegram
 - File a detailed bug report for persistent issues
 
-This user guide covers the essential aspects of operating the On-Chain Perpetual Trading System. For more detailed information, refer to the Technical Specification document.
+This user guide covers the essential aspects of operating the On-Chain Perpetual Trading System. For
+more detailed information, refer to the Technical Specification document.
