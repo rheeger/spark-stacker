@@ -1,136 +1,133 @@
 # Development Roadmap & Progress Tracking
 
-## **Phase 1: System Design & Planning**
+This roadmap provides an overview of the development phases for the Spark Stacker trading system. For detailed implementation checklists, progress status, and technical details, please refer to the phase-specific checklist files.
 
-### Tasks:
+## Phase 1: System Design & Planning
+**Status: COMPLETED** 
+**Dependencies: None**
 
-✅ Define system architecture and components.
-✅ Research and document API specifications for exchanges (Synthetix, Hyperliquid).
-✅ Research and document API specifications for Coinbase Exchange.
-✅ Outline indicator framework and Pine Script integration.
-✅ Design risk management module structure.
-✅ Finalize core product requirements and user workflows.
+Core activities:
+- Define system architecture and components
+- Research exchange APIs (Hyperliquid, Synthetix, Coinbase)
+- Design indicator framework and risk management
+- Create core product requirements and documentation
 
-### Implementation Details:
-- Requirement Specification for supported indicators and exchanges
-- Environment Setup (Python repositories with necessary libraries)
-- Prototype Core Logic with basic data fetching and decision logic
-- Basic Order Execution Testing on testnets
-- Hedge Execution Testing with opposite orders in sequence
+[Detailed Phase 1 Checklist](./checklists/phase1-system-design-planning.md)
 
-### References:
-- [Synthetix Perps Docs](https://docs.synthetix.io/perpetual-futures)
-- [Hyperliquid API Docs](https://hyperliquid.gitbook.io/hyperliquid-docs/)
-- [Coinbase API Documentation](https://docs.cloud.coinbase.com/advanced-trade-api/docs/welcome)
+## Phase 2: Core Development & Backtesting
+**Status: PARTIALLY COMPLETED (75%)** 
+**Dependencies: Phase 1**
+**Critical Path: Backtesting Framework**
 
-## **Phase 2: Core Development & Backtesting**
+Core activities:
+- Implement exchange connectors for Hyperliquid and Coinbase
+- Develop indicator framework and initial indicators (RSI)
+- Create risk management system with hedging capabilities
+- Implement order execution logic
+- Develop backtesting framework (pending)
 
-### Tasks:
+[Detailed Phase 2 Checklist](./checklists/phase2-core-development-backtesting.md)
 
-✅ Implement exchange connectors (Hyperliquid, Synthetix pending).
-🟡 Implement Coinbase exchange connector.
-✅ Develop order execution logic (market/limit orders, leverage handling).
-✅ Implement technical indicators (RSI implemented, more pending).
-✅ Integrate Pine Script support for user-defined strategies.
-✅ Build hedging mechanism to protect principal.
-✅ Develop risk management logic (max leverage, stop-loss, drawdown control).
-🔲 Implement backtesting framework for strategy validation.
+## Phase 3: Integration & Dry Run
+**Status: PARTIALLY COMPLETED (80%)** 
+**Dependencies: Phase 2**
+**Parallel Work: Basic Monitoring Setup**
 
-### Implementation Details:
-- ✅ Indicator Module Development with Pandas (RSI implemented)
-- ✅ Hedging Logic implementation with parameterized hedge ratios
-- 🟡 Coinbase Connector with API key authentication
-- 🔲 Backtesting Framework development for historical validation
-- 🔲 Historical Data Collection for accurate backtests
-- 🔲 Parameter Optimization based on backtesting results
-- 🔲 Risk Scenario Simulation for extreme market conditions
+Core activities:
+- Integrate all components into a cohesive system
+- Implement comprehensive testing
+- Add security features and error handling
+- Create containerization and deployment infrastructure
+- Run dry tests on testnets
 
-### References:
-- [TA-Lib Documentation](https://ta-lib.org/function.html)
-- [Pandas-TA GitHub](https://github.com/twopirllc/pandas-ta)
-- [Synthetix Testnet (Optimistic Sepolia)](https://docs.synthetix.io/integrations/testnet)
-- [Coinbase Advanced Trade API](https://docs.cloud.coinbase.com/advanced-trade-api/reference)
+[Detailed Phase 3 Checklist](./checklists/phase3-integration-dry-run.md)
 
-## **Phase 3: Integration & Dry Run**
+## Phase 4: Monitoring & Control Interface
+**Status: PLANNED** 
+**Dependencies: Phase 3 (Partial)**
+**Can Start: During Phase 3**
+**Parallel Work: Basic Control Interface**
 
-### Tasks:
+Core activities:
+- Set up NX monorepo structure
+- Implement Grafana-based monitoring system
+- Create performance and health dashboards
+- Develop control interface for strategy management
+- Add real-time alerts and notifications
 
-✅ Unit testing of API connections and order execution.
-✅ Full integration of all components into a cohesive system.
-🔲 Paper trading on testnets for strategy validation.
-🟡 End-to-end dry runs with continuous monitoring.
-🔲 Performance and latency evaluation.
-✅ Implement error handling and fail-safe mechanisms.
-✅ Security checks for API keys and sensitive information.
+[Detailed Phase 4 Checklist](./checklists/phase4-monitoring-control-interface.md)
 
-### Implementation Details:
-- ✅ Combined data ingestion, indicator evaluation, trade execution, and risk management
-- ✅ Unit test framework with fixtures and robust test coverage
-- ✅ Continuous test automation with file watching
-- 🟡 Run on testnets or paper trading mode without real capital
-- 🔲 Verify signal pickup, order placement, and stop management
-- 🔲 Test reliability with network disconnection scenarios
-- 🔲 Measure response time from signal to order execution
-- ✅ Secure sensitive information (API keys, private keys)
+## Phase 5: Deployment & Live Trading
+**Status: PLANNED** 
+**Dependencies: Phase 3, Phase 4**
+**Cannot Start Until: Dry Run Complete & Basic Monitoring Ready**
 
-### References:
-- [Web3.py Documentation](https://web3py.readthedocs.io/)
-- [Hyperliquid Python SDK](https://github.com/hyperliquid-dex/hyperliquid-python-sdk)
+Core activities:
+- Configure production environment
+- Implement CI/CD pipeline
+- Deploy with minimal initial capital
+- Monitor system under real conditions
+- Analyze performance and optimize execution
 
-## **Phase 4: Deployment & Live Trading**
+[Detailed Phase 5 Checklist](./checklists/phase5-deployment-live-trading.md)
 
-### Tasks:
+## Phase 6: Continuous Improvement & Expansion
+**Status: PLANNED** 
+**Dependencies: None (Can Start During Phase 5)**
+**Parallel Work: Independent Features**
 
-🔲 Deploy system in controlled live environment with minimal capital.
-🔲 Setup monitoring tools and alerts for critical events.
-🔲 Monitor real-time performance and compare with backtests.
-🔲 Performance assessment and strategy adjustments.
-🔲 Scale system for increased capital deployment.
+Core activities:
+- Add advanced order types (trailing stops, OCO orders)
+- Implement additional exchange connectors
+- Create advanced risk management features
+- Integrate machine learning capabilities
+- Develop extended analytics and reporting
+- Implement comprehensive testing improvement plan to reach 85%+ code coverage
 
-### Implementation Details:
-- 🔲 Initial deployment with small capital amounts
-- ✅ Implement logging for every action (signals, orders, balance changes)
-- 🔲 Set up alerts for critical events via messaging or email
-- 🔲 Compare live trading results with backtest expectations
-- 🔲 Gradually increase capital allocation after validation
+[Detailed Phase 6 Checklist](./checklists/phase6-continuous-improvement-expansion.md)
 
-### References:
-- [Structured Logging with Python](https://docs.python.org/3/howto/logging.html)
-- [Synthetix Perps Markets](https://docs.synthetix.io/integrations/perps-integration-guide)
+## Progress Summary
 
-## **Phase 5: Continuous Improvement & Expansion**
+| Phase | Status | Completion % | Dependencies | Critical Path Items |
+|-------|--------|--------------|--------------|-------------------|
+| 1: System Design & Planning | ✅ Complete | 100% | None | - |
+| 2: Core Development & Backtesting | 🟡 In Progress | 75% | Phase 1 | Backtesting framework, additional indicators |
+| 3: Integration & Dry Run | 🟡 In Progress | 80% | Phase 2 | End-to-end testing, performance evaluation |
+| 4: Monitoring & Control Interface | 🔲 Planned | 0% | Phase 3 (Partial) | Basic monitoring, core control interface |
+| 5: Deployment & Live Trading | 🔲 Planned | 0% | Phase 3, Phase 4 | Dry run completion, monitoring readiness |
+| 6: Continuous Improvement | 🔲 Planned | 0% | None | Independent features |
 
-### Tasks:
+## Development Timeline
 
-🔲 Introduce additional order types (trailing stops, OCO orders).
-🔲 Expand trade monitoring and analytics features.
-🔲 Automate updates for new exchange API changes.
-🔲 Add support for additional exchanges.
-🔲 Implement ML-based trade optimization (future roadmap).
+```mermaid
+graph TD
+    A[Phase 1: System Design] --> B[Phase 2: Core Development]
+    B --> C[Phase 3: Integration & Dry Run]
+    C --> D[Phase 4: Monitoring & Control]
+    C --> E[Phase 5: Live Trading]
+    D --> E
+    E --> F[Phase 6: Continuous Improvement]
+    
+    %% Parallel work opportunities
+    C -.-> D
+    E -.-> F
+```
 
-### Implementation Details:
-- 🔲 Periodic reviews of performance and integration of new indicators
-- 🔲 Updates for any API changes on Synthetix or Hyperliquid
-- 🔲 A/B testing of new strategies or parameters
-- 🔲 Shadow backtests for continuous validation
+## Critical Path Analysis
 
-## **Progress Tracking Checklist**
+1. **Immediate Focus**
+   - Complete backtesting framework in Phase 2
+   - Start basic monitoring setup during Phase 3
+   - Begin essential control interface development
 
-| Task                                              | Status     |
-| ------------------------------------------------- | ---------- |
-| Prototype & Basic API Testing                     | ✅ Complete |
-| Core Architecture Implementation                  | ✅ Complete |
-| Indicator Framework & Initial Indicators          | ✅ Complete |
-| Connector Interface & Hyperliquid Implementation  | ✅ Complete |
-| Coinbase Connector Implementation                 | 🟡 In Progress |
-| Risk Management System                            | ✅ Complete |
-| Trading Engine with Hedging Support               | ✅ Complete |
-| Webhook Integration for TradingView               | ✅ Complete |
-| Unit Testing & Test Automation                    | ✅ Complete |
-| Strategy Coding & Backtesting                     | 🔲 Pending |
-| Integration & Dry Run                             | 🟡 Partial  |
-| Launch with Small Capital                         | 🔲 Pending |
-| Scale Up & Monitor                                | 🔲 Pending |
-| Optimize & Expand                                 | 🔲 Pending |
+2. **Risk Mitigation**
+   - Implement basic monitoring earlier in the process
+   - Start with minimal viable control interface
+   - Focus on core functionality before advanced features
+
+3. **Resource Allocation**
+   - Prioritize backtesting framework completion
+   - Allocate resources to parallel development where possible
+   - Focus on critical path items before nice-to-have features
 
 This roadmap ensures structured development with clear milestones, allowing for incremental validation and capital protection during the deployment process.
