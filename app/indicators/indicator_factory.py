@@ -1,8 +1,16 @@
 import logging
-from typing import Dict, Any, Optional, Type, List
+from typing import Any, Dict, List, Optional, Type
 
+from app.indicators.adaptive_supertrend_indicator import \
+    AdaptiveSupertrendIndicator
+from app.indicators.adaptive_trend_finder_indicator import \
+    AdaptiveTrendFinderIndicator
 from app.indicators.base_indicator import BaseIndicator
+from app.indicators.bollinger_bands_indicator import BollingerBandsIndicator
+from app.indicators.macd_indicator import MACDIndicator
+from app.indicators.moving_average_indicator import MovingAverageIndicator
 from app.indicators.rsi_indicator import RSIIndicator
+from app.indicators.ultimate_ma_indicator import UltimateMAIndicator
 
 # Import additional indicators as they are implemented
 # from app.indicators.macd_indicator import MACDIndicator
@@ -22,9 +30,12 @@ class IndicatorFactory:
     # Registry of available indicator types
     _indicator_registry: Dict[str, Type[BaseIndicator]] = {
         "rsi": RSIIndicator,
-        # Add more indicators as they are implemented
-        # 'macd': MACDIndicator,
-        # 'bollinger': BollingerBandsIndicator,
+        "macd": MACDIndicator,
+        "bollinger": BollingerBandsIndicator,
+        "ma": MovingAverageIndicator,
+        "adaptive_supertrend": AdaptiveSupertrendIndicator,
+        "adaptive_trend_finder": AdaptiveTrendFinderIndicator,
+        "ultimate_ma": UltimateMAIndicator,
     }
 
     @classmethod
