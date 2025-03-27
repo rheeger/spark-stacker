@@ -22,6 +22,7 @@
     "graph": "nx graph"
   },
   "devDependencies": {
+    "@nx/webpack": "^20.6.4",
     "nx": "20.6.4",
     "typescript": "^5.8.2"
   }

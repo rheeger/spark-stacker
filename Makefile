@@ -1,4 +1,4 @@
-.PHONY: help install-all build-all start-all test-all lint-all clean-all monitoring spark-app shared
+.PHONY: help install-all build-all start-all stop-all test-all lint-all clean-all monitoring spark-app shared
 
 # Default target
 help:
@@ -10,7 +10,8 @@ help:
 	@echo "Project-wide commands:"
 	@echo "  make install-all     : Install dependencies for all packages"
 	@echo "  make build-all       : Build all packages"
-	@echo "  make start-all       : Start all applications"
+	@echo "  make start-all       : Start all services (monitoring and spark-app)"
+	@echo "  make stop-all        : Stop all services"
 	@echo "  make test-all        : Run tests for all packages"
 	@echo "  make lint-all        : Run linters for all packages"
 	@echo "  make clean-all       : Clean up all packages"
@@ -30,7 +31,8 @@ spark-app:
 	@cd packages/spark-app && make help
 
 shared:
-	@echo "To be implemented: Shared package commands"
+	@echo "Shared package commands:"
+	@echo "No specific commands available yet"
 
 # Project-wide commands
 install-all:
@@ -52,37 +54,43 @@ build-all:
 	@echo "All packages built"
 
 start-all:
-	@echo "Starting all applications..."
+	@echo "Starting all services..."
 	@echo "Starting monitoring services..."
 	@cd packages/monitoring && make monitoring-start
-	@echo "Starting monitoring application..."
-	@cd packages/monitoring && make start &
-	@echo "Starting spark-app application..."
-	@cd packages/spark-app && make start &
-	@echo "All applications started"
+	@echo "Starting spark-app services..."
+	@cd packages/spark-app && make spark-app-start
+	@echo "All services started"
+
+stop-all:
+	@echo "Stopping all services..."
+	@echo "Stopping monitoring services..."
+	@cd packages/monitoring && make monitoring-stop
+	@echo "Stopping spark-app services..."
+	@cd packages/spark-app && make spark-app-stop
+	@echo "All services stopped"
 
 test-all:
 	@echo "Running tests for all packages..."
 	@echo "Testing spark-app..."
-	@cd packages/spark-app && make test
+	-@cd packages/spark-app && make test
 	@echo "Testing monitoring..."
-	@cd packages/monitoring && make test
+	-@cd packages/monitoring && make test
 	@echo "All tests complete"
 
 lint-all:
 	@echo "Linting all packages..."
 	@echo "Linting spark-app..."
-	@cd packages/spark-app && make lint
+	-@cd packages/spark-app && make lint
 	@echo "Linting monitoring..."
-	@cd packages/monitoring && make lint
+	-@cd packages/monitoring && make lint
 	@echo "All linting complete"
 
 clean-all:
 	@echo "Cleaning all packages..."
+	@echo "Stopping all services first..."
+	@$(MAKE) stop-all
 	@echo "Cleaning spark-app..."
 	@cd packages/spark-app && make clean
 	@echo "Cleaning monitoring..."
 	@cd packages/monitoring && make clean
-	@echo "Stopping monitoring services..."
-	@cd packages/monitoring && make monitoring-stop
 	@echo "All packages cleaned"
