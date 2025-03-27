@@ -187,7 +187,7 @@ def test_create_indicators_from_config():
     atf = indicators["adaptive_trend_finder_eth"]
     assert isinstance(atf, AdaptiveTrendFinderIndicator)
     assert atf.name == "adaptive_trend_finder_eth"
-    assert atf.period == 20
+    assert 20 in atf.periods
 
     # Check the Ultimate MA indicator
     assert "ultimate_ma_eth" in indicators
