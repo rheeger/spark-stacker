@@ -27,8 +27,10 @@
   - 🔲 Set up global NX installation
   - 🔲 Create project initialization scripts
 - 🔲 Configure NX workspace structure
+
   - 🔲 Set up directory layout as follows:
-    ```
+
+    ```tree
     spark-stacker/
     ├── app/                  # Existing Python trading application
     ├── docs/                 # Documentation
@@ -43,8 +45,10 @@
         │   └── apis/         # Backend APIs for control interface
         └── shared/           # Shared libraries and utilities
     ```
+
   - 🔲 Define project boundaries
   - 🔲 Configure dependency graph
+
 - 🔲 Create package.json and nx.json configuration
   - 🔲 Define workspace defaults
   - 🔲 Configure task runners
@@ -207,6 +211,7 @@
 ## Log Collection Implementation (CRITICAL PATH)
 
 - 🔲 Define structured log format (JSON)
+
   ```json
   {
     "timestamp": "2023-03-15T12:34:56.789Z",
@@ -224,6 +229,7 @@
     "trace_id": "abc123"
   }
   ```
+
 - 🔲 Implement log categories:
   - 🔲 `app`: General application logs
   - 🔲 `trading`: Trading-specific logs
