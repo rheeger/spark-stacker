@@ -43,12 +43,26 @@ services:
     volumes:
       - ./loki/loki-config.yml:/etc/loki/loki-config.yml
       - loki_data:/loki
-    command: -config.file=/etc/loki/loki-config.yml
+      - loki_wal:/wal
     restart: unless-stopped
     ports:
       - "3100:3100"
     networks:
       - monitoring
+    # Use root user temporarily to create directories with proper permissions
+    user: "0"
+    # Add an entrypoint script to initialize directories
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /loki/chunks /loki/boltdb-shipper-active /loki/boltdb-shipper-cache /loki/compactor /wal
+        chown -R 10001:10001 /loki /wal
+        chmod -R 755 /loki /wal
+        # Run Loki directly as root, but the files have proper permissions now
+        exec /usr/bin/loki -config.file=/etc/loki/loki-config.yml
+    env_file:
+      - ./loki/loki.env
 
   promtail:
     image: grafana/promtail:2.9.0
@@ -105,3 +119,4 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  loki_wal:
