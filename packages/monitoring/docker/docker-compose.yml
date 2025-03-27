@@ -18,17 +18,23 @@ services:
       - "9090:9090"
     networks:
       - monitoring
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   grafana:
     image: grafana/grafana:10.1.0
     container_name: grafana
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
+      - ../dashboards:/etc/grafana/dashboards
       - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/dashboards/home.json
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -36,6 +42,8 @@ services:
       - monitoring
     depends_on:
       - prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   loki:
     image: grafana/loki:2.9.0
@@ -63,6 +71,8 @@ services:
         exec /usr/bin/loki -config.file=/etc/loki/loki-config.yml
     env_file:
       - ./loki/loki.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   promtail:
     image: grafana/promtail:2.9.0
@@ -77,6 +87,8 @@ services:
       - loki
     networks:
       - monitoring
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   node-exporter:
     image: prom/node-exporter:v1.6.0
@@ -95,6 +107,8 @@ services:
       - "9100:9100"
     networks:
       - monitoring
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.0
@@ -110,6 +124,30 @@ services:
       - "8090:8080"
     networks:
       - monitoring
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  mock-metrics:
+    image: python:3.9-slim
+    container_name: mock-metrics
+    volumes:
+      - ../exporters:/app
+    command: >
+      bash -c "pip install prometheus_client &&
+              ls -la /app &&
+              python /app/mock-metrics.py"
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
   monitoring:

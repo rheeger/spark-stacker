@@ -1,4 +1,4 @@
-.PHONY: help monitoring-start monitoring-stop monitoring-clean install-deps build start test clean lint
+.PHONY: help monitoring-start monitoring-stop monitoring-clean install-deps build start test clean lint update-dashboards monitoring-restart sync-dashboards
 
 # Default target
 help:
@@ -7,6 +7,8 @@ help:
 	@echo "  make monitoring-start: Start monitoring services with Docker"
 	@echo "  make monitoring-stop : Stop monitoring services"
 	@echo "  make monitoring-clean: Stop and remove Docker volumes"
+	@echo "  make monitoring-restart: Restart monitoring services"
+	@echo "  make update-dashboards: Update Grafana dashboards"
 	@echo "  make install-deps    : Install all dependencies"
 	@echo "  make build           : Build the monitoring application"
 	@echo "  make start           : Start the monitoring application"
@@ -26,6 +28,21 @@ monitoring-stop:
 monitoring-clean:
 	@echo "Cleaning up monitoring services..."
 	cd docker && docker-compose down -v
+
+# Restart monitoring services
+monitoring-restart: sync-dashboards
+	@echo "Restarting monitoring services..."
+	cd docker && docker-compose down
+	cd docker && docker-compose up -d
+	@echo "Monitoring services restarted"
+
+# Update dashboards
+update-dashboards:
+	@echo "Updating Grafana dashboards..."
+	@mkdir -p docker/grafana/provisioning/dashboards/json
+	@cp -f dashboards/*.json docker/grafana/provisioning/dashboards/json/
+	@curl -X POST http://admin:admin@localhost:3000/api/admin/provisioning/dashboards/reload
+	@echo "Dashboards updated and Grafana reloaded"
 
 # Dependencies
 install-deps:
@@ -60,3 +77,11 @@ clean:
 	@echo "Cleaning up monitoring package..."
 	rm -rf node_modules/.cache
 	@echo "Clean complete"
+
+# Sync dashboards
+sync-dashboards:
+	@echo "Syncing dashboards..."
+	@mkdir -p docker/grafana/provisioning/dashboards/json
+	@rm -f docker/grafana/provisioning/dashboards/json/*.json
+	@cp -f dashboards/*.json docker/grafana/provisioning/dashboards/json/
+	@echo "Dashboards synced"
