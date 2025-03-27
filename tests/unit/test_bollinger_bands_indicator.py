@@ -179,29 +179,58 @@ def test_bollinger_bands_process_method(sample_price_data):
     # Manipulate data to create scenarios for signal generation
     df = sample_price_data.copy()
 
-    # First create a scenario where price drops below lower band then recovers
-    drop_start = 30
-    recovery_start = 40
+    # Get actual row indices - we'll use the timestamp index
+    timestamps = df.index.tolist()
+
+    # Define relative positions in the dataset
+    drop_start_idx = int(len(timestamps) * 0.1)    # 10% through data
+    recovery_start_idx = int(len(timestamps) * 0.15)  # 15% through data
+    rise_start_idx = int(len(timestamps) * 0.2)     # 20% through data
+    fall_start_idx = int(len(timestamps) * 0.25)    # 25% through data
+
+    # Define periods for trends
+    trend_period = 5
+
+    # Make sure we don't exceed the dataframe bounds
+    if fall_start_idx + trend_period >= len(timestamps):
+        # Scale down our indices
+        drop_start_idx = 30
+        recovery_start_idx = 40
+        rise_start_idx = 60
+        fall_start_idx = 70
+        trend_period = min(5, (len(timestamps) - fall_start_idx) // 4)
 
     # Make the price drop sharply below the lower band
-    for i in range(drop_start, drop_start + 5):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 0.95  # 5% drop
+    current_price = df.iloc[drop_start_idx]["close"]
+    for i in range(trend_period):
+        idx = drop_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 0.95  # 5% drop
+            df.loc[timestamps[idx], "close"] = current_price
 
     # Then make it recover
-    for i in range(recovery_start, recovery_start + 5):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 1.05  # 5% rise
-
-    # Now create a scenario where price rises above upper band then falls
-    rise_start = 60
-    fall_start = 70
+    current_price = df.iloc[recovery_start_idx]["close"]
+    for i in range(trend_period):
+        idx = recovery_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 1.05  # 5% rise
+            df.loc[timestamps[idx], "close"] = current_price
 
     # Make the price rise sharply above the upper band
-    for i in range(rise_start, rise_start + 5):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 1.05  # 5% rise
+    current_price = df.iloc[rise_start_idx]["close"]
+    for i in range(trend_period):
+        idx = rise_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 1.05  # 5% rise
+            df.loc[timestamps[idx], "close"] = current_price
 
     # Then make it fall
-    for i in range(fall_start, fall_start + 5):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 0.95  # 5% drop
+    current_price = df.iloc[fall_start_idx]["close"]
+    for i in range(trend_period):
+        idx = fall_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 0.95  # 5% drop
+            df.loc[timestamps[idx], "close"] = current_price
 
     processed_data, signal = bb.process(df)
 

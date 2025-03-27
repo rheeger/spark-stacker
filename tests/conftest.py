@@ -284,3 +284,13 @@ def sample_signal():
 def pytest_addoption(parser):
     parser.addoption("--allow-synthetic-data", action="store_true", default=False,
                      help="Allow using synthetic data when cached data is missing")
+
+@pytest.fixture
+def market_data_params(request):
+    """
+    Fixture to provide market data parameters to the real_market_data fixture.
+
+    This enables parametrization of the real_market_data fixture by passing
+    parameters through this intermediary fixture.
+    """
+    return request.param

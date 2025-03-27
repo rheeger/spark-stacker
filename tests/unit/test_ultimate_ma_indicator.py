@@ -289,18 +289,38 @@ def test_ultimate_ma_process_method(sample_price_data):
     # Manipulate data to create crossover scenarios
     df = sample_price_data.copy()
 
-    # Create trend reversals to trigger MA crossovers
-    # First a downtrend followed by uptrend (for price crossing MA and MA crossovers)
-    down_start = 20
-    up_start = 30
+    # Get actual row indices - we'll use the timestamp index
+    timestamps = df.index.tolist()
+
+    # Define relative positions in the dataset
+    down_start_idx = int(len(timestamps) * 0.1)  # 10% through data
+    up_start_idx = int(len(timestamps) * 0.2)    # 20% through data
+
+    # Define periods for trends
+    trend_period = 10
+
+    # Make sure we don't exceed the dataframe bounds
+    if up_start_idx + trend_period >= len(timestamps):
+        # Scale down our indices
+        down_start_idx = 20
+        up_start_idx = 30
+        trend_period = min(10, (len(timestamps) - up_start_idx) // 2)
 
     # Create a downtrend
-    for i in range(down_start, up_start):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 0.98  # 2% drop
+    current_price = df.iloc[down_start_idx]["close"]
+    for i in range(trend_period):
+        idx = down_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 0.98  # 2% drop
+            df.loc[timestamps[idx], "close"] = current_price
 
     # Create an uptrend
-    for i in range(up_start, up_start + 10):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 1.02  # 2% increase
+    current_price = df.iloc[up_start_idx]["close"]
+    for i in range(trend_period):
+        idx = up_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 1.02  # 2% increase
+            df.loc[timestamps[idx], "close"] = current_price
 
     processed_data, signal = uma.process(df)
 

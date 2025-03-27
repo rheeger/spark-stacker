@@ -18,7 +18,8 @@ class MACDIndicator(BaseIndicator):
     between two moving averages of a security's price.
     """
 
-    def __init__(self, name: str, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, name: str = "macd", params: Optional[Dict[str, Any]] = None,
+                  fast_period: int = None, slow_period: int = None, signal_period: int = None):
         """
         Initialize the MACD indicator.
 
@@ -29,11 +30,16 @@ class MACDIndicator(BaseIndicator):
                 slow_period: The slow EMA period (default: 26)
                 signal_period: The signal line period (default: 9)
                 trigger_threshold: The threshold for signal generation (default: 0)
+            fast_period: Direct parameter for fast EMA period (overrides params)
+            slow_period: Direct parameter for slow EMA period (overrides params)
+            signal_period: Direct parameter for signal line period (overrides params)
         """
-        super().__init__(name, params)
-        self.fast_period = self.params.get("fast_period", 12)
-        self.slow_period = self.params.get("slow_period", 26)
-        self.signal_period = self.params.get("signal_period", 9)
+        super().__init__(name, params or {})
+
+        # Allow parameters to be passed directly or via params dict
+        self.fast_period = fast_period or self.params.get("fast_period", 12)
+        self.slow_period = slow_period or self.params.get("slow_period", 26)
+        self.signal_period = signal_period or self.params.get("signal_period", 9)
         self.trigger_threshold = self.params.get("trigger_threshold", 0)
 
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -178,3 +184,60 @@ class MACDIndicator(BaseIndicator):
     def __str__(self) -> str:
         """String representation of the indicator."""
         return f"MACD(fast={self.fast_period}, slow={self.slow_period}, signal={self.signal_period})"
+
+    def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Process an entire DataFrame and return all signals in a new DataFrame.
+
+        Args:
+            data: Price data as pandas DataFrame with at least 'close' column
+
+        Returns:
+            DataFrame with MACD values and signal information
+        """
+        # Calculate MACD values
+        result = self.calculate(data.copy())
+
+        # Create signals column with None as default
+        result["signal"] = None
+        result["confidence"] = 0.0
+
+        # Detect buy signals (MACD crosses above signal line)
+        buy_signals = result["macd_crosses_above_signal"]
+        result.loc[buy_signals, "signal"] = SignalDirection.BUY
+
+        # Detect sell signals (MACD crosses below signal line)
+        sell_signals = result["macd_crosses_below_signal"]
+        result.loc[sell_signals, "signal"] = SignalDirection.SELL
+
+        # Calculate confidence based on histogram value and MACD value
+        # For buy signals
+        buy_indices = result.index[buy_signals]
+        for idx in buy_indices:
+            histogram = result.loc[idx, "macd_histogram"]
+            macd_value = result.loc[idx, "macd"]
+
+            # Higher confidence if MACD is also crossing above zero or already positive
+            if result.loc[idx, "macd_crosses_above_zero"] or macd_value > 0:
+                confidence = min(1.0, 0.7 + abs(histogram) / 5)
+            else:
+                confidence = min(1.0, 0.5 + abs(histogram) / 5)
+
+            result.loc[idx, "confidence"] = confidence
+
+        # For sell signals
+        sell_indices = result.index[sell_signals]
+        for idx in sell_indices:
+            histogram = result.loc[idx, "macd_histogram"]
+            macd_value = result.loc[idx, "macd"]
+
+            # Higher confidence if MACD is also crossing below zero or already negative
+            if result.loc[idx, "macd_crosses_below_zero"] or macd_value < 0:
+                confidence = min(1.0, 0.7 + abs(histogram) / 5)
+            else:
+                confidence = min(1.0, 0.5 + abs(histogram) / 5)
+
+            result.loc[idx, "confidence"] = confidence
+
+        # Return the result with signals
+        return result

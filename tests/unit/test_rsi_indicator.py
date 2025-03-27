@@ -1,10 +1,11 @@
-import pytest
-import pandas as pd
-import numpy as np
 from unittest.mock import patch
 
-from app.indicators.rsi_indicator import RSIIndicator
+import numpy as np
+import pandas as pd
+import pytest
+
 from app.indicators.base_indicator import SignalDirection
+from app.indicators.rsi_indicator import RSIIndicator
 
 
 def test_rsi_initialization():
@@ -119,17 +120,39 @@ def test_rsi_process_method(sample_price_data):
     # Manipulate some data to ensure we get a signal
     # Create a scenario where price drops causing oversold and then rises
     df = sample_price_data.copy()
-    # Force RSI to go oversold and then recover
-    drop_start = 20
-    recovery_start = 30
 
-    # Make the price drop for 10 periods to trigger oversold
-    for i in range(drop_start, drop_start + 10):
-        df.loc[i, "close"] = df.loc[i - 1, "close"] * 0.95  # 5% drop
+    # Get actual row indices - we'll use actual timestamps since that's the index
+    timestamps = df.index.tolist()
+    # Use 10% of the way through the data, and 15% of the way through for recovery
+    drop_start_idx = int(len(timestamps) * 0.1)
+    recovery_start_idx = int(len(timestamps) * 0.15)
 
-    # Then make it recover for the next 10 periods to trigger a buy signal
-    for i in range(recovery_start, recovery_start + 10):
-        df.loc[i, "close"] = df.loc[i - 1, "close"] * 1.05  # 5% rise
+    drop_periods = 10
+    recovery_periods = 10
+
+    # Make sure we don't go beyond the dataframe bounds
+    if drop_start_idx + drop_periods + recovery_periods >= len(timestamps):
+        # Adjust to ensure we have enough room for our modifications
+        drop_start_idx = 20
+        recovery_start_idx = 30
+        drop_periods = min(10, len(timestamps) - drop_start_idx - recovery_periods)
+        recovery_periods = min(10, len(timestamps) - drop_start_idx - drop_periods)
+
+    # Make the price drop for several periods to trigger oversold
+    current_price = df.iloc[drop_start_idx]["close"]
+    for i in range(drop_periods):
+        idx = drop_start_idx + i
+        if idx < len(timestamps):
+            current_price = current_price * 0.95  # 5% drop
+            df.loc[timestamps[idx], "close"] = current_price
+
+    # Then make it recover for the next several periods to trigger a buy signal
+    current_price = df.iloc[drop_start_idx + drop_periods - 1]["close"]
+    for i in range(recovery_periods):
+        idx = drop_start_idx + drop_periods + i
+        if idx < len(timestamps):
+            current_price = current_price * 1.05  # 5% rise
+            df.loc[timestamps[idx], "close"] = current_price
 
     processed_data, signal = rsi.process(df)
 

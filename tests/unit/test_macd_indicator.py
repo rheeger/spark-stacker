@@ -123,18 +123,39 @@ def test_macd_process_method(sample_price_data):
     # Use a larger dataset to ensure we get enough data points
     df = sample_price_data.copy()
 
-    # Manipulate data to create a crossover scenario
-    # First make price trend down, then reverse upward
-    down_trend_start = 20
-    up_trend_start = 40
+    # Get actual row indices - we'll use the timestamp index
+    timestamps = df.index.tolist()
+
+    # Choose points at 15% and 25% through the data
+    down_trend_start_idx = int(len(timestamps) * 0.15)
+    up_trend_start_idx = int(len(timestamps) * 0.25)
+
+    down_trend_periods = 20
+    up_trend_periods = 20
+
+    # Make sure we don't go beyond the dataframe bounds
+    if up_trend_start_idx + up_trend_periods >= len(timestamps):
+        # Adjust to ensure we have enough room for our modifications
+        down_trend_start_idx = 20
+        up_trend_start_idx = 40
+        down_trend_periods = min(20, up_trend_start_idx - down_trend_start_idx)
+        up_trend_periods = min(20, len(timestamps) - up_trend_start_idx)
 
     # Create a downtrend
-    for i in range(down_trend_start, up_trend_start):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 0.99  # 1% drop
+    current_price = df.iloc[down_trend_start_idx]["close"]
+    for i in range(down_trend_periods):
+        idx = down_trend_start_idx + i
+        if idx < len(timestamps):
+            current_price = current_price * 0.99  # 1% drop
+            df.loc[timestamps[idx], "close"] = current_price
 
     # Create an uptrend
-    for i in range(up_trend_start, up_trend_start + 20):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 1.01  # 1% increase
+    current_price = df.iloc[up_trend_start_idx]["close"]
+    for i in range(up_trend_periods):
+        idx = up_trend_start_idx + i
+        if idx < len(timestamps):
+            current_price = current_price * 1.01  # 1% increase
+            df.loc[timestamps[idx], "close"] = current_price
 
     processed_data, signal = macd.process(df)
 

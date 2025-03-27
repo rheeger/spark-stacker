@@ -183,30 +183,58 @@ def test_moving_average_process_method(sample_price_data):
     # Manipulate data to create crossover scenarios
     df = sample_price_data.copy()
 
-    # Create trend reversals to trigger MA crossovers
-    # First a downtrend followed by uptrend (for golden cross)
-    down_start = 20
-    up_start = 40
+    # Get actual row indices - we'll use the timestamp index
+    timestamps = df.index.tolist()
+
+    # Define relative positions in the dataset
+    down_start_idx = int(len(timestamps) * 0.15)  # Start downtrend at 15% through data
+    up_start_idx = int(len(timestamps) * 0.25)    # Start uptrend at 25% through data
+    up2_start_idx = int(len(timestamps) * 0.35)   # Start second uptrend at 35%
+    down2_start_idx = int(len(timestamps) * 0.45) # Start second downtrend at 45%
+
+    # Ensure we have enough data points
+    trend_period = 20
+
+    # Make sure we don't exceed the dataframe bounds
+    if down2_start_idx + trend_period >= len(timestamps):
+        # Scale down our indices
+        down_start_idx = 20
+        up_start_idx = 40
+        up2_start_idx = 60
+        down2_start_idx = 80
+        trend_period = min(20, (len(timestamps) - down2_start_idx) // 2)
 
     # Create a downtrend
-    for i in range(down_start, up_start):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 0.99  # 1% drop
+    current_price = df.iloc[down_start_idx]["close"]
+    for i in range(trend_period):
+        idx = down_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 0.99  # 1% drop
+            df.loc[timestamps[idx], "close"] = current_price
 
     # Create an uptrend
-    for i in range(up_start, up_start + 20):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 1.01  # 1% increase
+    current_price = df.iloc[up_start_idx]["close"]
+    for i in range(trend_period):
+        idx = up_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 1.01  # 1% increase
+            df.loc[timestamps[idx], "close"] = current_price
 
-    # Then an uptrend followed by downtrend (for death cross)
-    up2_start = 60
-    down2_start = 80
+    # Create a second uptrend
+    current_price = df.iloc[up2_start_idx]["close"]
+    for i in range(trend_period):
+        idx = up2_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 1.01  # 1% increase
+            df.loc[timestamps[idx], "close"] = current_price
 
-    # Create an uptrend
-    for i in range(up2_start, down2_start):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 1.01  # 1% increase
-
-    # Create a downtrend
-    for i in range(down2_start, down2_start + 20):
-        df.loc[i, "close"] = df.loc[i-1, "close"] * 0.99  # 1% drop
+    # Create a second downtrend
+    current_price = df.iloc[down2_start_idx]["close"]
+    for i in range(trend_period):
+        idx = down2_start_idx + i
+        if idx < len(timestamps):
+            current_price *= 0.99  # 1% drop
+            df.loc[timestamps[idx], "close"] = current_price
 
     processed_data, signal = ma.process(df)
 
