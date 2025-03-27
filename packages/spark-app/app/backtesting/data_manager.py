@@ -11,10 +11,10 @@ import pandas as pd
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 class DataSource(ABC):
     """Abstract base class for data sources."""
@@ -26,7 +26,7 @@ class DataSource(ABC):
         interval: str,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
-        limit: int = 1000
+        limit: int = 1000,
     ) -> pd.DataFrame:
         """
         Retrieve historical data for a specific symbol and timeframe.
@@ -42,6 +42,7 @@ class DataSource(ABC):
             DataFrame with OHLCV data
         """
         pass
+
 
 class ExchangeDataSource(DataSource):
     """Data source that retrieves data from exchange connectors."""
@@ -61,7 +62,7 @@ class ExchangeDataSource(DataSource):
         interval: str,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
-        limit: int = 1000
+        limit: int = 1000,
     ) -> pd.DataFrame:
         """
         Retrieve historical data using the exchange connector.
@@ -86,34 +87,37 @@ class ExchangeDataSource(DataSource):
             interval=interval,
             start_time=start_time,
             end_time=end_time,
-            limit=limit
+            limit=limit,
         )
 
         # Convert to DataFrame
         if not candles:
-            return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            return pd.DataFrame(
+                columns=["timestamp", "open", "high", "low", "close", "volume"]
+            )
 
         df = pd.DataFrame(candles)
 
         # Ensure required columns exist
-        required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
         for col in required_columns:
             if col not in df.columns:
                 logger.error(f"Required column '{col}' missing from data")
                 raise ValueError(f"Required column '{col}' missing from data")
 
         # Ensure timestamp is in milliseconds
-        if df['timestamp'].iloc[0] < 1e12:
-            df['timestamp'] = df['timestamp'] * 1000
+        if df["timestamp"].iloc[0] < 1e12:
+            df["timestamp"] = df["timestamp"] * 1000
 
         # Sort by timestamp
-        df = df.sort_values('timestamp')
+        df = df.sort_values("timestamp")
 
         # Convert columns to numeric
-        for col in ['open', 'high', 'low', 'close', 'volume']:
+        for col in ["open", "high", "low", "close", "volume"]:
             df[col] = pd.to_numeric(df[col])
 
         return df
+
 
 class CSVDataSource(DataSource):
     """Data source that retrieves data from CSV files."""
@@ -134,7 +138,7 @@ class CSVDataSource(DataSource):
         interval: str,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
-        limit: int = 1000
+        limit: int = 1000,
     ) -> pd.DataFrame:
         """
         Retrieve historical data from CSV files.
@@ -162,27 +166,33 @@ class CSVDataSource(DataSource):
             # Check if file exists
             if not os.path.exists(file_path):
                 logger.error(f"CSV file not found: {file_path}")
-                return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                return pd.DataFrame(
+                    columns=["timestamp", "open", "high", "low", "close", "volume"]
+                )
 
             # Read CSV file
             df = pd.read_csv(file_path)
 
             # Ensure required columns exist
-            required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
             for col in required_columns:
                 if col not in df.columns:
-                    logger.error(f"Required column '{col}' missing from CSV: {file_path}")
-                    raise ValueError(f"Required column '{col}' missing from CSV: {file_path}")
+                    logger.error(
+                        f"Required column '{col}' missing from CSV: {file_path}"
+                    )
+                    raise ValueError(
+                        f"Required column '{col}' missing from CSV: {file_path}"
+                    )
 
             # Ensure timestamp is in milliseconds
-            if df['timestamp'].iloc[0] < 1e12:
-                df['timestamp'] = df['timestamp'] * 1000
+            if df["timestamp"].iloc[0] < 1e12:
+                df["timestamp"] = df["timestamp"] * 1000
 
             # Sort by timestamp
-            df = df.sort_values('timestamp')
+            df = df.sort_values("timestamp")
 
             # Convert columns to numeric
-            for col in ['open', 'high', 'low', 'close', 'volume']:
+            for col in ["open", "high", "low", "close", "volume"]:
                 df[col] = pd.to_numeric(df[col])
 
             # Cache the data
@@ -190,16 +200,17 @@ class CSVDataSource(DataSource):
 
         # Apply time filters if provided
         if start_time:
-            df = df[df['timestamp'] >= start_time]
+            df = df[df["timestamp"] >= start_time]
 
         if end_time:
-            df = df[df['timestamp'] <= end_time]
+            df = df[df["timestamp"] <= end_time]
 
         # Apply limit
         if limit and len(df) > limit:
             df = df.tail(limit)
 
         return df
+
 
 class DataManager:
     """
@@ -239,7 +250,7 @@ class DataManager:
         interval: str,
         start_time: Optional[Union[int, datetime]] = None,
         end_time: Optional[Union[int, datetime]] = None,
-        limit: int = 1000
+        limit: int = 1000,
     ) -> pd.DataFrame:
         """
         Get historical data from a specified source.
@@ -274,7 +285,7 @@ class DataManager:
             interval=interval,
             start_time=start_time,
             end_time=end_time,
-            limit=limit
+            limit=limit,
         )
 
         return df
@@ -308,7 +319,7 @@ class DataManager:
         interval: str,
         start_time: Union[int, datetime],
         end_time: Union[int, datetime],
-        save: bool = True
+        save: bool = True,
     ) -> pd.DataFrame:
         """
         Download and optionally save historical data.
@@ -349,11 +360,12 @@ class DataManager:
         while current_start < end_time_ts:
             # Calculate end time for this chunk
             chunk_end = min(
-                current_start + (interval_ms * max_candles_per_request),
-                end_time_ts
+                current_start + (interval_ms * max_candles_per_request), end_time_ts
             )
 
-            logger.info(f"Downloading {symbol} {interval} data from {self._ms_to_date_str(current_start)} to {self._ms_to_date_str(chunk_end)}")
+            logger.info(
+                f"Downloading {symbol} {interval} data from {self._ms_to_date_str(current_start)} to {self._ms_to_date_str(chunk_end)}"
+            )
 
             # Get data for this chunk
             chunk_data = self.get_data(
@@ -362,7 +374,7 @@ class DataManager:
                 interval=interval,
                 start_time=current_start,
                 end_time=chunk_end,
-                limit=max_candles_per_request
+                limit=max_candles_per_request,
             )
 
             # Append to result dataframe
@@ -371,7 +383,7 @@ class DataManager:
             # Update start time for next chunk
             if len(chunk_data) > 0:
                 # Use last timestamp + interval as next start
-                current_start = chunk_data['timestamp'].max() + interval_ms
+                current_start = chunk_data["timestamp"].max() + interval_ms
             else:
                 # If no data, move forward by the max window
                 current_start = chunk_end
@@ -380,7 +392,7 @@ class DataManager:
             time.sleep(0.5)
 
         # Remove duplicates
-        all_data = all_data.drop_duplicates(subset='timestamp').sort_values('timestamp')
+        all_data = all_data.drop_duplicates(subset="timestamp").sort_values("timestamp")
 
         # Save data if requested
         if save and not all_data.empty:
@@ -393,13 +405,13 @@ class DataManager:
         unit = interval[-1]
         value = int(interval[:-1])
 
-        if unit == 'm':
+        if unit == "m":
             return value * 60 * 1000
-        elif unit == 'h':
+        elif unit == "h":
             return value * 60 * 60 * 1000
-        elif unit == 'd':
+        elif unit == "d":
             return value * 24 * 60 * 60 * 1000
-        elif unit == 'w':
+        elif unit == "w":
             return value * 7 * 24 * 60 * 60 * 1000
         else:
             raise ValueError(f"Unsupported interval unit: {unit}")
@@ -407,7 +419,7 @@ class DataManager:
     def _ms_to_date_str(self, ms: int) -> str:
         """Convert milliseconds to date string."""
         dt = datetime.fromtimestamp(ms / 1000)
-        return dt.strftime('%Y-%m-%d %H:%M:%S')
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -426,17 +438,17 @@ class DataManager:
         df = df.dropna()
 
         # Remove rows with zero volume (if volume column exists)
-        if 'volume' in df.columns:
-            df = df[df['volume'] > 0]
+        if "volume" in df.columns:
+            df = df[df["volume"] > 0]
 
         # Ensure price integrity (high >= low, etc.)
-        df = df[df['high'] >= df['low']]
-        df = df[df['high'] >= df['close']]
-        df = df[df['high'] >= df['open']]
-        df = df[df['low'] <= df['close']]
-        df = df[df['low'] <= df['open']]
+        df = df[df["high"] >= df["low"]]
+        df = df[df["high"] >= df["close"]]
+        df = df[df["high"] >= df["open"]]
+        df = df[df["low"] <= df["close"]]
+        df = df[df["low"] <= df["open"]]
 
         # Sort by timestamp
-        df = df.sort_values('timestamp')
+        df = df.sort_values("timestamp")
 
         return df

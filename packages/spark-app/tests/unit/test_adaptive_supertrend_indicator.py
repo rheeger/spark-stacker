@@ -4,8 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.indicators.adaptive_supertrend_indicator import \
-    AdaptiveSupertrendIndicator
+from app.indicators.adaptive_supertrend_indicator import AdaptiveSupertrendIndicator
 from app.indicators.base_indicator import SignalDirection
 
 
@@ -30,7 +29,7 @@ def test_adaptive_supertrend_initialization():
         "high_vol_percentile": 0.8,
         "medium_vol_percentile": 0.6,
         "low_vol_percentile": 0.3,
-        "max_iterations": 15
+        "max_iterations": 15,
     }
     ast_custom = AdaptiveSupertrendIndicator(name="custom_ast", params=custom_params)
     assert ast_custom.name == "custom_ast"
@@ -48,11 +47,13 @@ def test_atr_calculation():
     ast = AdaptiveSupertrendIndicator(name="test_ast")
 
     # Create test data with a known pattern
-    data = pd.DataFrame({
-        "high": [110, 120, 130, 140, 150],
-        "low": [90, 80, 70, 60, 50],
-        "close": [100, 100, 100, 100, 100],
-    })
+    data = pd.DataFrame(
+        {
+            "high": [110, 120, 130, 140, 150],
+            "low": [90, 80, 70, 60, 50],
+            "close": [100, 100, 100, 100, 100],
+        }
+    )
 
     atr = ast._calculate_atr(data, 3)
 
@@ -75,18 +76,52 @@ def test_kmeans_clustering():
     ast = AdaptiveSupertrendIndicator(name="test_ast", params={"max_iterations": 5})
 
     # Create synthetic volatility data with clear clusters
-    volatility = pd.Series([
-        # Low volatility points
-        1.2, 1.3, 1.1, 1.4, 1.5, 1.2, 1.3, 1.0, 1.4, 1.3,
-        # Medium volatility points
-        3.7, 3.8, 3.6, 3.9, 4.0, 3.7, 3.8, 3.5, 3.9, 3.8,
-        # High volatility points
-        7.5, 7.6, 7.4, 7.7, 7.8, 7.5, 7.6, 7.3, 7.7, 7.6,
-        # End with a high volatility point for the current value
-        7.7
-    ])
+    volatility = pd.Series(
+        [
+            # Low volatility points
+            1.2,
+            1.3,
+            1.1,
+            1.4,
+            1.5,
+            1.2,
+            1.3,
+            1.0,
+            1.4,
+            1.3,
+            # Medium volatility points
+            3.7,
+            3.8,
+            3.6,
+            3.9,
+            4.0,
+            3.7,
+            3.8,
+            3.5,
+            3.9,
+            3.8,
+            # High volatility points
+            7.5,
+            7.6,
+            7.4,
+            7.7,
+            7.8,
+            7.5,
+            7.6,
+            7.3,
+            7.7,
+            7.6,
+            # End with a high volatility point for the current value
+            7.7,
+        ]
+    )
 
-    high_centroid, medium_centroid, low_centroid, current_cluster = ast._kmeans_clustering(volatility, 30)
+    (
+        high_centroid,
+        medium_centroid,
+        low_centroid,
+        current_cluster,
+    ) = ast._kmeans_clustering(volatility, 30)
 
     # Verify centroids are in the correct ranges
     assert 7.0 < high_centroid < 8.0  # Should be around 7.5-7.6
@@ -102,11 +137,13 @@ def test_supertrend_calculation():
     ast = AdaptiveSupertrendIndicator(name="test_ast")
 
     # Create test data for a basic trend
-    data = pd.DataFrame({
-        "high": [110, 120, 130, 125, 115, 105, 95, 90, 100, 110],
-        "low": [90, 100, 110, 105, 95, 85, 75, 70, 80, 90],
-        "close": [100, 110, 120, 115, 105, 95, 85, 80, 90, 100],
-    })
+    data = pd.DataFrame(
+        {
+            "high": [110, 120, 130, 125, 115, 105, 95, 90, 100, 110],
+            "low": [90, 100, 110, 105, 95, 85, 75, 70, 80, 90],
+            "close": [100, 110, 120, 115, 105, 95, 85, 80, 90, 100],
+        }
+    )
 
     # Use a constant ATR for simplicity
     atr = pd.Series([10] * len(data))
@@ -134,7 +171,7 @@ def test_adaptive_supertrend_calculation(sample_price_data):
     # Ensure we have enough data for testing
     if len(sample_price_data) < 150:
         # Create synthetic data with trend and volatility changes
-        index = pd.date_range('2023-01-01', periods=200, freq='1h')
+        index = pd.date_range("2023-01-01", periods=200, freq="1h")
         close_prices = np.linspace(1000, 1500, 200)
 
         # Add volatility regimes
@@ -153,20 +190,26 @@ def test_adaptive_supertrend_calculation(sample_price_data):
         noise = np.random.normal(0, volatility, 200)
         close_with_noise = close_prices + noise
 
-        data = pd.DataFrame({
-            'timestamp': index,
-            'symbol': 'ETH',
-            'open': close_with_noise - np.random.normal(0, 5, 200),
-            'high': close_with_noise + np.random.normal(10, 5, 200),
-            'low': close_with_noise - np.random.normal(10, 5, 200),
-            'close': close_with_noise,
-            'volume': np.random.normal(1000, 200, 200),
-        })
+        data = pd.DataFrame(
+            {
+                "timestamp": index,
+                "symbol": "ETH",
+                "open": close_with_noise - np.random.normal(0, 5, 200),
+                "high": close_with_noise + np.random.normal(10, 5, 200),
+                "low": close_with_noise - np.random.normal(10, 5, 200),
+                "close": close_with_noise,
+                "volume": np.random.normal(1000, 200, 200),
+            }
+        )
 
         # Ensure high/low constraints
         for i in range(len(data)):
-            data.loc[i, 'high'] = max(data.loc[i, 'open'], data.loc[i, 'close'], data.loc[i, 'high'])
-            data.loc[i, 'low'] = min(data.loc[i, 'open'], data.loc[i, 'close'], data.loc[i, 'low'])
+            data.loc[i, "high"] = max(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"]
+            )
+            data.loc[i, "low"] = min(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"]
+            )
     else:
         data = sample_price_data.copy()
 
@@ -190,7 +233,9 @@ def test_adaptive_supertrend_calculation(sample_price_data):
     assert result["ast_volatility_cluster"].iloc[-1] in [0, 1, 2, -1]
 
     # Verify that there is at least one trend change in the data
-    assert (result["ast_trend_change_up"].sum() > 0) or (result["ast_trend_change_down"].sum() > 0)
+    assert (result["ast_trend_change_up"].sum() > 0) or (
+        result["ast_trend_change_down"].sum() > 0
+    )
 
 
 def test_adaptive_supertrend_signal_generation():
@@ -198,25 +243,27 @@ def test_adaptive_supertrend_signal_generation():
     ast = AdaptiveSupertrendIndicator(name="test_ast")
 
     # Create test data for a buy signal (trend changing from bearish to bullish)
-    buy_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-        "symbol": "ETH",
-        "open": [1500, 1450, 1400, 1380, 1420],
-        "high": [1520, 1470, 1420, 1400, 1440],
-        "low": [1480, 1430, 1380, 1360, 1400],
-        "close": [1500, 1450, 1400, 1380, 1420],
-        "ast_atr": [20, 20, 20, 20, 20],
-        "ast_high_centroid": [30, 30, 30, 30, 30],
-        "ast_medium_centroid": [20, 20, 20, 20, 20],
-        "ast_low_centroid": [10, 10, 10, 10, 10],
-        "ast_volatility_cluster": [1, 1, 1, 1, 1],  # Medium volatility
-        "ast_supertrend": [1520, 1470, 1420, 1400, 1380],
-        "ast_direction": [1, 1, 1, 1, -1],  # Last bar changes to bullish
-        "ast_trend_change_up": [False, False, False, False, True],  # Bullish signal
-        "ast_trend_change_down": [False, False, False, False, False],
-        "ast_is_bullish": [False, False, False, False, True],
-        "ast_is_bearish": [True, True, True, True, False],
-    })
+    buy_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
+            "symbol": "ETH",
+            "open": [1500, 1450, 1400, 1380, 1420],
+            "high": [1520, 1470, 1420, 1400, 1440],
+            "low": [1480, 1430, 1380, 1360, 1400],
+            "close": [1500, 1450, 1400, 1380, 1420],
+            "ast_atr": [20, 20, 20, 20, 20],
+            "ast_high_centroid": [30, 30, 30, 30, 30],
+            "ast_medium_centroid": [20, 20, 20, 20, 20],
+            "ast_low_centroid": [10, 10, 10, 10, 10],
+            "ast_volatility_cluster": [1, 1, 1, 1, 1],  # Medium volatility
+            "ast_supertrend": [1520, 1470, 1420, 1400, 1380],
+            "ast_direction": [1, 1, 1, 1, -1],  # Last bar changes to bullish
+            "ast_trend_change_up": [False, False, False, False, True],  # Bullish signal
+            "ast_trend_change_down": [False, False, False, False, False],
+            "ast_is_bullish": [False, False, False, False, True],
+            "ast_is_bearish": [True, True, True, True, False],
+        }
+    )
 
     # Generate buy signal
     signal = ast.generate_signal(buy_data)
@@ -229,25 +276,33 @@ def test_adaptive_supertrend_signal_generation():
     assert signal.params["volatility_regime"] == "Medium"
 
     # Create test data for a sell signal (trend changing from bullish to bearish)
-    sell_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-        "symbol": "ETH",
-        "open": [1500, 1520, 1540, 1560, 1520],
-        "high": [1520, 1540, 1560, 1580, 1540],
-        "low": [1480, 1500, 1520, 1540, 1500],
-        "close": [1500, 1520, 1540, 1560, 1520],
-        "ast_atr": [15, 15, 15, 15, 15],
-        "ast_high_centroid": [30, 30, 30, 30, 30],
-        "ast_medium_centroid": [20, 20, 20, 20, 20],
-        "ast_low_centroid": [10, 10, 10, 10, 10],
-        "ast_volatility_cluster": [2, 2, 2, 2, 2],  # Low volatility
-        "ast_supertrend": [1480, 1500, 1520, 1540, 1560],
-        "ast_direction": [-1, -1, -1, -1, 1],  # Last bar changes to bearish
-        "ast_trend_change_up": [False, False, False, False, False],
-        "ast_trend_change_down": [False, False, False, False, True],  # Bearish signal
-        "ast_is_bullish": [True, True, True, True, False],
-        "ast_is_bearish": [False, False, False, False, True],
-    })
+    sell_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
+            "symbol": "ETH",
+            "open": [1500, 1520, 1540, 1560, 1520],
+            "high": [1520, 1540, 1560, 1580, 1540],
+            "low": [1480, 1500, 1520, 1540, 1500],
+            "close": [1500, 1520, 1540, 1560, 1520],
+            "ast_atr": [15, 15, 15, 15, 15],
+            "ast_high_centroid": [30, 30, 30, 30, 30],
+            "ast_medium_centroid": [20, 20, 20, 20, 20],
+            "ast_low_centroid": [10, 10, 10, 10, 10],
+            "ast_volatility_cluster": [2, 2, 2, 2, 2],  # Low volatility
+            "ast_supertrend": [1480, 1500, 1520, 1540, 1560],
+            "ast_direction": [-1, -1, -1, -1, 1],  # Last bar changes to bearish
+            "ast_trend_change_up": [False, False, False, False, False],
+            "ast_trend_change_down": [
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],  # Bearish signal
+            "ast_is_bullish": [True, True, True, True, False],
+            "ast_is_bearish": [False, False, False, False, True],
+        }
+    )
 
     # Generate sell signal
     signal = ast.generate_signal(sell_data)
@@ -260,25 +315,27 @@ def test_adaptive_supertrend_signal_generation():
     assert signal.params["volatility_regime"] == "Low"
 
     # Test with no signal conditions
-    neutral_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=3, freq="1h"),
-        "symbol": "ETH",
-        "open": [1500, 1520, 1540],
-        "high": [1520, 1540, 1560],
-        "low": [1480, 1500, 1520],
-        "close": [1500, 1520, 1540],
-        "ast_atr": [15, 15, 15],
-        "ast_high_centroid": [30, 30, 30],
-        "ast_medium_centroid": [20, 20, 20],
-        "ast_low_centroid": [10, 10, 10],
-        "ast_volatility_cluster": [1, 1, 1],
-        "ast_supertrend": [1480, 1500, 1520],
-        "ast_direction": [-1, -1, -1],  # No change in direction
-        "ast_trend_change_up": [False, False, False],
-        "ast_trend_change_down": [False, False, False],
-        "ast_is_bullish": [True, True, True],
-        "ast_is_bearish": [False, False, False],
-    })
+    neutral_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=3, freq="1h"),
+            "symbol": "ETH",
+            "open": [1500, 1520, 1540],
+            "high": [1520, 1540, 1560],
+            "low": [1480, 1500, 1520],
+            "close": [1500, 1520, 1540],
+            "ast_atr": [15, 15, 15],
+            "ast_high_centroid": [30, 30, 30],
+            "ast_medium_centroid": [20, 20, 20],
+            "ast_low_centroid": [10, 10, 10],
+            "ast_volatility_cluster": [1, 1, 1],
+            "ast_supertrend": [1480, 1500, 1520],
+            "ast_direction": [-1, -1, -1],  # No change in direction
+            "ast_trend_change_up": [False, False, False],
+            "ast_trend_change_down": [False, False, False],
+            "ast_is_bullish": [True, True, True],
+            "ast_is_bearish": [False, False, False],
+        }
+    )
 
     signal = ast.generate_signal(neutral_data)
     assert signal is None
@@ -289,14 +346,16 @@ def test_adaptive_supertrend_error_handling():
     ast = AdaptiveSupertrendIndicator(name="test_ast")
 
     # Test with insufficient data
-    insufficient_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=20, freq="1h"),
-        "symbol": "ETH",
-        "open": np.linspace(1000, 1100, 20),
-        "high": np.linspace(1020, 1120, 20),
-        "low": np.linspace(980, 1080, 20),
-        "close": np.linspace(1000, 1100, 20),
-    })
+    insufficient_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=20, freq="1h"),
+            "symbol": "ETH",
+            "open": np.linspace(1000, 1100, 20),
+            "high": np.linspace(1020, 1120, 20),
+            "low": np.linspace(980, 1080, 20),
+            "close": np.linspace(1000, 1100, 20),
+        }
+    )
 
     # Should process but return empty columns due to insufficient data
     result = ast.calculate(insufficient_data)
@@ -304,12 +363,14 @@ def test_adaptive_supertrend_error_handling():
     assert pd.isna(result["ast_supertrend"].iloc[0])
 
     # Test with missing required columns
-    invalid_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=150, freq="1h"),
-        "symbol": "ETH",
-        "close": np.linspace(1000, 1500, 150),
-        # Missing 'open', 'high', 'low' columns
-    })
+    invalid_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=150, freq="1h"),
+            "symbol": "ETH",
+            "close": np.linspace(1000, 1500, 150),
+            # Missing 'open', 'high', 'low' columns
+        }
+    )
 
     with pytest.raises(ValueError):
         ast.calculate(invalid_data)

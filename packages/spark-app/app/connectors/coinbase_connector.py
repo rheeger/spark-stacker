@@ -5,16 +5,23 @@ from datetime import datetime
 from io import StringIO
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
+# Import the BaseConnector interface
+from app.connectors.base_connector import (
+    BaseConnector,
+    MarketType,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    TimeInForce,
+)
+from app.utils.logging_setup import (
+    setup_connector_balance_logger,
+    setup_connector_markets_logger,
+    setup_connector_orders_logger,
+)
+
 # Import Coinbase Advanced API client
 from coinbase.rest import RESTClient
-
-# Import the BaseConnector interface
-from app.connectors.base_connector import (BaseConnector, MarketType,
-                                           OrderSide, OrderStatus, OrderType,
-                                           TimeInForce)
-from app.utils.logging_setup import (setup_connector_balance_logger,
-                                     setup_connector_markets_logger,
-                                     setup_connector_orders_logger)
 
 # Get the main logger
 logger = logging.getLogger(__name__)
@@ -838,21 +845,30 @@ class CoinbaseConnector(BaseConnector):
             if hasattr(response, "success_response") and response.success_response:
                 success_response = response.success_response
                 # Check if the order ID is in the list of successfully canceled orders
-                if hasattr(success_response, "order_ids") and order_id in success_response.order_ids:
+                if (
+                    hasattr(success_response, "order_ids")
+                    and order_id in success_response.order_ids
+                ):
                     self.orders_logger.info(f"Successfully canceled order {order_id}")
                     return True
                 else:
-                    self.orders_logger.warning(f"Order ID {order_id} not found in canceled orders list")
+                    self.orders_logger.warning(
+                        f"Order ID {order_id} not found in canceled orders list"
+                    )
                     return False
 
             # If there's an error response, log it
             if hasattr(response, "error_response") and response.error_response:
-                error_msg = f"Failed to cancel order {order_id}: {response.error_response}"
+                error_msg = (
+                    f"Failed to cancel order {order_id}: {response.error_response}"
+                )
                 self.orders_logger.error(error_msg)
                 return False
 
             # Default case if neither success nor error response is found
-            self.orders_logger.warning(f"Unexpected response when canceling order {order_id}")
+            self.orders_logger.warning(
+                f"Unexpected response when canceling order {order_id}"
+            )
             return False
 
         except Exception as e:
@@ -893,7 +909,9 @@ class CoinbaseConnector(BaseConnector):
 
             # Handle error response
             if hasattr(response, "error_response") and response.error_response:
-                error_msg = f"Error retrieving order {order_id}: {response.error_response}"
+                error_msg = (
+                    f"Error retrieving order {order_id}: {response.error_response}"
+                )
                 logger.error(error_msg)
                 return {"error": error_msg}
 
@@ -990,7 +1008,9 @@ class CoinbaseConnector(BaseConnector):
         try:
             # Ensure client is connected
             if not self.client:
-                self.orders_logger.info("Client not connected, attempting to connect...")
+                self.orders_logger.info(
+                    "Client not connected, attempting to connect..."
+                )
                 if not self.connect():
                     return {
                         "success": False,
@@ -1006,7 +1026,9 @@ class CoinbaseConnector(BaseConnector):
                     cancel_result = self.cancel_order(position_id)
                     return {
                         "success": cancel_result,
-                        "message": f"Canceled order {position_id}" if cancel_result else f"Failed to cancel order {position_id}",
+                        "message": f"Canceled order {position_id}"
+                        if cancel_result
+                        else f"Failed to cancel order {position_id}",
                     }
                 except Exception as cancel_err:
                     error_msg = f"Error canceling order {position_id}: {cancel_err}"
@@ -1037,7 +1059,9 @@ class CoinbaseConnector(BaseConnector):
                 }
 
             # Place a market sell order for the entire balance
-            self.orders_logger.info(f"Closing position by selling {asset_balance} {symbol}")
+            self.orders_logger.info(
+                f"Closing position by selling {asset_balance} {symbol}"
+            )
             try:
                 order_result = self.place_order(
                     symbol=symbol,
@@ -1055,13 +1079,17 @@ class CoinbaseConnector(BaseConnector):
                 }
 
             if "error" in order_result:
-                self.orders_logger.error(f"Failed to close {symbol} position: {order_result['error']}")
+                self.orders_logger.error(
+                    f"Failed to close {symbol} position: {order_result['error']}"
+                )
                 return {
                     "success": False,
                     "message": f"Failed to close position: {order_result['error']}",
                 }
 
-            self.orders_logger.info(f"Successfully closed {symbol} position with order {order_result['order_id']}")
+            self.orders_logger.info(
+                f"Successfully closed {symbol} position with order {order_result['order_id']}"
+            )
             return {
                 "success": True,
                 "message": f"Position closed with market sell order",
@@ -1128,7 +1156,9 @@ class CoinbaseConnector(BaseConnector):
             levels = order_book["asks"] if side == OrderSide.BUY else order_book["bids"]
 
             if not levels:
-                message = f"No {'asks' if side == OrderSide.BUY else 'bids'} in order book"
+                message = (
+                    f"No {'asks' if side == OrderSide.BUY else 'bids'} in order book"
+                )
                 logger.warning(message)
 
                 # Try to use ticker price as fallback
@@ -1158,7 +1188,11 @@ class CoinbaseConnector(BaseConnector):
             if amount <= levels[0][1]:
                 # Add/subtract a small percentage for increased fill probability
                 buffer = 0.001  # 0.1%
-                optimal_price = best_price * (1 + buffer) if side == OrderSide.BUY else best_price * (1 - buffer)
+                optimal_price = (
+                    best_price * (1 + buffer)
+                    if side == OrderSide.BUY
+                    else best_price * (1 - buffer)
+                )
 
                 return {
                     "price": optimal_price,
@@ -1193,7 +1227,11 @@ class CoinbaseConnector(BaseConnector):
                 # Use the worst available price with appropriate buffer
                 worst_price = levels[-1][0] if levels else best_price
                 buffer = 0.005  # 0.5%
-                optimal_price = worst_price * (1 + buffer) if side == OrderSide.BUY else worst_price * (1 - buffer)
+                optimal_price = (
+                    worst_price * (1 + buffer)
+                    if side == OrderSide.BUY
+                    else worst_price * (1 - buffer)
+                )
 
                 return {
                     "price": optimal_price,
@@ -1201,7 +1239,7 @@ class CoinbaseConnector(BaseConnector):
                     "message": f"Insufficient liquidity in order book. Found {cumulative_size}/{amount} {symbol}",
                     "total_cost": cumulative_value,
                     "slippage": abs(optimal_price - best_price) / best_price,
-                    "batches": []
+                    "batches": [],
                 }
 
             # Calculate volume-weighted average price
@@ -1209,7 +1247,9 @@ class CoinbaseConnector(BaseConnector):
 
             # Add a buffer for market impact
             buffer = 0.005  # 0.5%
-            optimal_price = vwap * (1 + buffer) if side == OrderSide.BUY else vwap * (1 - buffer)
+            optimal_price = (
+                vwap * (1 + buffer) if side == OrderSide.BUY else vwap * (1 - buffer)
+            )
 
             # Calculate slippage from best price
             slippage = abs(optimal_price - best_price) / best_price
@@ -1430,7 +1470,9 @@ class CoinbaseConnector(BaseConnector):
         Returns:
             Dict[str, Any]: Result of setting leverage
         """
-        logger.info(f"Ignoring set_leverage request for {symbol} as leverage is not supported for Coinbase spot trading")
+        logger.info(
+            f"Ignoring set_leverage request for {symbol} as leverage is not supported for Coinbase spot trading"
+        )
         return {
             "success": False,
             "message": f"Leverage trading is not supported for Coinbase spot trading. Symbol: {symbol}, Requested leverage: {leverage}",
@@ -1460,7 +1502,9 @@ class CoinbaseConnector(BaseConnector):
             logger.error(f"Error during Coinbase connector cleanup: {e}")
             return False
 
-    def create_hedge_position(self, symbol: str, amount: float, reference_price: float = None) -> Dict[str, Any]:
+    def create_hedge_position(
+        self, symbol: str, amount: float, reference_price: float = None
+    ) -> Dict[str, Any]:
         """
         Create a hedge position for a given position on another exchange.
 
@@ -1489,7 +1533,11 @@ class CoinbaseConnector(BaseConnector):
 
             self.orders_logger.info(
                 f"Creating hedge position for {symbol}: {side.value} {order_amount} at "
-                + (f"reference price ~{reference_price}" if reference_price else "market price")
+                + (
+                    f"reference price ~{reference_price}"
+                    if reference_price
+                    else "market price"
+                )
             )
 
             # If reference price is provided, we'll try to place a limit order
@@ -1510,7 +1558,7 @@ class CoinbaseConnector(BaseConnector):
                     order_type=OrderType.LIMIT,
                     amount=order_amount,
                     leverage=1.0,  # Spot markets always use 1.0 leverage
-                    price=limit_price
+                    price=limit_price,
                 )
             else:
                 # Without reference price, use market order for immediate execution
@@ -1524,7 +1572,9 @@ class CoinbaseConnector(BaseConnector):
 
             # Check if order placement was successful
             if "error" in order_result:
-                self.orders_logger.error(f"Failed to create hedge position: {order_result['error']}")
+                self.orders_logger.error(
+                    f"Failed to create hedge position: {order_result['error']}"
+                )
                 return {
                     "success": False,
                     "message": f"Hedge creation failed: {order_result['error']}",
@@ -1552,10 +1602,14 @@ class CoinbaseConnector(BaseConnector):
                 "success": False,
                 "message": error_msg,
                 "hedge_amount": 0.0,
-                "hedge_direction": OrderSide.BUY.value if amount > 0 else OrderSide.SELL.value,
+                "hedge_direction": OrderSide.BUY.value
+                if amount > 0
+                else OrderSide.SELL.value,
             }
 
-    def adjust_hedge_position(self, symbol: str, target_amount: float, current_position: Dict[str, Any] = None) -> Dict[str, Any]:
+    def adjust_hedge_position(
+        self, symbol: str, target_amount: float, current_position: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """
         Adjust an existing hedge position to match a target amount.
 

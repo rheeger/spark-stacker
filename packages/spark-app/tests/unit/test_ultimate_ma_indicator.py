@@ -35,18 +35,22 @@ def test_ultimate_ma_initialization():
         "ma_type2": 4,  # HullMA
         "t3_factor2": 3,  # 0.3 after multiplier
         "color_based_on_direction": False,
-        "smooth_factor": 3
+        "smooth_factor": 3,
     }
     uma_custom = UltimateMAIndicator(name="custom_uma", params=custom_params)
     assert uma_custom.name == "custom_uma"
     assert uma_custom.source_col == "high"
     assert uma_custom.length == 10
     assert uma_custom.ma_type == 2  # EMA
-    assert abs(uma_custom.t3_factor - 0.5) < 1e-10  # Use approximation for floating point
+    assert (
+        abs(uma_custom.t3_factor - 0.5) < 1e-10
+    )  # Use approximation for floating point
     assert uma_custom.use_second_ma is True
     assert uma_custom.length2 == 30
     assert uma_custom.ma_type2 == 4  # HullMA
-    assert abs(uma_custom.t3_factor2 - 0.3) < 1e-10  # Use approximation for floating point
+    assert (
+        abs(uma_custom.t3_factor2 - 0.3) < 1e-10
+    )  # Use approximation for floating point
     assert uma_custom.color_based_on_direction is False
     assert uma_custom.smooth_factor == 3
 
@@ -130,7 +134,7 @@ def test_ultimate_ma_calculation(sample_price_data):
     # Test with dual MA setup
     uma_dual = UltimateMAIndicator(
         name="test_uma_dual",
-        params={"length": 10, "use_second_ma": True, "length2": 20}
+        params={"length": 10, "use_second_ma": True, "length2": 20},
     )
     result_dual = uma_dual.calculate(sample_price_data)
 
@@ -146,35 +150,36 @@ def test_ultimate_ma_calculation(sample_price_data):
 
     # Test with different MA types
     types = [
-        {"ma_type": 1, "name": "SMA", "min_rows": 10},       # SMA needs length rows
-        {"ma_type": 2, "name": "EMA", "min_rows": 10},       # EMA converges quickly
-        {"ma_type": 3, "name": "WMA", "min_rows": 10},       # WMA needs length rows
-        {"ma_type": 4, "name": "HullMA", "min_rows": 15},    # Hull needs more warmup
-        {"ma_type": 6, "name": "RMA", "min_rows": 10},       # RMA converges quickly
-        {"ma_type": 7, "name": "TEMA", "min_rows": 30},      # TEMA needs 3x length
-        {"ma_type": 8, "name": "T3", "min_rows": 30},        # T3 needs more warmup
+        {"ma_type": 1, "name": "SMA", "min_rows": 10},  # SMA needs length rows
+        {"ma_type": 2, "name": "EMA", "min_rows": 10},  # EMA converges quickly
+        {"ma_type": 3, "name": "WMA", "min_rows": 10},  # WMA needs length rows
+        {"ma_type": 4, "name": "HullMA", "min_rows": 15},  # Hull needs more warmup
+        {"ma_type": 6, "name": "RMA", "min_rows": 10},  # RMA converges quickly
+        {"ma_type": 7, "name": "TEMA", "min_rows": 30},  # TEMA needs 3x length
+        {"ma_type": 8, "name": "T3", "min_rows": 30},  # T3 needs more warmup
     ]
 
     # Instead of comparing results directly, just verify each MA type produces valid output
     for ma_type in types:
         uma_type = UltimateMAIndicator(
             name=f"test_{ma_type['name']}",
-            params={"length": 10, "ma_type": ma_type["ma_type"]}
+            params={"length": 10, "ma_type": ma_type["ma_type"]},
         )
         result_type = uma_type.calculate(sample_price_data)
 
         # Allow for different warmup periods for different MA types
         # Check that the values are valid after the required warmup
         min_rows = ma_type["min_rows"]
-        warmup_end = min(len(sample_price_data) - 1, min_rows + 5)  # Add a few more rows for safety
+        warmup_end = min(
+            len(sample_price_data) - 1, min_rows + 5
+        )  # Add a few more rows for safety
 
         # Check that the indicator has valid values near the end of the series
         assert not pd.isna(result_type["uma_line1"].iloc[-10:]).all()
 
     # Test VWMA (ma_type 5) separately as it requires volume data
     uma_vwma = UltimateMAIndicator(
-        name="test_VWMA",
-        params={"length": 10, "ma_type": 5}
+        name="test_VWMA", params={"length": 10, "ma_type": 5}
     )
     result_vwma = uma_vwma.calculate(sample_price_data)
     assert not pd.isna(result_vwma["uma_line1"].iloc[-1])
@@ -282,8 +287,7 @@ def test_ultimate_ma_signal_generation():
 def test_ultimate_ma_process_method(sample_price_data):
     """Test the combined process method."""
     uma = UltimateMAIndicator(
-        name="test_uma",
-        params={"length": 5, "use_second_ma": True, "length2": 10}
+        name="test_uma", params={"length": 5, "use_second_ma": True, "length2": 10}
     )  # Shorter periods for quicker signals
 
     # Manipulate data to create crossover scenarios
@@ -294,7 +298,7 @@ def test_ultimate_ma_process_method(sample_price_data):
 
     # Define relative positions in the dataset
     down_start_idx = int(len(timestamps) * 0.1)  # 10% through data
-    up_start_idx = int(len(timestamps) * 0.2)    # 20% through data
+    up_start_idx = int(len(timestamps) * 0.2)  # 20% through data
 
     # Define periods for trends
     trend_period = 10
@@ -396,7 +400,7 @@ def test_str_representation():
             "length": 10,
             "use_second_ma": True,
             "ma_type2": 4,
-            "length2": 20
-        }
+            "length2": 20,
+        },
     )
     assert str(uma_dual) == "UltimateMA(WMA(10) + HullMA(20))"

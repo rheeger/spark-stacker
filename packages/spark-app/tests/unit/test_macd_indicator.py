@@ -23,7 +23,7 @@ def test_macd_initialization():
         "fast_period": 8,
         "slow_period": 21,
         "signal_period": 5,
-        "trigger_threshold": 0.001
+        "trigger_threshold": 0.001,
     }
     macd_custom = MACDIndicator(name="custom_macd", params=custom_params)
     assert macd_custom.name == "custom_macd"
@@ -117,7 +117,7 @@ def test_macd_process_method(sample_price_data):
     """Test the combined process method."""
     macd = MACDIndicator(
         name="test_macd",
-        params={"fast_period": 5, "slow_period": 10, "signal_period": 3}
+        params={"fast_period": 5, "slow_period": 10, "signal_period": 3},
     )  # Shorter periods for quicker signals
 
     # Use a larger dataset to ensure we get enough data points

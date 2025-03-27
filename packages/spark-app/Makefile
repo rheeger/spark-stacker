@@ -1,4 +1,4 @@
-.PHONY: help lint lint-python lint-markdown install-deps start build test clean
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean
 
 # Default target
 help:
@@ -8,10 +8,11 @@ help:
 	@echo "  make lint-python     : Run Python linters only (black, pylint, mypy)"
 	@echo "  make lint-markdown   : Run Markdown linter only"
 	@echo "  make install-deps    : Install all dependencies"
-	@echo "  make start           : Start the spark-app application"
-	@echo "  make build           : Build the spark-app application"
-	@echo "  make test            : Run tests for spark-app"
-	@echo "  make clean           : Clean up temporary files and build artifacts"
+	@echo "  make start          : Start the spark-app services"
+	@echo "  make stop           : Stop the spark-app services"
+	@echo "  make clean          : Clean up temporary files and build artifacts"
+	@echo "  make test           : Run tests for spark-app"
+	@echo "  make spark-app-clean: Clean up spark-app services and volumes"
 
 # Linting
 lint: lint-python lint-markdown
@@ -47,18 +48,28 @@ install-deps:
 	@echo "Dependencies installed"
 
 # Application commands
-start:
-	@echo "Starting spark-app application..."
-	python app/main.py
+start: spark-app-start
 
-build:
-	@echo "Building spark-app application..."
-	# Add build steps specific to the spark-app package
-	@echo "Build complete"
+stop: spark-app-stop
+
+spark-app-start:
+	@echo "Starting spark-app services..."
+	cd docker && docker-compose up -d
+	@echo "Services started. Check logs with: docker logs -f spark-stacker"
+
+spark-app-stop:
+	@echo "Stopping spark-app services..."
+	cd docker && docker-compose down
+	@echo "Services stopped"
+
+spark-app-clean:
+	@echo "Cleaning up spark-app services..."
+	cd docker && docker-compose down -v
+	@echo "Services cleaned up"
 
 test:
 	@echo "Running tests for spark-app..."
-	pytest tests/
+	cd scripts && ./run_tests_with_venv.sh
 	@echo "Tests complete"
 
 clean:
@@ -67,4 +78,5 @@ clean:
 	find . -type d -name .pytest_cache -exec rm -rf {} +
 	find . -type d -name .mypy_cache -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+	rm -rf .venv
 	@echo "Clean complete"

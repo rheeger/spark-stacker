@@ -11,9 +11,14 @@ from unittest.mock import ANY, MagicMock, PropertyMock, patch
 
 import pytest
 
-from app.connectors.base_connector import (BaseConnector, MarketType,
-                                           OrderSide, OrderStatus, OrderType,
-                                           TimeInForce)
+from app.connectors.base_connector import (
+    BaseConnector,
+    MarketType,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    TimeInForce,
+)
 from app.connectors.coinbase_connector import CoinbaseConnector
 
 
@@ -158,10 +163,13 @@ def coinbase_connector(mock_rest_client):
 # Basic Connector Tests
 # =============================================================================
 
+
 def test_initialization(coinbase_connector):
     """Test that the Coinbase connector initializes correctly."""
     assert coinbase_connector.api_key == os.environ.get("COINBASE_API_KEY", "test_key")
-    assert coinbase_connector.api_secret == os.environ.get("COINBASE_API_SECRET", "test_secret")
+    assert coinbase_connector.api_secret == os.environ.get(
+        "COINBASE_API_SECRET", "test_secret"
+    )
     assert coinbase_connector.passphrase == "test_passphrase"
     assert coinbase_connector.testnet is True
     assert isinstance(coinbase_connector.market_types, list)
@@ -223,6 +231,7 @@ def test_disconnect(coinbase_connector):
 # Market Data Tests
 # =============================================================================
 
+
 def test_get_ticker(coinbase_connector, mock_rest_client):
     """Test retrieving ticker data."""
     # Create a mock product response with a fixed price
@@ -259,6 +268,7 @@ def test_get_orderbook(coinbase_connector, mock_rest_client):
 # =============================================================================
 # Account Tests
 # =============================================================================
+
 
 def test_get_account_balance(coinbase_connector, mock_rest_client):
     """Test retrieving account balances."""
@@ -297,6 +307,7 @@ def test_get_positions(coinbase_connector, mock_rest_client):
 # =============================================================================
 # Order Tests
 # =============================================================================
+
 
 def test_place_market_order(coinbase_connector, mock_rest_client):
     """Test placing a market order."""
@@ -413,18 +424,21 @@ def test_get_order(coinbase_connector, mock_rest_client):
 # Position Tests
 # =============================================================================
 
+
 def test_close_position_with_market_sell(coinbase_connector):
     """Test closing a position with a market sell order."""
     # Mock get_account_balance to return a balance for the test symbol
     coinbase_connector.get_account_balance = MagicMock(return_value={"ETH": 5.0})
 
     # Mock place_order to return a successful order
-    coinbase_connector.place_order = MagicMock(return_value={
-        "order_id": "test-order-id",
-        "status": "OPEN",
-        "symbol": "ETH",
-        "side": OrderSide.SELL.value,
-    })
+    coinbase_connector.place_order = MagicMock(
+        return_value={
+            "order_id": "test-order-id",
+            "status": "OPEN",
+            "symbol": "ETH",
+            "side": OrderSide.SELL.value,
+        }
+    )
 
     # Call close_position
     result = coinbase_connector.close_position(symbol="ETH")
@@ -450,7 +464,9 @@ def test_close_position_with_position_id(coinbase_connector):
     coinbase_connector.cancel_order = MagicMock(return_value=True)
 
     # Call close_position with position_id
-    result = coinbase_connector.close_position(symbol="ETH", position_id="test-position-id")
+    result = coinbase_connector.close_position(
+        symbol="ETH", position_id="test-position-id"
+    )
 
     # Verify the result
     assert result["success"] is True
@@ -486,9 +502,9 @@ def test_close_position_with_order_error(coinbase_connector):
     coinbase_connector.get_account_balance = MagicMock(return_value={"ETH": 5.0})
 
     # Mock place_order to return an error
-    coinbase_connector.place_order = MagicMock(return_value={
-        "error": "Failed to execute market sell"
-    })
+    coinbase_connector.place_order = MagicMock(
+        return_value={"error": "Failed to execute market sell"}
+    )
 
     # Call close_position
     result = coinbase_connector.close_position(symbol="ETH")
@@ -503,13 +519,16 @@ def test_close_position_with_order_error(coinbase_connector):
 # Price Optimization Tests
 # =============================================================================
 
+
 def test_get_optimal_limit_price_small_orders(coinbase_connector):
     """Test optimal price calculation for small orders."""
     # Mock the get_orderbook method
-    coinbase_connector.get_orderbook = MagicMock(return_value={
-        "bids": [[2000.0, 2.0], [1999.0, 3.0]],
-        "asks": [[2001.0, 2.0], [2002.0, 3.0]]
-    })
+    coinbase_connector.get_orderbook = MagicMock(
+        return_value={
+            "bids": [[2000.0, 2.0], [1999.0, 3.0]],
+            "asks": [[2001.0, 2.0], [2002.0, 3.0]],
+        }
+    )
 
     # Test buying a small amount (less than the top level)
     small_buy_result = coinbase_connector.get_optimal_limit_price(
@@ -535,10 +554,12 @@ def test_get_optimal_limit_price_small_orders(coinbase_connector):
 def test_get_optimal_limit_price_medium_orders(coinbase_connector):
     """Test optimal price calculation for medium orders spanning multiple levels."""
     # Mock the get_orderbook method with a deeper book
-    coinbase_connector.get_orderbook = MagicMock(return_value={
-        "bids": [[2000.0, 1.0], [1995.0, 2.0], [1990.0, 3.0]],
-        "asks": [[2001.0, 1.0], [2005.0, 2.0], [2010.0, 3.0]]
-    })
+    coinbase_connector.get_orderbook = MagicMock(
+        return_value={
+            "bids": [[2000.0, 1.0], [1995.0, 2.0], [1990.0, 3.0]],
+            "asks": [[2001.0, 1.0], [2005.0, 2.0], [2010.0, 3.0]],
+        }
+    )
 
     # Test buying a medium amount (spans multiple levels)
     medium_buy_result = coinbase_connector.get_optimal_limit_price(
@@ -548,7 +569,9 @@ def test_get_optimal_limit_price_medium_orders(coinbase_connector):
     assert medium_buy_result["enough_liquidity"] is True
     # Price should be weighted by the levels covered
     assert medium_buy_result["price"] > 2001.0
-    assert medium_buy_result["price"] < 2020.0  # Increased upper bound to account for buffer
+    assert (
+        medium_buy_result["price"] < 2020.0
+    )  # Increased upper bound to account for buffer
     assert medium_buy_result["slippage"] > 0.001  # More slippage than small orders
 
     # Test selling a medium amount (spans multiple levels)
@@ -559,17 +582,33 @@ def test_get_optimal_limit_price_medium_orders(coinbase_connector):
     assert medium_sell_result["enough_liquidity"] is True
     # Price should be weighted by the levels covered
     assert medium_sell_result["price"] < 2000.0
-    assert medium_sell_result["price"] > 1985.0  # Lowered to match actual calculated value
+    assert (
+        medium_sell_result["price"] > 1985.0
+    )  # Lowered to match actual calculated value
     assert medium_sell_result["slippage"] > 0.001  # More slippage than small orders
 
 
 def test_get_optimal_limit_price_large_orders(coinbase_connector):
     """Test optimal price calculation for large orders requiring batching."""
     # Mock the get_orderbook method with a deeper book
-    coinbase_connector.get_orderbook = MagicMock(return_value={
-        "bids": [[2000.0, 0.5], [1995.0, 1.0], [1990.0, 1.5], [1985.0, 2.0], [1980.0, 5.0]],
-        "asks": [[2001.0, 0.5], [2005.0, 1.0], [2010.0, 1.5], [2015.0, 2.0], [2020.0, 5.0]]
-    })
+    coinbase_connector.get_orderbook = MagicMock(
+        return_value={
+            "bids": [
+                [2000.0, 0.5],
+                [1995.0, 1.0],
+                [1990.0, 1.5],
+                [1985.0, 2.0],
+                [1980.0, 5.0],
+            ],
+            "asks": [
+                [2001.0, 0.5],
+                [2005.0, 1.0],
+                [2010.0, 1.5],
+                [2015.0, 2.0],
+                [2020.0, 5.0],
+            ],
+        }
+    )
 
     # Test buying a large amount (requires batching)
     large_buy_result = coinbase_connector.get_optimal_limit_price(
@@ -603,10 +642,12 @@ def test_get_optimal_limit_price_large_orders(coinbase_connector):
 def test_get_optimal_limit_price_insufficient_liquidity(coinbase_connector):
     """Test optimal price calculation when there's not enough liquidity."""
     # Mock the get_orderbook method with limited liquidity
-    coinbase_connector.get_orderbook = MagicMock(return_value={
-        "bids": [[2000.0, 0.5], [1995.0, 0.5]],
-        "asks": [[2001.0, 0.5], [2005.0, 0.5]]
-    })
+    coinbase_connector.get_orderbook = MagicMock(
+        return_value={
+            "bids": [[2000.0, 0.5], [1995.0, 0.5]],
+            "asks": [[2001.0, 0.5], [2005.0, 0.5]],
+        }
+    )
 
     # Test buying with insufficient liquidity
     no_liquidity_buy = coinbase_connector.get_optimal_limit_price(
@@ -628,10 +669,7 @@ def test_get_optimal_limit_price_insufficient_liquidity(coinbase_connector):
 def test_get_optimal_limit_price_empty_orderbook(coinbase_connector):
     """Test optimal price calculation with an empty order book."""
     # Mock the get_orderbook method to return empty
-    coinbase_connector.get_orderbook = MagicMock(return_value={
-        "bids": [],
-        "asks": []
-    })
+    coinbase_connector.get_orderbook = MagicMock(return_value={"bids": [], "asks": []})
 
     # Test buying with empty order book
     empty_book_buy = coinbase_connector.get_optimal_limit_price(
@@ -654,16 +692,19 @@ def test_get_optimal_limit_price_empty_orderbook(coinbase_connector):
 # Hedge Tests
 # =============================================================================
 
+
 def test_create_hedge_position(coinbase_connector):
     """Test creating a hedge position."""
     # Mock place_order
-    coinbase_connector.place_order = MagicMock(return_value={
-        "order_id": "test-hedge-order-id",
-        "status": "OPEN",
-        "symbol": "ETH",
-        "side": OrderSide.BUY.value,
-        "amount": 1.0
-    })
+    coinbase_connector.place_order = MagicMock(
+        return_value={
+            "order_id": "test-hedge-order-id",
+            "status": "OPEN",
+            "symbol": "ETH",
+            "side": OrderSide.BUY.value,
+            "amount": 1.0,
+        }
+    )
 
     # Test creating a long hedge position
     long_result = coinbase_connector.create_hedge_position(symbol="ETH", amount=1.0)
@@ -680,7 +721,7 @@ def test_create_hedge_position(coinbase_connector):
         side=OrderSide.BUY,
         order_type=OrderType.MARKET,
         amount=1.0,
-        leverage=1.0
+        leverage=1.0,
     )
 
     # Reset mock for next test
@@ -700,7 +741,7 @@ def test_create_hedge_position(coinbase_connector):
         side=OrderSide.SELL,
         order_type=OrderType.MARKET,
         amount=2.0,
-        leverage=1.0
+        leverage=1.0,
     )
 
     # Reset mock for next test
@@ -721,7 +762,7 @@ def test_create_hedge_position(coinbase_connector):
         order_type=OrderType.LIMIT,
         amount=1.0,
         leverage=1.0,
-        price=ANY
+        price=ANY,
     )
 
     # Extract the price argument
@@ -738,15 +779,19 @@ def test_adjust_hedge_position(coinbase_connector):
     coinbase_connector.get_account_balance = MagicMock(return_value={"ETH": 1.0})
 
     # Mock create_hedge_position for increasing position
-    coinbase_connector.create_hedge_position = MagicMock(return_value={
-        "success": True,
-        "message": "Hedge position created",
-        "hedge_amount": 1.0,
-        "hedge_direction": OrderSide.BUY.value,
-    })
+    coinbase_connector.create_hedge_position = MagicMock(
+        return_value={
+            "success": True,
+            "message": "Hedge position created",
+            "hedge_amount": 1.0,
+            "hedge_direction": OrderSide.BUY.value,
+        }
+    )
 
     # Test increasing a hedge position
-    increase_result = coinbase_connector.adjust_hedge_position(symbol="ETH", target_amount=2.0)
+    increase_result = coinbase_connector.adjust_hedge_position(
+        symbol="ETH", target_amount=2.0
+    )
 
     assert increase_result["success"] is True
     assert increase_result["adjustment"] == 1.0  # From 1.0 to 2.0
@@ -761,7 +806,9 @@ def test_adjust_hedge_position(coinbase_connector):
     coinbase_connector.create_hedge_position.reset_mock()
 
     # Test decreasing a hedge position
-    decrease_result = coinbase_connector.adjust_hedge_position(symbol="ETH", target_amount=0.5)
+    decrease_result = coinbase_connector.adjust_hedge_position(
+        symbol="ETH", target_amount=0.5
+    )
 
     assert decrease_result["success"] is True
     assert decrease_result["adjustment"] == -0.5  # From 1.0 to 0.5

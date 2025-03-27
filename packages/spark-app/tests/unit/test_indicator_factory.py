@@ -2,10 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.indicators.adaptive_supertrend_indicator import \
-    AdaptiveSupertrendIndicator
-from app.indicators.adaptive_trend_finder_indicator import \
-    AdaptiveTrendFinderIndicator
+from app.indicators.adaptive_supertrend_indicator import AdaptiveSupertrendIndicator
+from app.indicators.adaptive_trend_finder_indicator import AdaptiveTrendFinderIndicator
 from app.indicators.base_indicator import BaseIndicator
 from app.indicators.bollinger_bands_indicator import BollingerBandsIndicator
 from app.indicators.indicator_factory import IndicatorFactory
@@ -33,8 +31,14 @@ def test_indicator_registry():
     assert IndicatorFactory._indicator_registry["macd"] == MACDIndicator
     assert IndicatorFactory._indicator_registry["bollinger"] == BollingerBandsIndicator
     assert IndicatorFactory._indicator_registry["ma"] == MovingAverageIndicator
-    assert IndicatorFactory._indicator_registry["adaptive_supertrend"] == AdaptiveSupertrendIndicator
-    assert IndicatorFactory._indicator_registry["adaptive_trend_finder"] == AdaptiveTrendFinderIndicator
+    assert (
+        IndicatorFactory._indicator_registry["adaptive_supertrend"]
+        == AdaptiveSupertrendIndicator
+    )
+    assert (
+        IndicatorFactory._indicator_registry["adaptive_trend_finder"]
+        == AdaptiveTrendFinderIndicator
+    )
     assert IndicatorFactory._indicator_registry["ultimate_ma"] == UltimateMAIndicator
 
 
@@ -119,7 +123,12 @@ def test_create_indicators_from_config():
             "name": "ultimate_ma_eth",
             "type": "ultimate_ma",
             "enabled": True,
-            "parameters": {"length": 20, "ma_type": 2, "use_second_ma": True, "length2": 50},
+            "parameters": {
+                "length": 20,
+                "ma_type": 2,
+                "use_second_ma": True,
+                "length2": 50,
+            },
         },
         {
             "name": "disabled_indicator",
@@ -235,7 +244,15 @@ def test_get_available_indicators():
     available = IndicatorFactory.get_available_indicators()
 
     # Should include all our indicator types
-    expected_indicators = ["rsi", "macd", "bollinger", "ma", "adaptive_supertrend", "adaptive_trend_finder", "ultimate_ma"]
+    expected_indicators = [
+        "rsi",
+        "macd",
+        "bollinger",
+        "ma",
+        "adaptive_supertrend",
+        "adaptive_trend_finder",
+        "ultimate_ma",
+    ]
     for indicator in expected_indicators:
         assert indicator in available
 

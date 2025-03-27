@@ -8,12 +8,13 @@ import pandas as pd
 import pytest
 
 from app.core.trading_engine import TradingEngine
-from app.indicators.adaptive_trend_finder_indicator import \
-    AdaptiveTrendFinderIndicator
+from app.indicators.adaptive_trend_finder_indicator import AdaptiveTrendFinderIndicator
 from app.indicators.base_indicator import Signal, SignalDirection
 
 
-def test_adaptive_trend_finder_integration(mock_connector, mock_risk_manager, trading_engine):
+def test_adaptive_trend_finder_integration(
+    mock_connector, mock_risk_manager, trading_engine
+):
     """
     Test that the Adaptive Trend Finder indicator can generate signals that are properly
     processed by the trading engine.
@@ -22,8 +23,14 @@ def test_adaptive_trend_finder_integration(mock_connector, mock_risk_manager, tr
     mock_connector.get_ticker.return_value = {"symbol": "ETH", "last_price": 1500.0}
 
     # Configure the mock risk manager
-    mock_risk_manager.calculate_position_size.return_value = (1.0, 5.0)  # size, leverage
-    mock_risk_manager.calculate_hedge_parameters.return_value = (0.2, 2.0)  # hedge size, hedge leverage
+    mock_risk_manager.calculate_position_size.return_value = (
+        1.0,
+        5.0,
+    )  # size, leverage
+    mock_risk_manager.calculate_hedge_parameters.return_value = (
+        0.2,
+        2.0,
+    )  # hedge size, hedge leverage
     mock_risk_manager.validate_trade.return_value = (True, "Trade validated")
 
     # Start the trading engine
@@ -33,7 +40,7 @@ def test_adaptive_trend_finder_integration(mock_connector, mock_risk_manager, tr
         # Create an Adaptive Trend Finder indicator
         atf = AdaptiveTrendFinderIndicator(
             name="AdaptiveTrendFinder",
-            params={"use_long_term": False, "dev_multiplier": 2.0}
+            params={"use_long_term": False, "dev_multiplier": 2.0},
         )
 
         # Create synthetic price data with a clear trend
@@ -42,27 +49,35 @@ def test_adaptive_trend_finder_integration(mock_connector, mock_risk_manager, tr
         timestamps = pd.date_range(start="2023-01-01", periods=num_periods, freq="1h")
 
         # Create a trend with some noise
-        base_close = np.linspace(1000, 1500, num_periods) + np.random.normal(0, 20, num_periods)
+        base_close = np.linspace(1000, 1500, num_periods) + np.random.normal(
+            0, 20, num_periods
+        )
 
         # Add a dip at the end to generate a buy signal (price returns from lower band)
         # Last 5 periods: normal trend, drop below lower band, stay below, stay below, bounce up
         base_close[-5:] = [1480, 1460, 1430, 1420, 1450]
 
         # Create OHLC data
-        data = pd.DataFrame({
-            "timestamp": timestamps,
-            "symbol": "ETH",
-            "open": base_close - np.random.normal(0, 5, num_periods),
-            "high": base_close + np.random.normal(10, 5, num_periods),
-            "low": base_close - np.random.normal(10, 5, num_periods),
-            "close": base_close,
-            "volume": np.random.normal(1000, 200, num_periods),
-        })
+        data = pd.DataFrame(
+            {
+                "timestamp": timestamps,
+                "symbol": "ETH",
+                "open": base_close - np.random.normal(0, 5, num_periods),
+                "high": base_close + np.random.normal(10, 5, num_periods),
+                "low": base_close - np.random.normal(10, 5, num_periods),
+                "close": base_close,
+                "volume": np.random.normal(1000, 200, num_periods),
+            }
+        )
 
         # Ensure high is highest and low is lowest
         for i in range(len(data)):
-            data.loc[i, "high"] = max(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"])
-            data.loc[i, "low"] = min(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"])
+            data.loc[i, "high"] = max(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"]
+            )
+            data.loc[i, "low"] = min(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"]
+            )
 
         # Process the data with the ATF indicator
         processed_data, signal = atf.process(data)
@@ -70,7 +85,9 @@ def test_adaptive_trend_finder_integration(mock_connector, mock_risk_manager, tr
         # If no signal was generated, adjust the data to force a signal for testing
         if signal is None:
             # Manually generate a buy signal
-            logging.info("No signal generated naturally, creating a synthetic bounce from lower band")
+            logging.info(
+                "No signal generated naturally, creating a synthetic bounce from lower band"
+            )
 
             # Calculate the indicator values first
             processed_data = atf.calculate(data)
@@ -102,7 +119,10 @@ def test_adaptive_trend_finder_integration(mock_connector, mock_risk_manager, tr
             trading_engine.process_signal(signal)
 
             # Check that the trading engine processed the signal
-            assert len(trading_engine.active_trades) > 0 or len(trading_engine.get_trade_history()) > 0
+            assert (
+                len(trading_engine.active_trades) > 0
+                or len(trading_engine.get_trade_history()) > 0
+            )
 
             # Get the trades and check details
             if trading_engine.active_trades:
@@ -146,7 +166,9 @@ def test_adaptive_trend_finder_integration(mock_connector, mock_risk_manager, tr
         trading_engine.stop()
 
 
-def test_adaptive_trend_finder_multiple_periods(mock_connector, mock_risk_manager, trading_engine):
+def test_adaptive_trend_finder_multiple_periods(
+    mock_connector, mock_risk_manager, trading_engine
+):
     """
     Test the Adaptive Trend Finder with different period settings.
     """
@@ -160,39 +182,43 @@ def test_adaptive_trend_finder_multiple_periods(mock_connector, mock_risk_manage
     timestamps = pd.date_range(start="2023-01-01", periods=num_periods, freq="1h")
 
     # Create a trend with some cycles
-    t = np.linspace(0, 12*np.pi, num_periods)  # Multiple cycles
+    t = np.linspace(0, 12 * np.pi, num_periods)  # Multiple cycles
     trend = np.linspace(1000, 2000, num_periods)  # Underlying trend
     cycles = 100 * np.sin(t)  # Add cyclical component
     noise = np.random.normal(0, 20, num_periods)  # Add noise
 
     close_prices = trend + cycles + noise
 
-    data = pd.DataFrame({
-        "timestamp": timestamps,
-        "symbol": "ETH",
-        "open": close_prices - np.random.normal(0, 5, num_periods),
-        "high": close_prices + np.random.normal(10, 5, num_periods),
-        "low": close_prices - np.random.normal(10, 5, num_periods),
-        "close": close_prices,
-        "volume": np.random.normal(1000, 200, num_periods),
-    })
+    data = pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "symbol": "ETH",
+            "open": close_prices - np.random.normal(0, 5, num_periods),
+            "high": close_prices + np.random.normal(10, 5, num_periods),
+            "low": close_prices - np.random.normal(10, 5, num_periods),
+            "close": close_prices,
+            "volume": np.random.normal(1000, 200, num_periods),
+        }
+    )
 
     # Fix high/low values
     for i in range(len(data)):
-        data.loc[i, "high"] = max(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"])
-        data.loc[i, "low"] = min(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"])
+        data.loc[i, "high"] = max(
+            data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"]
+        )
+        data.loc[i, "low"] = min(
+            data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"]
+        )
 
     # Test with short-term settings
     short_term_atf = AdaptiveTrendFinderIndicator(
-        name="ShortTermATF",
-        params={"use_long_term": False, "dev_multiplier": 2.0}
+        name="ShortTermATF", params={"use_long_term": False, "dev_multiplier": 2.0}
     )
     short_term_result = short_term_atf.calculate(data)
 
     # Test with long-term settings
     long_term_atf = AdaptiveTrendFinderIndicator(
-        name="LongTermATF",
-        params={"use_long_term": True, "dev_multiplier": 2.5}
+        name="LongTermATF", params={"use_long_term": True, "dev_multiplier": 2.5}
     )
     long_term_result = long_term_atf.calculate(data)
 
@@ -201,10 +227,16 @@ def test_adaptive_trend_finder_multiple_periods(mock_connector, mock_risk_manage
     assert not pd.isna(long_term_result["atf_period"].iloc[-1])
 
     # The periods should be different
-    assert short_term_result["atf_period"].iloc[-1] != long_term_result["atf_period"].iloc[-1]
+    assert (
+        short_term_result["atf_period"].iloc[-1]
+        != long_term_result["atf_period"].iloc[-1]
+    )
 
     # Short term period should be smaller than long term
-    assert short_term_result["atf_period"].iloc[-1] < long_term_result["atf_period"].iloc[-1]
+    assert (
+        short_term_result["atf_period"].iloc[-1]
+        < long_term_result["atf_period"].iloc[-1]
+    )
 
     # Verify the channels were calculated
     assert not pd.isna(short_term_result["atf_midline"].iloc[-1])

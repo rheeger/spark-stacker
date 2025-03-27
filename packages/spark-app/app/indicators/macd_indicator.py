@@ -4,8 +4,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
-from app.indicators.base_indicator import (BaseIndicator, Signal,
-                                           SignalDirection)
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +17,14 @@ class MACDIndicator(BaseIndicator):
     between two moving averages of a security's price.
     """
 
-    def __init__(self, name: str = "macd", params: Optional[Dict[str, Any]] = None,
-                  fast_period: int = None, slow_period: int = None, signal_period: int = None):
+    def __init__(
+        self,
+        name: str = "macd",
+        params: Optional[Dict[str, Any]] = None,
+        fast_period: int = None,
+        slow_period: int = None,
+        signal_period: int = None,
+    ):
         """
         Initialize the MACD indicator.
 
@@ -82,24 +87,16 @@ class MACDIndicator(BaseIndicator):
         df["macd_histogram"] = df["macd"] - df["macd_signal"]
 
         # Calculate crossovers
-        df["macd_crosses_above_signal"] = (
-            (df["macd"] > df["macd_signal"]) &
-            (df["macd"].shift(1) <= df["macd_signal"].shift(1))
+        df["macd_crosses_above_signal"] = (df["macd"] > df["macd_signal"]) & (
+            df["macd"].shift(1) <= df["macd_signal"].shift(1)
         )
-        df["macd_crosses_below_signal"] = (
-            (df["macd"] < df["macd_signal"]) &
-            (df["macd"].shift(1) >= df["macd_signal"].shift(1))
+        df["macd_crosses_below_signal"] = (df["macd"] < df["macd_signal"]) & (
+            df["macd"].shift(1) >= df["macd_signal"].shift(1)
         )
 
         # Zero line crossovers
-        df["macd_crosses_above_zero"] = (
-            (df["macd"] > 0) &
-            (df["macd"].shift(1) <= 0)
-        )
-        df["macd_crosses_below_zero"] = (
-            (df["macd"] < 0) &
-            (df["macd"].shift(1) >= 0)
-        )
+        df["macd_crosses_above_zero"] = (df["macd"] > 0) & (df["macd"].shift(1) <= 0)
+        df["macd_crosses_below_zero"] = (df["macd"] < 0) & (df["macd"].shift(1) >= 0)
 
         return df
 
@@ -117,7 +114,9 @@ class MACDIndicator(BaseIndicator):
             Signal object if conditions are met, None otherwise
         """
         if "macd" not in data.columns or "macd_signal" not in data.columns:
-            logger.warning("MACD or signal columns missing in data, cannot generate signal")
+            logger.warning(
+                "MACD or signal columns missing in data, cannot generate signal"
+            )
             return None
 
         if len(data) < 2:

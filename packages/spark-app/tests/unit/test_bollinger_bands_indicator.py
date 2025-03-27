@@ -18,11 +18,7 @@ def test_bollinger_bands_initialization():
     assert bb.mean_reversion_threshold == 0.05
 
     # Test with custom parameters
-    custom_params = {
-        "period": 15,
-        "std_dev": 2.5,
-        "mean_reversion_threshold": 0.1
-    }
+    custom_params = {"period": 15, "std_dev": 2.5, "mean_reversion_threshold": 0.1}
     bb_custom = BollingerBandsIndicator(name="custom_bb", params=custom_params)
     assert bb_custom.name == "custom_bb"
     assert bb_custom.period == 15
@@ -46,8 +42,14 @@ def test_bollinger_bands_calculation(sample_price_data):
 
     # Upper band should be greater than middle band, which should be greater than lower band
     non_nan_indices = ~result["bb_middle"].isna()
-    assert (result.loc[non_nan_indices, "bb_upper"] > result.loc[non_nan_indices, "bb_middle"]).all()
-    assert (result.loc[non_nan_indices, "bb_middle"] > result.loc[non_nan_indices, "bb_lower"]).all()
+    assert (
+        result.loc[non_nan_indices, "bb_upper"]
+        > result.loc[non_nan_indices, "bb_middle"]
+    ).all()
+    assert (
+        result.loc[non_nan_indices, "bb_middle"]
+        > result.loc[non_nan_indices, "bb_lower"]
+    ).all()
 
     # Verify signal detection columns
     assert "price_below_lower" in result.columns
@@ -110,22 +112,24 @@ def test_bollinger_bands_signal_generation():
     assert signal.params.get("trigger") == "mean_reversion_buy"
 
     # Create new data specifically for price crossing above upper band test
-    upper_cross_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
-        "symbol": "ETH",
-        "close": [1540, 1560],
-        "bb_middle": [1500, 1500],
-        "bb_upper": [1550, 1550],
-        "bb_lower": [1450, 1450],
-        "bb_width": [0.07, 0.07],
-        "bb_%b": [0.9, 1.1],
-        "price_below_lower": [False, False],
-        "price_crossing_below_lower": [False, False],
-        "price_above_upper": [False, True],
-        "price_crossing_above_upper": [False, True],
-        "mean_reversion_buy": [False, False],
-        "mean_reversion_sell": [False, False]
-    })
+    upper_cross_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH",
+            "close": [1540, 1560],
+            "bb_middle": [1500, 1500],
+            "bb_upper": [1550, 1550],
+            "bb_lower": [1450, 1450],
+            "bb_width": [0.07, 0.07],
+            "bb_%b": [0.9, 1.1],
+            "price_below_lower": [False, False],
+            "price_crossing_below_lower": [False, False],
+            "price_above_upper": [False, True],
+            "price_crossing_above_upper": [False, True],
+            "mean_reversion_buy": [False, False],
+            "mean_reversion_sell": [False, False],
+        }
+    )
 
     # Test sell signal - price crossing above upper band
     signal = bb.generate_signal(upper_cross_data)
@@ -172,8 +176,7 @@ def test_bollinger_bands_signal_generation():
 def test_bollinger_bands_process_method(sample_price_data):
     """Test the combined process method."""
     bb = BollingerBandsIndicator(
-        name="test_bb",
-        params={"period": 10, "std_dev": 2}
+        name="test_bb", params={"period": 10, "std_dev": 2}
     )  # Shorter period for quicker signals
 
     # Manipulate data to create scenarios for signal generation
@@ -183,10 +186,10 @@ def test_bollinger_bands_process_method(sample_price_data):
     timestamps = df.index.tolist()
 
     # Define relative positions in the dataset
-    drop_start_idx = int(len(timestamps) * 0.1)    # 10% through data
+    drop_start_idx = int(len(timestamps) * 0.1)  # 10% through data
     recovery_start_idx = int(len(timestamps) * 0.15)  # 15% through data
-    rise_start_idx = int(len(timestamps) * 0.2)     # 20% through data
-    fall_start_idx = int(len(timestamps) * 0.25)    # 25% through data
+    rise_start_idx = int(len(timestamps) * 0.2)  # 20% through data
+    fall_start_idx = int(len(timestamps) * 0.25)  # 25% through data
 
     # Define periods for trends
     trend_period = 5

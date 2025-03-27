@@ -5,8 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from app.indicators.base_indicator import (BaseIndicator, Signal,
-                                           SignalDirection)
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +56,14 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
         tr2 = (high - close).abs()
         tr3 = (low - close).abs()
 
-        tr = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
+        tr = pd.DataFrame({"tr1": tr1, "tr2": tr2, "tr3": tr3}).max(axis=1)
         atr = tr.rolling(window=length).mean()
 
         return atr
 
-    def _kmeans_clustering(self, volatility: pd.Series, training_length: int) -> Tuple[float, float, float, int]:
+    def _kmeans_clustering(
+        self, volatility: pd.Series, training_length: int
+    ) -> Tuple[float, float, float, int]:
         """
         Perform K-means clustering on volatility data to identify regimes.
 
@@ -82,7 +83,9 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
 
         if len(training_data) < training_length / 2:
             # Not enough data
-            logger.warning(f"Not enough valid data for K-means clustering. Need at least {training_length/2}, got {len(training_data)}")
+            logger.warning(
+                f"Not enough valid data for K-means clustering. Need at least {training_length/2}, got {len(training_data)}"
+            )
             return np.nan, np.nan, np.nan, -1
 
         # Initial centroids based on percentiles
@@ -101,11 +104,11 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
         prev_medium_centroid = None
         prev_low_centroid = None
 
-        while (iterations < self.max_iterations and
-              (prev_high_centroid != high_centroid or
-               prev_medium_centroid != medium_centroid or
-               prev_low_centroid != low_centroid)):
-
+        while iterations < self.max_iterations and (
+            prev_high_centroid != high_centroid
+            or prev_medium_centroid != medium_centroid
+            or prev_low_centroid != low_centroid
+        ):
             prev_high_centroid = high_centroid
             prev_medium_centroid = medium_centroid
             prev_low_centroid = low_centroid
@@ -155,7 +158,9 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
 
         return high_centroid, medium_centroid, low_centroid, current_cluster
 
-    def _calculate_supertrend(self, data: pd.DataFrame, factor: float, atr: pd.Series) -> Tuple[pd.Series, pd.Series]:
+    def _calculate_supertrend(
+        self, data: pd.DataFrame, factor: float, atr: pd.Series
+    ) -> Tuple[pd.Series, pd.Series]:
         """
         Calculate SuperTrend indicator values.
 
@@ -185,16 +190,16 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
         # Calculate SuperTrend
         for i in range(1, len(data)):
             # Skip if we have missing data
-            if pd.isna(atr.iloc[i-1]):
+            if pd.isna(atr.iloc[i - 1]):
                 supertrend.iloc[i] = 0
                 direction.iloc[i] = 1
                 continue
 
             # Previous values
-            prev_upper = upper_band.iloc[i-1]
-            prev_lower = lower_band.iloc[i-1]
-            prev_supertrend = supertrend.iloc[i-1]
-            prev_close = data["close"].iloc[i-1]
+            prev_upper = upper_band.iloc[i - 1]
+            prev_lower = lower_band.iloc[i - 1]
+            prev_supertrend = supertrend.iloc[i - 1]
+            prev_close = data["close"].iloc[i - 1]
 
             # Current values
             curr_upper = upper_band.iloc[i]
@@ -267,7 +272,12 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
         df["ast_atr"] = atr
 
         # Apply K-means clustering to determine volatility regime
-        high_centroid, medium_centroid, low_centroid, current_cluster = self._kmeans_clustering(atr, self.training_length)
+        (
+            high_centroid,
+            medium_centroid,
+            low_centroid,
+            current_cluster,
+        ) = self._kmeans_clustering(atr, self.training_length)
 
         # Store centroids and cluster information
         df["ast_high_centroid"] = high_centroid
@@ -294,7 +304,9 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
         supertrend_atr.iloc[:] = atr.iloc[:]
         supertrend_atr.iloc[-1] = assigned_centroid
 
-        supertrend, direction = self._calculate_supertrend(df, self.factor, supertrend_atr)
+        supertrend, direction = self._calculate_supertrend(
+            df, self.factor, supertrend_atr
+        )
 
         # Add SuperTrend values to the DataFrame
         df["ast_supertrend"] = supertrend
@@ -348,10 +360,18 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
         Returns:
             Signal object if conditions are met, None otherwise
         """
-        required_cols = ["ast_supertrend", "ast_direction", "ast_trend_change_up", "ast_trend_change_down", "ast_volatility_cluster"]
+        required_cols = [
+            "ast_supertrend",
+            "ast_direction",
+            "ast_trend_change_up",
+            "ast_trend_change_down",
+            "ast_volatility_cluster",
+        ]
         for col in required_cols:
             if col not in data.columns:
-                logger.warning(f"Required column {col} missing in data, cannot generate signal")
+                logger.warning(
+                    f"Required column {col} missing in data, cannot generate signal"
+                )
                 return None
 
         if len(data) < 2:
@@ -381,7 +401,7 @@ class AdaptiveSupertrendIndicator(BaseIndicator):
         if volatility_cluster == 0:  # High volatility
             vol_adjust = -0.1  # Lower confidence in high volatility
         elif volatility_cluster == 2:  # Low volatility
-            vol_adjust = 0.1   # Higher confidence in low volatility
+            vol_adjust = 0.1  # Higher confidence in low volatility
 
         confidence = min(max(base_confidence + vol_adjust, 0.5), 0.95)
 

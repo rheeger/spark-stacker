@@ -11,10 +11,10 @@ from ..connectors.base_connector import OrderSide, OrderStatus, OrderType
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 class SimulatedOrder:
     """Represents a simulated order in the backtesting system."""
@@ -30,7 +30,7 @@ class SimulatedOrder:
         status: OrderStatus = OrderStatus.OPEN,
         timestamp: Optional[int] = None,
         fees: float = 0.0,
-        slippage: float = 0.0
+        slippage: float = 0.0,
     ):
         """
         Initialize a simulated order.
@@ -65,41 +65,41 @@ class SimulatedOrder:
     def to_dict(self) -> Dict[str, Any]:
         """Convert order to dictionary."""
         return {
-            'order_id': self.order_id,
-            'symbol': self.symbol,
-            'side': self.side.value,
-            'order_type': self.order_type.value,
-            'amount': self.amount,
-            'price': self.price,
-            'leverage': self.leverage,
-            'status': self.status.value,
-            'timestamp': self.timestamp,
-            'fees': self.fees,
-            'slippage': self.slippage,
-            'filled_price': self.filled_price,
-            'filled_amount': self.filled_amount,
-            'fill_timestamp': self.fill_timestamp
+            "order_id": self.order_id,
+            "symbol": self.symbol,
+            "side": self.side.value,
+            "order_type": self.order_type.value,
+            "amount": self.amount,
+            "price": self.price,
+            "leverage": self.leverage,
+            "status": self.status.value,
+            "timestamp": self.timestamp,
+            "fees": self.fees,
+            "slippage": self.slippage,
+            "filled_price": self.filled_price,
+            "filled_amount": self.filled_amount,
+            "fill_timestamp": self.fill_timestamp,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SimulatedOrder':
+    def from_dict(cls, data: Dict[str, Any]) -> "SimulatedOrder":
         """Create an order from dictionary."""
         order = cls(
-            symbol=data['symbol'],
-            side=OrderSide(data['side']),
-            order_type=OrderType(data['order_type']),
-            amount=data['amount'],
-            price=data.get('price'),
-            leverage=data.get('leverage', 1.0),
-            status=OrderStatus(data['status']),
-            timestamp=data.get('timestamp')
+            symbol=data["symbol"],
+            side=OrderSide(data["side"]),
+            order_type=OrderType(data["order_type"]),
+            amount=data["amount"],
+            price=data.get("price"),
+            leverage=data.get("leverage", 1.0),
+            status=OrderStatus(data["status"]),
+            timestamp=data.get("timestamp"),
         )
-        order.order_id = data['order_id']
-        order.fees = data.get('fees', 0.0)
-        order.slippage = data.get('slippage', 0.0)
-        order.filled_price = data.get('filled_price')
-        order.filled_amount = data.get('filled_amount', 0.0)
-        order.fill_timestamp = data.get('fill_timestamp')
+        order.order_id = data["order_id"]
+        order.fees = data.get("fees", 0.0)
+        order.slippage = data.get("slippage", 0.0)
+        order.filled_price = data.get("filled_price")
+        order.filled_amount = data.get("filled_amount", 0.0)
+        order.fill_timestamp = data.get("fill_timestamp")
         return order
 
 
@@ -115,7 +115,7 @@ class SimulatedPosition:
         leverage: float = 1.0,
         timestamp: Optional[int] = None,
         unrealized_pnl: float = 0.0,
-        realized_pnl: float = 0.0
+        realized_pnl: float = 0.0,
     ):
         """
         Initialize a simulated position.
@@ -144,7 +144,7 @@ class SimulatedPosition:
     def _calculate_liquidation_price(self) -> float:
         """Calculate liquidation price based on leverage."""
         if self.leverage <= 1:
-            return 0.0 if self.side == OrderSide.BUY else float('inf')
+            return 0.0 if self.side == OrderSide.BUY else float("inf")
 
         # Basic liquidation price calculation
         maintenance_margin = 0.05  # 5% maintenance margin requirement
@@ -192,33 +192,35 @@ class SimulatedPosition:
     def to_dict(self) -> Dict[str, Any]:
         """Convert position to dictionary."""
         return {
-            'position_id': self.position_id,
-            'symbol': self.symbol,
-            'side': self.side.value,
-            'entry_price': self.entry_price,
-            'amount': self.amount,
-            'leverage': self.leverage,
-            'timestamp': self.timestamp,
-            'unrealized_pnl': self.unrealized_pnl,
-            'realized_pnl': self.realized_pnl,
-            'liquidation_price': self.liquidation_price
+            "position_id": self.position_id,
+            "symbol": self.symbol,
+            "side": self.side.value,
+            "entry_price": self.entry_price,
+            "amount": self.amount,
+            "leverage": self.leverage,
+            "timestamp": self.timestamp,
+            "unrealized_pnl": self.unrealized_pnl,
+            "realized_pnl": self.realized_pnl,
+            "liquidation_price": self.liquidation_price,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SimulatedPosition':
+    def from_dict(cls, data: Dict[str, Any]) -> "SimulatedPosition":
         """Create a position from dictionary."""
         position = cls(
-            symbol=data['symbol'],
-            side=OrderSide(data['side']),
-            entry_price=data['entry_price'],
-            amount=data['amount'],
-            leverage=data.get('leverage', 1.0),
-            timestamp=data.get('timestamp'),
-            unrealized_pnl=data.get('unrealized_pnl', 0.0),
-            realized_pnl=data.get('realized_pnl', 0.0)
+            symbol=data["symbol"],
+            side=OrderSide(data["side"]),
+            entry_price=data["entry_price"],
+            amount=data["amount"],
+            leverage=data.get("leverage", 1.0),
+            timestamp=data.get("timestamp"),
+            unrealized_pnl=data.get("unrealized_pnl", 0.0),
+            realized_pnl=data.get("realized_pnl", 0.0),
         )
-        position.position_id = data['position_id']
-        position.liquidation_price = data.get('liquidation_price', position.liquidation_price)
+        position.position_id = data["position_id"]
+        position.liquidation_price = data.get(
+            "liquidation_price", position.liquidation_price
+        )
         return position
 
 
@@ -234,7 +236,7 @@ class SimulationEngine:
         initial_balance: Dict[str, float],
         maker_fee: float = 0.0001,  # 0.01%
         taker_fee: float = 0.0005,  # 0.05%
-        slippage_model: str = 'random'
+        slippage_model: str = "random",
     ):
         """
         Initialize the simulation engine.
@@ -265,7 +267,7 @@ class SimulationEngine:
         price: Optional[float] = None,
         leverage: float = 1.0,
         timestamp: int = None,
-        current_candle: Optional[pd.Series] = None
+        current_candle: Optional[pd.Series] = None,
     ) -> SimulatedOrder:
         """
         Place a simulated order.
@@ -295,7 +297,7 @@ class SimulationEngine:
             amount=amount,
             price=price,
             leverage=leverage,
-            timestamp=timestamp
+            timestamp=timestamp,
         )
 
         # Add to orders list
@@ -307,11 +309,7 @@ class SimulationEngine:
 
         return order
 
-    def execute_order(
-        self,
-        order: SimulatedOrder,
-        candle: pd.Series
-    ) -> OrderStatus:
+    def execute_order(self, order: SimulatedOrder, candle: pd.Series) -> OrderStatus:
         """
         Attempt to execute a simulated order.
 
@@ -337,17 +335,12 @@ class SimulationEngine:
         return order.status
 
     def _execute_market_order(
-        self,
-        order: SimulatedOrder,
-        candle: pd.Series
+        self, order: SimulatedOrder, candle: pd.Series
     ) -> OrderStatus:
         """Execute a market order."""
         # Calculate execution price with slippage
         price = self._calculate_execution_price(
-            order.side,
-            order.order_type,
-            candle,
-            order.amount
+            order.side, order.order_type, candle, order.amount
         )
 
         # Calculate fees
@@ -355,9 +348,9 @@ class SimulationEngine:
         fee_amount = price * order.amount * fee_rate
 
         # Apply slippage based on model
-        if self.slippage_model == 'fixed':
+        if self.slippage_model == "fixed":
             slippage = 0.001  # 0.1%
-        elif self.slippage_model == 'random':
+        elif self.slippage_model == "random":
             # Random slippage between 0 and 0.2%
             slippage = np.random.uniform(0, 0.002)
         else:  # orderbook model - more complex simulation
@@ -372,7 +365,7 @@ class SimulationEngine:
         # Update order
         order.filled_price = execution_price
         order.filled_amount = order.amount
-        order.fill_timestamp = candle.get('timestamp', order.timestamp)
+        order.fill_timestamp = candle.get("timestamp", order.timestamp)
         order.fees = fee_amount
         order.slippage = slippage
         order.status = OrderStatus.FILLED
@@ -389,16 +382,14 @@ class SimulationEngine:
         return OrderStatus.FILLED
 
     def _execute_limit_order(
-        self,
-        order: SimulatedOrder,
-        candle: pd.Series
+        self, order: SimulatedOrder, candle: pd.Series
     ) -> OrderStatus:
         """Execute a limit order if price conditions are met."""
         # Check if limit price is reached
         if order.side == OrderSide.BUY:
             # For buy orders, check if low price <= limit price
-            if candle['low'] <= order.price:
-                execution_price = min(candle['open'], order.price)
+            if candle["low"] <= order.price:
+                execution_price = min(candle["open"], order.price)
 
                 # Calculate fees (maker fee for limit orders)
                 fee_rate = self.maker_fee
@@ -407,7 +398,7 @@ class SimulationEngine:
                 # Update order
                 order.filled_price = execution_price
                 order.filled_amount = order.amount
-                order.fill_timestamp = candle.get('timestamp', order.timestamp)
+                order.fill_timestamp = candle.get("timestamp", order.timestamp)
                 order.fees = fee_amount
                 order.slippage = 0.0  # No slippage for limit orders
                 order.status = OrderStatus.FILLED
@@ -425,8 +416,8 @@ class SimulationEngine:
 
         elif order.side == OrderSide.SELL:
             # For sell orders, check if high price >= limit price
-            if candle['high'] >= order.price:
-                execution_price = max(candle['open'], order.price)
+            if candle["high"] >= order.price:
+                execution_price = max(candle["open"], order.price)
 
                 # Calculate fees (maker fee for limit orders)
                 fee_rate = self.maker_fee
@@ -435,7 +426,7 @@ class SimulationEngine:
                 # Update order
                 order.filled_price = execution_price
                 order.filled_amount = order.amount
-                order.fill_timestamp = candle.get('timestamp', order.timestamp)
+                order.fill_timestamp = candle.get("timestamp", order.timestamp)
                 order.fees = fee_amount
                 order.slippage = 0.0  # No slippage for limit orders
                 order.status = OrderStatus.FILLED
@@ -454,11 +445,7 @@ class SimulationEngine:
         return order.status
 
     def _calculate_execution_price(
-        self,
-        side: OrderSide,
-        order_type: OrderType,
-        candle: pd.Series,
-        amount: float
+        self, side: OrderSide, order_type: OrderType, candle: pd.Series, amount: float
     ) -> float:
         """
         Calculate execution price for an order.
@@ -474,10 +461,12 @@ class SimulationEngine:
         """
         # For market orders, use open price of candle
         if order_type == OrderType.MARKET:
-            return candle['open']
+            return candle["open"]
 
         # For limit orders, use the specified price
-        return candle['open']  # Placeholder - actual limit price is checked in _execute_limit_order
+        return candle[
+            "open"
+        ]  # Placeholder - actual limit price is checked in _execute_limit_order
 
     def _update_position(self, order: SimulatedOrder) -> None:
         """
@@ -489,8 +478,8 @@ class SimulationEngine:
         symbol = order.symbol
 
         # Get the base and quote currencies
-        base_currency = symbol.split('-')[0]
-        quote_currency = symbol.split('-')[1]
+        base_currency = symbol.split("-")[0]
+        quote_currency = symbol.split("-")[1]
 
         # Calculate order value
         order_value = order.filled_price * order.filled_amount
@@ -502,7 +491,9 @@ class SimulationEngine:
                 if quote_currency in self.balance:
                     self.balance[quote_currency] -= order_value + order.fees
                     if self.balance[quote_currency] < 0:
-                        logger.warning(f"Negative balance for {quote_currency}: {self.balance[quote_currency]}")
+                        logger.warning(
+                            f"Negative balance for {quote_currency}: {self.balance[quote_currency]}"
+                        )
 
                 # Add base currency
                 if base_currency not in self.balance:
@@ -514,7 +505,9 @@ class SimulationEngine:
                 if base_currency in self.balance:
                     self.balance[base_currency] -= order.filled_amount
                     if self.balance[base_currency] < 0:
-                        logger.warning(f"Negative balance for {base_currency}: {self.balance[base_currency]}")
+                        logger.warning(
+                            f"Negative balance for {base_currency}: {self.balance[base_currency]}"
+                        )
 
                 # Add quote currency
                 if quote_currency not in self.balance:
@@ -531,15 +524,19 @@ class SimulationEngine:
                 # Calculate new average entry price
                 total_amount = existing_position.amount + order.filled_amount
                 new_entry_price = (
-                    (existing_position.entry_price * existing_position.amount) +
-                    (order.filled_price * order.filled_amount)
+                    (existing_position.entry_price * existing_position.amount)
+                    + (order.filled_price * order.filled_amount)
                 ) / total_amount
 
                 # Update position
                 existing_position.entry_price = new_entry_price
                 existing_position.amount += order.filled_amount
-                existing_position.leverage = max(existing_position.leverage, order.leverage)
-                existing_position.liquidation_price = existing_position._calculate_liquidation_price()
+                existing_position.leverage = max(
+                    existing_position.leverage, order.leverage
+                )
+                existing_position.liquidation_price = (
+                    existing_position._calculate_liquidation_price()
+                )
 
             # If order is in the opposite direction, reduce or flip position
             else:
@@ -554,7 +551,9 @@ class SimulationEngine:
                     else:
                         price_diff = existing_position.entry_price - order.filled_price
 
-                    realized_pnl = price_diff * order.filled_amount * existing_position.leverage
+                    realized_pnl = (
+                        price_diff * order.filled_amount * existing_position.leverage
+                    )
                     existing_position.realized_pnl += realized_pnl
 
                     # Add realized PnL to quote currency balance
@@ -573,7 +572,11 @@ class SimulationEngine:
                     else:
                         price_diff = existing_position.entry_price - order.filled_price
 
-                    realized_pnl = price_diff * existing_position.amount * existing_position.leverage
+                    realized_pnl = (
+                        price_diff
+                        * existing_position.amount
+                        * existing_position.leverage
+                    )
 
                     # Add realized PnL to quote currency balance
                     if quote_currency not in self.balance:
@@ -591,7 +594,11 @@ class SimulationEngine:
                     else:
                         price_diff = existing_position.entry_price - order.filled_price
 
-                    realized_pnl = price_diff * existing_position.amount * existing_position.leverage
+                    realized_pnl = (
+                        price_diff
+                        * existing_position.amount
+                        * existing_position.leverage
+                    )
 
                     # Add realized PnL to quote currency balance
                     if quote_currency not in self.balance:
@@ -605,7 +612,7 @@ class SimulationEngine:
                         entry_price=order.filled_price,
                         amount=abs(net_amount),
                         leverage=order.leverage,
-                        timestamp=order.fill_timestamp
+                        timestamp=order.fill_timestamp,
                     )
 
                     self.positions[symbol] = new_position
@@ -619,7 +626,7 @@ class SimulationEngine:
                 entry_price=order.filled_price,
                 amount=order.filled_amount,
                 leverage=order.leverage,
-                timestamp=order.fill_timestamp
+                timestamp=order.fill_timestamp,
             )
 
             self.positions[symbol] = new_position
@@ -632,15 +639,15 @@ class SimulationEngine:
             order: Executed order
         """
         trade = {
-            'order_id': order.order_id,
-            'symbol': order.symbol,
-            'side': order.side.value,
-            'type': order.order_type.value,
-            'amount': order.filled_amount,
-            'price': order.filled_price,
-            'timestamp': order.fill_timestamp,
-            'fees': order.fees,
-            'leverage': order.leverage
+            "order_id": order.order_id,
+            "symbol": order.symbol,
+            "side": order.side.value,
+            "type": order.order_type.value,
+            "amount": order.filled_amount,
+            "price": order.filled_price,
+            "timestamp": order.fill_timestamp,
+            "fees": order.fees,
+            "leverage": order.leverage,
         }
 
         self.trade_history.append(trade)
@@ -661,30 +668,36 @@ class SimulationEngine:
                 continue
 
             candle = candle_data[symbol]
-            current_price = candle['close']
+            current_price = candle["close"]
 
             # Update last known price
             self.last_prices[symbol] = current_price
 
             # Check for liquidation
             if position.is_liquidated(current_price):
-                logger.warning(f"Position {position.position_id} liquidated at {current_price}")
+                logger.warning(
+                    f"Position {position.position_id} liquidated at {current_price}"
+                )
 
                 # Calculate realized PnL (total loss in this case)
-                realized_pnl = -1 * (position.entry_price * position.amount / position.leverage)
+                realized_pnl = -1 * (
+                    position.entry_price * position.amount / position.leverage
+                )
 
                 # Record liquidation in trade history
                 liquidation_trade = {
-                    'order_id': 'liquidation_' + position.position_id,
-                    'symbol': symbol,
-                    'side': 'LIQUIDATION',
-                    'type': 'MARKET',
-                    'amount': position.amount,
-                    'price': position.liquidation_price,
-                    'timestamp': candle.get('timestamp', int(datetime.now().timestamp() * 1000)),
-                    'fees': 0,
-                    'leverage': position.leverage,
-                    'realized_pnl': realized_pnl
+                    "order_id": "liquidation_" + position.position_id,
+                    "symbol": symbol,
+                    "side": "LIQUIDATION",
+                    "type": "MARKET",
+                    "amount": position.amount,
+                    "price": position.liquidation_price,
+                    "timestamp": candle.get(
+                        "timestamp", int(datetime.now().timestamp() * 1000)
+                    ),
+                    "fees": 0,
+                    "leverage": position.leverage,
+                    "realized_pnl": realized_pnl,
                 }
 
                 self.trade_history.append(liquidation_trade)
@@ -747,7 +760,9 @@ class SimulationEngine:
         else:
             return list(self.positions.values())
 
-    def get_balance(self, asset: Optional[str] = None) -> Union[Dict[str, float], float]:
+    def get_balance(
+        self, asset: Optional[str] = None
+    ) -> Union[Dict[str, float], float]:
         """
         Get account balance, optionally for a specific asset.
 

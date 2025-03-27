@@ -5,8 +5,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from app.indicators.base_indicator import (BaseIndicator, Signal,
-                                           SignalDirection)
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,9 @@ class UltimateMAIndicator(BaseIndicator):
         self.ma_type2 = self.params.get("ma_type2", 1)
         self.t3_factor2 = self.params.get("t3_factor2", 7) * 0.1
 
-        self.color_based_on_direction = self.params.get("color_based_on_direction", True)
+        self.color_based_on_direction = self.params.get(
+            "color_based_on_direction", True
+        )
         self.smooth_factor = self.params.get("smooth_factor", 2)
 
         # Validate parameters
@@ -86,7 +87,7 @@ class UltimateMAIndicator(BaseIndicator):
         result[:] = np.nan
 
         for i in range(length - 1, len(data)):
-            window = data.iloc[i - length + 1:i + 1].values
+            window = data.iloc[i - length + 1 : i + 1].values
             result.iloc[i] = np.sum(window * weights) / sum_weights
 
         return result
@@ -107,10 +108,14 @@ class UltimateMAIndicator(BaseIndicator):
 
         return hull
 
-    def _calculate_vwma(self, price: pd.Series, volume: pd.Series, length: int) -> pd.Series:
+    def _calculate_vwma(
+        self, price: pd.Series, volume: pd.Series, length: int
+    ) -> pd.Series:
         """Calculate Volume Weighted Moving Average."""
         vol_price = price * volume
-        return vol_price.rolling(window=length).sum() / volume.rolling(window=length).sum()
+        return (
+            vol_price.rolling(window=length).sum() / volume.rolling(window=length).sum()
+        )
 
     def _calculate_rma(self, data: pd.Series, length: int) -> pd.Series:
         """Calculate Relative Moving Average (aka Wilder's Smoothing Method)."""
@@ -128,10 +133,11 @@ class UltimateMAIndicator(BaseIndicator):
 
     def _calculate_t3(self, data: pd.Series, length: int, factor: float) -> pd.Series:
         """Calculate Tilson T3 Moving Average."""
+
         def gd(src: pd.Series, len_val: int, fctr: float) -> pd.Series:
             return (
-                self._calculate_ema(src, len_val) * (1 + fctr) -
-                self._calculate_ema(self._calculate_ema(src, len_val), len_val) * fctr
+                self._calculate_ema(src, len_val) * (1 + fctr)
+                - self._calculate_ema(self._calculate_ema(src, len_val), len_val) * fctr
             )
 
         gd1 = gd(data, length, factor)
@@ -140,8 +146,14 @@ class UltimateMAIndicator(BaseIndicator):
 
         return t3
 
-    def _calculate_ma(self, data: pd.Series, volume: Optional[pd.Series],
-                      ma_type: int, length: int, t3_factor: float) -> pd.Series:
+    def _calculate_ma(
+        self,
+        data: pd.Series,
+        volume: Optional[pd.Series],
+        ma_type: int,
+        length: int,
+        t3_factor: float,
+    ) -> pd.Series:
         """Calculate the specified type of moving average."""
         if ma_type == 1:
             return self._calculate_sma(data, length)
@@ -153,7 +165,9 @@ class UltimateMAIndicator(BaseIndicator):
             return self._calculate_hull_ma(data, length)
         elif ma_type == 5:
             if volume is None:
-                logger.warning("Volume data required for VWMA but not provided. Using SMA instead.")
+                logger.warning(
+                    "Volume data required for VWMA but not provided. Using SMA instead."
+                )
                 return self._calculate_sma(data, length)
             return self._calculate_vwma(data, volume, length)
         elif ma_type == 6:
@@ -177,7 +191,9 @@ class UltimateMAIndicator(BaseIndicator):
             DataFrame with Ultimate MA values added as new columns
         """
         if self.source_col not in data.columns:
-            raise ValueError(f"DataFrame must contain a '{self.source_col}' price column")
+            raise ValueError(
+                f"DataFrame must contain a '{self.source_col}' price column"
+            )
 
         # Check for minimum data length
         if len(data) < max(self.length, self.length2 if self.use_second_ma else 0):
@@ -200,22 +216,38 @@ class UltimateMAIndicator(BaseIndicator):
         # Calculate the secondary MA if enabled
         if self.use_second_ma:
             df["uma_line2"] = self._calculate_ma(
-                df[self.source_col], volume, self.ma_type2, self.length2, self.t3_factor2
+                df[self.source_col],
+                volume,
+                self.ma_type2,
+                self.length2,
+                self.t3_factor2,
             )
 
         # Identify price crossing the moving averages
         # Crossing MA #1
-        df["uma_price_crossing_up1"] = (df[self.source_col] > df["uma_line1"]) & (df[self.source_col].shift(1) <= df["uma_line1"].shift(1))
-        df["uma_price_crossing_down1"] = (df[self.source_col] < df["uma_line1"]) & (df[self.source_col].shift(1) >= df["uma_line1"].shift(1))
+        df["uma_price_crossing_up1"] = (df[self.source_col] > df["uma_line1"]) & (
+            df[self.source_col].shift(1) <= df["uma_line1"].shift(1)
+        )
+        df["uma_price_crossing_down1"] = (df[self.source_col] < df["uma_line1"]) & (
+            df[self.source_col].shift(1) >= df["uma_line1"].shift(1)
+        )
 
         # Crossing MA #2 (if enabled)
         if self.use_second_ma:
-            df["uma_price_crossing_up2"] = (df[self.source_col] > df["uma_line2"]) & (df[self.source_col].shift(1) <= df["uma_line2"].shift(1))
-            df["uma_price_crossing_down2"] = (df[self.source_col] < df["uma_line2"]) & (df[self.source_col].shift(1) >= df["uma_line2"].shift(1))
+            df["uma_price_crossing_up2"] = (df[self.source_col] > df["uma_line2"]) & (
+                df[self.source_col].shift(1) <= df["uma_line2"].shift(1)
+            )
+            df["uma_price_crossing_down2"] = (df[self.source_col] < df["uma_line2"]) & (
+                df[self.source_col].shift(1) >= df["uma_line2"].shift(1)
+            )
 
             # MA crossovers
-            df["uma_ma_crossing_up"] = (df["uma_line1"] > df["uma_line2"]) & (df["uma_line1"].shift(1) <= df["uma_line2"].shift(1))
-            df["uma_ma_crossing_down"] = (df["uma_line1"] < df["uma_line2"]) & (df["uma_line1"].shift(1) >= df["uma_line2"].shift(1))
+            df["uma_ma_crossing_up"] = (df["uma_line1"] > df["uma_line2"]) & (
+                df["uma_line1"].shift(1) <= df["uma_line2"].shift(1)
+            )
+            df["uma_ma_crossing_down"] = (df["uma_line1"] < df["uma_line2"]) & (
+                df["uma_line1"].shift(1) >= df["uma_line2"].shift(1)
+            )
 
         # Determine direction trend
         if self.color_based_on_direction:
@@ -286,11 +318,13 @@ class UltimateMAIndicator(BaseIndicator):
 
         # Add MA2 to params if used
         if self.use_second_ma:
-            params.update({
-                "ma2": latest["uma_line2"],
-                "ma2_type": self.ma_type2,
-                "length2": self.length2,
-            })
+            params.update(
+                {
+                    "ma2": latest["uma_line2"],
+                    "ma2_type": self.ma_type2,
+                    "length2": self.length2,
+                }
+            )
 
         # Check for price crossing primary MA
         if latest.get("uma_price_crossing_up1", False):
@@ -324,7 +358,9 @@ class UltimateMAIndicator(BaseIndicator):
             # Price crossing secondary MA
             if latest.get("uma_price_crossing_up2", False):
                 params["trigger"] = "price_crossing_up_ma2"
-                if self.color_based_on_direction and latest.get("uma_is_uptrend2", False):
+                if self.color_based_on_direction and latest.get(
+                    "uma_is_uptrend2", False
+                ):
                     confidence = 0.7  # Slightly higher confidence if MA is in uptrend
 
                 return Signal(
@@ -337,7 +373,9 @@ class UltimateMAIndicator(BaseIndicator):
 
             elif latest.get("uma_price_crossing_down2", False):
                 params["trigger"] = "price_crossing_down_ma2"
-                if self.color_based_on_direction and not latest.get("uma_is_uptrend2", True):
+                if self.color_based_on_direction and not latest.get(
+                    "uma_is_uptrend2", True
+                ):
                     confidence = 0.7  # Slightly higher confidence if MA is in downtrend
 
                 return Signal(
@@ -379,8 +417,14 @@ class UltimateMAIndicator(BaseIndicator):
     def __str__(self) -> str:
         """String representation of the indicator."""
         ma_types = {
-            1: "SMA", 2: "EMA", 3: "WMA", 4: "HullMA",
-            5: "VWMA", 6: "RMA", 7: "TEMA", 8: "T3"
+            1: "SMA",
+            2: "EMA",
+            3: "WMA",
+            4: "HullMA",
+            5: "VWMA",
+            6: "RMA",
+            7: "TEMA",
+            8: "T3",
         }
 
         ma_desc = f"{ma_types.get(self.ma_type, 'Unknown')}({self.length})"

@@ -17,7 +17,7 @@ from app.indicators.rsi_indicator import RSIIndicator
 def simple_strategy_with_many_params(
     historical_data: pd.DataFrame,
     simulation_engine: SimulationEngine,
-    params: Dict[str, Any]
+    params: Dict[str, Any],
 ) -> None:
     """
     A simple strategy for testing genetic optimization with many parameters.
@@ -27,23 +27,23 @@ def simple_strategy_with_many_params(
         return
 
     # Extract current candle and symbol
-    current_candle = params['current_candle']
-    symbol = params['symbol']
+    current_candle = params["current_candle"]
+    symbol = params["symbol"]
 
     # Extract strategy parameters or use defaults
-    param1 = params.get('param1', 5)
-    param2 = params.get('param2', 10)
-    param3 = params.get('param3', 15)
-    param4 = params.get('param4', 0.1)
-    param5 = params.get('param5', 0.2)
-    param6 = params.get('param6', 0.5)
-    param7 = params.get('param7', 1.0)
-    param8 = params.get('param8', 2.0)
-    param9 = params.get('param9', True)
-    param10 = params.get('param10', 'option1')
+    param1 = params.get("param1", 5)
+    param2 = params.get("param2", 10)
+    param3 = params.get("param3", 15)
+    param4 = params.get("param4", 0.1)
+    param5 = params.get("param5", 0.2)
+    param6 = params.get("param6", 0.5)
+    param7 = params.get("param7", 1.0)
+    param8 = params.get("param8", 2.0)
+    param9 = params.get("param9", True)
+    param10 = params.get("param10", "option1")
 
     # Get RSI value if available
-    rsi_value = params.get('RSI_rsi', 50.0)
+    rsi_value = params.get("RSI_rsi", 50.0)
 
     # Very simple logic for testing:
     # Buy if RSI is below param1 threshold
@@ -52,7 +52,7 @@ def simple_strategy_with_many_params(
 
     # Check for open positions
     positions = simulation_engine.get_positions()
-    has_position = any(pos['symbol'] == symbol for pos in positions)
+    has_position = any(pos["symbol"] == symbol for pos in positions)
 
     if not has_position and rsi_value < param1:
         # Buy signal
@@ -64,25 +64,26 @@ def simple_strategy_with_many_params(
         simulation_engine.place_market_order(
             symbol=symbol,
             side="BUY",
-            quantity=current_candle['close'] * position_size / params.get('leverage', 1.0),
-            margin=True
+            quantity=current_candle["close"]
+            * position_size
+            / params.get("leverage", 1.0),
+            margin=True,
         )
 
     elif has_position and rsi_value > param2:
         # Sell signal
         for position in positions:
-            if position['symbol'] == symbol:
+            if position["symbol"] == symbol:
                 simulation_engine.place_market_order(
                     symbol=symbol,
                     side="SELL",
-                    quantity=abs(position['quantity']),
-                    margin=True
+                    quantity=abs(position["quantity"]),
+                    margin=True,
                 )
                 break
 
 
 class TestGeneticOptimizationStress:
-
     @pytest.fixture
     def sample_data(self):
         """Create sample price data with clear patterns for testing."""
@@ -109,12 +110,12 @@ class TestGeneticOptimizationStress:
 
         # Create OHLCV data
         data = {
-            'timestamp': timestamps,
-            'open': [c * 0.99 for c in closes],
-            'high': [c * 1.01 for c in closes],
-            'low': [c * 0.98 for c in closes],
-            'close': closes,
-            'volume': [10000.0 for _ in range(100)]
+            "timestamp": timestamps,
+            "open": [c * 0.99 for c in closes],
+            "high": [c * 1.01 for c in closes],
+            "low": [c * 0.98 for c in closes],
+            "close": closes,
+            "volume": [10000.0 for _ in range(100)],
         }
 
         return pd.DataFrame(data)
@@ -131,15 +132,15 @@ class TestGeneticOptimizationStress:
             sample_data.to_csv(os.path.join(temp_dir, "TEST-USD_1d.csv"), index=False)
 
             # Register a CSV data source
-            dm.register_data_source('csv', CSVDataSource(temp_dir))
+            dm.register_data_source("csv", CSVDataSource(temp_dir))
 
             # Create BacktestEngine
             engine = BacktestEngine(
                 data_manager=dm,
-                initial_balance={'USD': 10000.0},
+                initial_balance={"USD": 10000.0},
                 maker_fee=0.001,
                 taker_fee=0.002,
-                slippage_model='fixed'
+                slippage_model="fixed",
             )
 
             yield engine
@@ -148,16 +149,16 @@ class TestGeneticOptimizationStress:
         """Test genetic optimization with a large parameter space."""
         # Define a complex parameter space with many parameters
         param_space = {
-            'param1': list(range(10, 40, 5)),              # 6 options (RSI buy threshold)
-            'param2': list(range(60, 90, 5)),              # 6 options (RSI sell threshold)
-            'param3': (10, 50, 5),                         # Range (integers)
-            'param4': (0.01, 0.1, 0.01),                   # Range (floats)
-            'param5': (0.1, 0.5, 0.1),                     # Range (floats)
-            'param6': [0.1, 0.2, 0.3, 0.4, 0.5],           # 5 options (position size)
-            'param7': [0.5, 1.0, 1.5, 2.0],                # 4 options (multiplier)
-            'param8': (1.0, 5.0, 0.5),                     # Range (floats)
-            'param9': [True, False],                       # Boolean option
-            'param10': ['option1', 'option2', 'option3']   # String options
+            "param1": list(range(10, 40, 5)),  # 6 options (RSI buy threshold)
+            "param2": list(range(60, 90, 5)),  # 6 options (RSI sell threshold)
+            "param3": (10, 50, 5),  # Range (integers)
+            "param4": (0.01, 0.1, 0.01),  # Range (floats)
+            "param5": (0.1, 0.5, 0.1),  # Range (floats)
+            "param6": [0.1, 0.2, 0.3, 0.4, 0.5],  # 5 options (position size)
+            "param7": [0.5, 1.0, 1.5, 2.0],  # 4 options (multiplier)
+            "param8": (1.0, 5.0, 0.5),  # Range (floats)
+            "param9": [True, False],  # Boolean option
+            "param10": ["option1", "option2", "option3"],  # String options
         }
 
         # This parameter space has a total of 6 * 6 * 9 * 10 * 5 * 5 * 4 * 9 * 2 * 3 = 5,832,000 possible combinations
@@ -169,15 +170,15 @@ class TestGeneticOptimizationStress:
         # Run genetic optimization with a small population and few generations for testing
         best_params, best_result = backtest_engine.genetic_optimize(
             strategy_func=simple_strategy_with_many_params,
-            symbol='TEST-USD',
-            interval='1d',
-            start_date='2020-01-01',
-            end_date='2020-04-10',
-            data_source_name='csv',
+            symbol="TEST-USD",
+            interval="1d",
+            start_date="2020-01-01",
+            end_date="2020-04-10",
+            data_source_name="csv",
             param_space=param_space,
-            population_size=10,       # Small population for testing
-            generations=3,            # Few generations for testing
-            random_seed=42            # For reproducibility
+            population_size=10,  # Small population for testing
+            generations=3,  # Few generations for testing
+            random_seed=42,  # For reproducibility
         )
 
         # Verify results are within expected parameter ranges
@@ -185,114 +186,112 @@ class TestGeneticOptimizationStress:
         assert len(best_params) == len(param_space)
 
         # Check each parameter is within its expected range
-        assert 10 <= best_params['param1'] <= 35
-        assert 60 <= best_params['param2'] <= 85
-        assert 10 <= best_params['param3'] <= 50
-        assert 0.01 <= best_params['param4'] <= 0.1
-        assert 0.1 <= best_params['param5'] <= 0.5
-        assert best_params['param6'] in [0.1, 0.2, 0.3, 0.4, 0.5]
-        assert best_params['param7'] in [0.5, 1.0, 1.5, 2.0]
-        assert 1.0 <= best_params['param8'] <= 5.0
-        assert best_params['param9'] in [True, False]
-        assert best_params['param10'] in ['option1', 'option2', 'option3']
+        assert 10 <= best_params["param1"] <= 35
+        assert 60 <= best_params["param2"] <= 85
+        assert 10 <= best_params["param3"] <= 50
+        assert 0.01 <= best_params["param4"] <= 0.1
+        assert 0.1 <= best_params["param5"] <= 0.5
+        assert best_params["param6"] in [0.1, 0.2, 0.3, 0.4, 0.5]
+        assert best_params["param7"] in [0.5, 1.0, 1.5, 2.0]
+        assert 1.0 <= best_params["param8"] <= 5.0
+        assert best_params["param9"] in [True, False]
+        assert best_params["param10"] in ["option1", "option2", "option3"]
 
     def test_edge_cases(self, backtest_engine):
         """Test genetic optimization with edge cases."""
 
         # 1. Test with a single parameter (minimal case)
-        single_param_space = {
-            'param1': list(range(5, 50, 5))  # RSI threshold
-        }
+        single_param_space = {"param1": list(range(5, 50, 5))}  # RSI threshold
 
         # Run with minimal parameter space
         best_params, best_result = backtest_engine.genetic_optimize(
             strategy_func=simple_strategy_with_many_params,
-            symbol='TEST-USD',
-            interval='1d',
-            start_date='2020-01-01',
-            end_date='2020-04-10',
-            data_source_name='csv',
+            symbol="TEST-USD",
+            interval="1d",
+            start_date="2020-01-01",
+            end_date="2020-04-10",
+            data_source_name="csv",
             param_space=single_param_space,
             population_size=5,
             generations=2,
-            random_seed=42
+            random_seed=42,
         )
 
         # Verify result
-        assert 'param1' in best_params
-        assert 5 <= best_params['param1'] <= 45
+        assert "param1" in best_params
+        assert 5 <= best_params["param1"] <= 45
 
         # 2. Test with very small population size (edge case)
         small_param_space = {
-            'param1': list(range(20, 40, 5)),
-            'param2': list(range(60, 80, 5))
+            "param1": list(range(20, 40, 5)),
+            "param2": list(range(60, 80, 5)),
         }
 
         # Run with minimal population
         best_params, best_result = backtest_engine.genetic_optimize(
             strategy_func=simple_strategy_with_many_params,
-            symbol='TEST-USD',
-            interval='1d',
-            start_date='2020-01-01',
-            end_date='2020-04-10',
-            data_source_name='csv',
+            symbol="TEST-USD",
+            interval="1d",
+            start_date="2020-01-01",
+            end_date="2020-04-10",
+            data_source_name="csv",
             param_space=small_param_space,
-            population_size=3,        # Very small population
+            population_size=3,  # Very small population
             generations=2,
-            random_seed=42
+            random_seed=42,
         )
 
         # Verify result
-        assert 'param1' in best_params and 'param2' in best_params
+        assert "param1" in best_params and "param2" in best_params
 
         # 3. Test with extreme mutation rate (edge case)
         high_mutation_params = {
-            'param1': list(range(20, 40, 5)),
-            'param2': list(range(60, 80, 5)),
-            'param6': [0.1, 0.3, 0.5]
+            "param1": list(range(20, 40, 5)),
+            "param2": list(range(60, 80, 5)),
+            "param6": [0.1, 0.3, 0.5],
         }
 
         # Run with high mutation rate
         best_params, best_result = backtest_engine.genetic_optimize(
             strategy_func=simple_strategy_with_many_params,
-            symbol='TEST-USD',
-            interval='1d',
-            start_date='2020-01-01',
-            end_date='2020-04-10',
-            data_source_name='csv',
+            symbol="TEST-USD",
+            interval="1d",
+            start_date="2020-01-01",
+            end_date="2020-04-10",
+            data_source_name="csv",
             param_space=high_mutation_params,
             population_size=5,
             generations=3,
-            mutation_rate=0.9,        # Very high mutation rate
-            random_seed=42
+            mutation_rate=0.9,  # Very high mutation rate
+            random_seed=42,
         )
 
         # Verify result
         assert len(best_params) == 3
-        assert best_params['param6'] in [0.1, 0.3, 0.5]
+        assert best_params["param6"] in [0.1, 0.3, 0.5]
 
         # 4. Test with no crossover (edge case)
         no_crossover_params = {
-            'param1': list(range(20, 40, 5)),
-            'param2': list(range(60, 80, 5)),
-            'param6': [0.1, 0.3, 0.5]
+            "param1": list(range(20, 40, 5)),
+            "param2": list(range(60, 80, 5)),
+            "param6": [0.1, 0.3, 0.5],
         }
 
         # Run with no crossover
         best_params, best_result = backtest_engine.genetic_optimize(
             strategy_func=simple_strategy_with_many_params,
-            symbol='TEST-USD',
-            interval='1d',
-            start_date='2020-01-01',
-            end_date='2020-04-10',
-            data_source_name='csv',
+            symbol="TEST-USD",
+            interval="1d",
+            start_date="2020-01-01",
+            end_date="2020-04-10",
+            data_source_name="csv",
             param_space=no_crossover_params,
             population_size=5,
             generations=3,
-            crossover_rate=0.0,       # No crossover
-            random_seed=42
+            crossover_rate=0.0,  # No crossover
+            random_seed=42,
         )
 
         # Verify result (should still work, just less effective)
         assert len(best_params) == 3
-        assert best_params['param6'] in [0.1, 0.3, 0.5]
+        assert best_params["param6"] in [0.1, 0.3, 0.5]

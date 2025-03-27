@@ -4,8 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.indicators.adaptive_trend_finder_indicator import \
-    AdaptiveTrendFinderIndicator
+from app.indicators.adaptive_trend_finder_indicator import AdaptiveTrendFinderIndicator
 from app.indicators.base_indicator import SignalDirection
 
 
@@ -64,7 +63,9 @@ def test_log_regression_calculation():
     prices = np.array([100, 102, 105, 107, 110, 112, 115, 118, 120, 123])
     log_prices = pd.Series(np.log(prices))
 
-    std_dev, pearson_r, slope, intercept = atf._calc_log_regression(log_prices, len(log_prices))
+    std_dev, pearson_r, slope, intercept = atf._calc_log_regression(
+        log_prices, len(log_prices)
+    )
 
     # Verify results
     assert std_dev > 0  # Standard deviation should be positive
@@ -79,20 +80,26 @@ def test_adaptive_trend_finder_calculation(sample_price_data):
     # Ensure we have enough data for the test
     if len(sample_price_data) < 50:
         # Create a larger dataset with a clear trend if needed
-        index = pd.date_range('2023-01-01', periods=200, freq='1h')
-        data = pd.DataFrame({
-            'timestamp': index,
-            'symbol': 'ETH',
-            'open': np.linspace(1000, 2000, 200) + np.random.normal(0, 50, 200),
-            'high': np.linspace(1020, 2020, 200) + np.random.normal(0, 50, 200),
-            'low': np.linspace(980, 1980, 200) + np.random.normal(0, 50, 200),
-            'close': np.linspace(1000, 2000, 200) + np.random.normal(0, 30, 200),
-            'volume': np.random.normal(1000, 200, 200),
-        })
+        index = pd.date_range("2023-01-01", periods=200, freq="1h")
+        data = pd.DataFrame(
+            {
+                "timestamp": index,
+                "symbol": "ETH",
+                "open": np.linspace(1000, 2000, 200) + np.random.normal(0, 50, 200),
+                "high": np.linspace(1020, 2020, 200) + np.random.normal(0, 50, 200),
+                "low": np.linspace(980, 1980, 200) + np.random.normal(0, 50, 200),
+                "close": np.linspace(1000, 2000, 200) + np.random.normal(0, 30, 200),
+                "volume": np.random.normal(1000, 200, 200),
+            }
+        )
         # Make sure high is actually highest and low is lowest
         for i in range(len(data)):
-            data.loc[i, 'high'] = max(data.loc[i, 'open'], data.loc[i, 'close'], data.loc[i, 'high'])
-            data.loc[i, 'low'] = min(data.loc[i, 'open'], data.loc[i, 'close'], data.loc[i, 'low'])
+            data.loc[i, "high"] = max(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"]
+            )
+            data.loc[i, "low"] = min(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"]
+            )
     else:
         data = sample_price_data.copy()
 
@@ -123,21 +130,35 @@ def test_adaptive_trend_finder_signal_generation():
     atf = AdaptiveTrendFinderIndicator(name="test_atf")
 
     # Create mock data with a buy signal scenario (price returning from lower band)
-    buy_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-        "symbol": "ETH",
-        "close": [1500, 1450, 1400, 1380, 1420],  # Price bouncing from lower band
-        "atf_period": [50, 50, 50, 50, 50],
-        "atf_pearson_r": [0.92, 0.92, 0.92, 0.92, 0.92],
-        "atf_confidence": ["Mostly Strong", "Mostly Strong", "Mostly Strong", "Mostly Strong", "Mostly Strong"],
-        "atf_slope": [-0.01, -0.01, -0.01, -0.01, -0.01],  # Negative slope = uptrend in log regression
-        "atf_midline": [1500, 1500, 1500, 1500, 1500],
-        "atf_upper": [1600, 1600, 1600, 1600, 1600],
-        "atf_lower": [1400, 1400, 1400, 1400, 1400],
-        "atf_returning_from_lower": [False, False, False, False, True],
-        "atf_returning_from_upper": [False, False, False, False, False],
-        "atf_channel_position": [50, 25, 0, -10, 10]
-    })
+    buy_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
+            "symbol": "ETH",
+            "close": [1500, 1450, 1400, 1380, 1420],  # Price bouncing from lower band
+            "atf_period": [50, 50, 50, 50, 50],
+            "atf_pearson_r": [0.92, 0.92, 0.92, 0.92, 0.92],
+            "atf_confidence": [
+                "Mostly Strong",
+                "Mostly Strong",
+                "Mostly Strong",
+                "Mostly Strong",
+                "Mostly Strong",
+            ],
+            "atf_slope": [
+                -0.01,
+                -0.01,
+                -0.01,
+                -0.01,
+                -0.01,
+            ],  # Negative slope = uptrend in log regression
+            "atf_midline": [1500, 1500, 1500, 1500, 1500],
+            "atf_upper": [1600, 1600, 1600, 1600, 1600],
+            "atf_lower": [1400, 1400, 1400, 1400, 1400],
+            "atf_returning_from_lower": [False, False, False, False, True],
+            "atf_returning_from_upper": [False, False, False, False, False],
+            "atf_channel_position": [50, 25, 0, -10, 10],
+        }
+    )
 
     # Generate buy signal
     signal = atf.generate_signal(buy_data)
@@ -149,21 +170,35 @@ def test_adaptive_trend_finder_signal_generation():
     assert signal.params["trigger"] == "returning_from_lower"
 
     # Create mock data with a sell signal scenario (price returning from upper band)
-    sell_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-        "symbol": "ETH",
-        "close": [1500, 1550, 1600, 1620, 1580],  # Price bouncing from upper band
-        "atf_period": [50, 50, 50, 50, 50],
-        "atf_pearson_r": [0.95, 0.95, 0.95, 0.95, 0.95],
-        "atf_confidence": ["Very Strong", "Very Strong", "Very Strong", "Very Strong", "Very Strong"],
-        "atf_slope": [0.01, 0.01, 0.01, 0.01, 0.01],  # Positive slope = downtrend in log regression
-        "atf_midline": [1500, 1500, 1500, 1500, 1500],
-        "atf_upper": [1600, 1600, 1600, 1600, 1600],
-        "atf_lower": [1400, 1400, 1400, 1400, 1400],
-        "atf_returning_from_lower": [False, False, False, False, False],
-        "atf_returning_from_upper": [False, False, False, False, True],
-        "atf_channel_position": [50, 75, 100, 110, 90]
-    })
+    sell_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
+            "symbol": "ETH",
+            "close": [1500, 1550, 1600, 1620, 1580],  # Price bouncing from upper band
+            "atf_period": [50, 50, 50, 50, 50],
+            "atf_pearson_r": [0.95, 0.95, 0.95, 0.95, 0.95],
+            "atf_confidence": [
+                "Very Strong",
+                "Very Strong",
+                "Very Strong",
+                "Very Strong",
+                "Very Strong",
+            ],
+            "atf_slope": [
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+            ],  # Positive slope = downtrend in log regression
+            "atf_midline": [1500, 1500, 1500, 1500, 1500],
+            "atf_upper": [1600, 1600, 1600, 1600, 1600],
+            "atf_lower": [1400, 1400, 1400, 1400, 1400],
+            "atf_returning_from_lower": [False, False, False, False, False],
+            "atf_returning_from_upper": [False, False, False, False, True],
+            "atf_channel_position": [50, 75, 100, 110, 90],
+        }
+    )
 
     # Generate sell signal
     signal = atf.generate_signal(sell_data)
@@ -175,21 +210,23 @@ def test_adaptive_trend_finder_signal_generation():
     assert signal.params["trigger"] == "returning_from_upper"
 
     # Test with no signal conditions
-    neutral_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=3, freq="1h"),
-        "symbol": "ETH",
-        "close": [1500, 1510, 1520],
-        "atf_period": [50, 50, 50],
-        "atf_pearson_r": [0.92, 0.92, 0.92],
-        "atf_confidence": ["Mostly Strong", "Mostly Strong", "Mostly Strong"],
-        "atf_slope": [-0.01, -0.01, -0.01],
-        "atf_midline": [1500, 1500, 1500],
-        "atf_upper": [1600, 1600, 1600],
-        "atf_lower": [1400, 1400, 1400],
-        "atf_returning_from_lower": [False, False, False],
-        "atf_returning_from_upper": [False, False, False],
-        "atf_channel_position": [50, 55, 60]
-    })
+    neutral_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=3, freq="1h"),
+            "symbol": "ETH",
+            "close": [1500, 1510, 1520],
+            "atf_period": [50, 50, 50],
+            "atf_pearson_r": [0.92, 0.92, 0.92],
+            "atf_confidence": ["Mostly Strong", "Mostly Strong", "Mostly Strong"],
+            "atf_slope": [-0.01, -0.01, -0.01],
+            "atf_midline": [1500, 1500, 1500],
+            "atf_upper": [1600, 1600, 1600],
+            "atf_lower": [1400, 1400, 1400],
+            "atf_returning_from_lower": [False, False, False],
+            "atf_returning_from_upper": [False, False, False],
+            "atf_channel_position": [50, 55, 60],
+        }
+    )
 
     signal = atf.generate_signal(neutral_data)
     assert signal is None
@@ -200,11 +237,13 @@ def test_adaptive_trend_finder_insufficient_data():
     atf = AdaptiveTrendFinderIndicator(name="test_atf")
 
     # Test with insufficient data points
-    insufficient_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=10, freq="1h"),
-        "symbol": "ETH",
-        "close": np.linspace(1000, 1100, 10)
-    })
+    insufficient_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=10, freq="1h"),
+            "symbol": "ETH",
+            "close": np.linspace(1000, 1100, 10),
+        }
+    )
 
     # Should still process but return empty indicator values
     result = atf.calculate(insufficient_data)
@@ -212,11 +251,13 @@ def test_adaptive_trend_finder_insufficient_data():
     assert pd.isna(result["atf_period"].iloc[0])
 
     # Test with missing required column
-    invalid_data = pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=50, freq="1h"),
-        "symbol": "ETH",
-        # Missing 'close' column
-    })
+    invalid_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=50, freq="1h"),
+            "symbol": "ETH",
+            # Missing 'close' column
+        }
+    )
 
     with pytest.raises(ValueError, match="must contain a 'close' price column"):
         atf.calculate(invalid_data)

@@ -14,21 +14,28 @@ import pytest
 # Add the app directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.connectors.base_connector import (BaseConnector, MarketType,
-                                           OrderSide, OrderType)
+from app.connectors.base_connector import (
+    BaseConnector,
+    MarketType,
+    OrderSide,
+    OrderType,
+)
 from app.connectors.connector_factory import ConnectorFactory
 from app.core.trading_engine import TradingEngine
-from app.indicators.base_indicator import (BaseIndicator, Signal,
-                                           SignalDirection)
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 from app.risk_management.risk_manager import RiskManager
+
 # Import project components
-from app.utils.config import (AppConfig, ExchangeConfig, IndicatorConfig,
-                              TradingStrategyConfig)
+from app.utils.config import (
+    AppConfig,
+    ExchangeConfig,
+    IndicatorConfig,
+    TradingStrategyConfig,
+)
 
 # Set up logging for conftest
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -42,7 +49,10 @@ MARKET_DATA_CACHE_DIR = Path(__file__).parent / "test_data" / "market_data"
 # Create cache directory if it doesn't exist
 MARKET_DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-def get_cached_market_data(exchange_name: str, symbol: str, timeframe: str, days: int = DEFAULT_DATA_DAYS) -> pd.DataFrame:
+
+def get_cached_market_data(
+    exchange_name: str, symbol: str, timeframe: str, days: int = DEFAULT_DATA_DAYS
+) -> pd.DataFrame:
     """
     Get market data from cache only. Does not fetch data from exchanges.
 
@@ -58,8 +68,10 @@ def get_cached_market_data(exchange_name: str, symbol: str, timeframe: str, days
     Raises:
         FileNotFoundError: If the cached data file doesn't exist
     """
-    symbol_normalized = symbol.replace('/', '_').replace('-', '_')
-    cache_file = MARKET_DATA_CACHE_DIR / f"{exchange_name}_{symbol_normalized}_{timeframe}.csv"
+    symbol_normalized = symbol.replace("/", "_").replace("-", "_")
+    cache_file = (
+        MARKET_DATA_CACHE_DIR / f"{exchange_name}_{symbol_normalized}_{timeframe}.csv"
+    )
 
     # Return cached data if available
     if cache_file.exists():
@@ -74,9 +86,12 @@ def get_cached_market_data(exchange_name: str, symbol: str, timeframe: str, days
     logger.error(error_msg)
     raise FileNotFoundError(error_msg)
 
+
 def generate_sample_price_data(symbol: str = "ETH") -> pd.DataFrame:
     """Generate synthetic price data for testing when real data is unavailable."""
-    logger.warning(f"Using synthetic data for {symbol} as real data could not be fetched")
+    logger.warning(
+        f"Using synthetic data for {symbol} as real data could not be fetched"
+    )
 
     # Create a DataFrame with typical OHLCV data
     data = {
@@ -96,6 +111,7 @@ def generate_sample_price_data(symbol: str = "ETH") -> pd.DataFrame:
 
     return pd.DataFrame(data)
 
+
 @pytest.fixture
 def sample_price_data():
     """
@@ -106,16 +122,19 @@ def sample_price_data():
         return get_cached_market_data(
             exchange_name=DEFAULT_TEST_EXCHANGE,
             symbol=DEFAULT_TEST_SYMBOL,
-            timeframe=DEFAULT_TEST_TIMEFRAME
+            timeframe=DEFAULT_TEST_TIMEFRAME,
         )
     except FileNotFoundError as e:
         # Check if we should allow synthetic data fallback
         if pytest.config.getoption("--allow-synthetic-data", default=False):
-            logger.warning("Using synthetic data because cached data is missing and --allow-synthetic-data flag is present")
+            logger.warning(
+                "Using synthetic data because cached data is missing and --allow-synthetic-data flag is present"
+            )
             return generate_sample_price_data(DEFAULT_TEST_SYMBOL)
         else:
             # Re-raise with a clear message about running the refresh script
             pytest.fail(f"Cached market data required: {e}")
+
 
 @pytest.fixture
 def real_market_data(request):
@@ -131,18 +150,20 @@ def real_market_data(request):
             # Use real_market_data as a DataFrame with OHLCV data
             ...
     """
-    params = getattr(request, 'param', {})
-    exchange = params.get('exchange', DEFAULT_TEST_EXCHANGE)
-    symbol = params.get('symbol', DEFAULT_TEST_SYMBOL)
-    timeframe = params.get('timeframe', DEFAULT_TEST_TIMEFRAME)
-    days = params.get('days', DEFAULT_DATA_DAYS)
+    params = getattr(request, "param", {})
+    exchange = params.get("exchange", DEFAULT_TEST_EXCHANGE)
+    symbol = params.get("symbol", DEFAULT_TEST_SYMBOL)
+    timeframe = params.get("timeframe", DEFAULT_TEST_TIMEFRAME)
+    days = params.get("days", DEFAULT_DATA_DAYS)
 
     return get_cached_market_data(exchange, symbol, timeframe, days)
+
 
 @pytest.fixture
 def market_data_cache_dir():
     """Return the path to the market data cache directory."""
     return MARKET_DATA_CACHE_DIR
+
 
 @pytest.fixture
 def sample_config():
@@ -237,7 +258,7 @@ def real_connector(request):
             # Use real_connector instance
             ...
     """
-    connector_name = getattr(request, 'param', DEFAULT_TEST_EXCHANGE)
+    connector_name = getattr(request, "param", DEFAULT_TEST_EXCHANGE)
     return ConnectorFactory.create_connector(connector_name)
 
 
@@ -280,10 +301,16 @@ def sample_signal():
         params={"reason": "test signal"},
     )
 
+
 # Add the command line option for allowing synthetic data fallback
 def pytest_addoption(parser):
-    parser.addoption("--allow-synthetic-data", action="store_true", default=False,
-                     help="Allow using synthetic data when cached data is missing")
+    parser.addoption(
+        "--allow-synthetic-data",
+        action="store_true",
+        default=False,
+        help="Allow using synthetic data when cached data is missing",
+    )
+
 
 @pytest.fixture
 def market_data_params(request):

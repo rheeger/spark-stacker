@@ -5,8 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from app.indicators.base_indicator import (BaseIndicator, Signal,
-                                           SignalDirection)
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +39,53 @@ class AdaptiveTrendFinderIndicator(BaseIndicator):
 
         # Define periods to analyze based on mode
         if self.use_long_term:
-            self.periods = [300, 350, 400, 450, 500, 550, 600, 650, 700, 750,
-                            800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200]
+            self.periods = [
+                300,
+                350,
+                400,
+                450,
+                500,
+                550,
+                600,
+                650,
+                700,
+                750,
+                800,
+                850,
+                900,
+                950,
+                1000,
+                1050,
+                1100,
+                1150,
+                1200,
+            ]
         else:
-            self.periods = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110,
-                            120, 130, 140, 150, 160, 170, 180, 190, 200]
+            self.periods = [
+                20,
+                30,
+                40,
+                50,
+                60,
+                70,
+                80,
+                90,
+                100,
+                110,
+                120,
+                130,
+                140,
+                150,
+                160,
+                170,
+                180,
+                190,
+                200,
+            ]
 
-    def _calc_log_regression(self, log_prices: pd.Series, length: int) -> Tuple[float, float, float, float]:
+    def _calc_log_regression(
+        self, log_prices: pd.Series, length: int
+    ) -> Tuple[float, float, float, float]:
         """
         Calculate logarithmic regression and Pearson's R correlation for the given period.
 
@@ -165,7 +204,7 @@ class AdaptiveTrendFinderIndicator(BaseIndicator):
             "Strong": 0.85,
             "Very Strong": 0.9,
             "Exceptionally Strong": 0.95,
-            "Ultra Strong": 1.0
+            "Ultra Strong": 1.0,
         }
         return confidence_map.get(confidence_str, 0.5)
 
@@ -180,7 +219,9 @@ class AdaptiveTrendFinderIndicator(BaseIndicator):
             DataFrame with Adaptive Trend Finder values added as new columns
         """
         if self.source_col not in data.columns:
-            raise ValueError(f"DataFrame must contain a '{self.source_col}' price column")
+            raise ValueError(
+                f"DataFrame must contain a '{self.source_col}' price column"
+            )
 
         # Check if we have enough data for minimum period
         min_period = min(self.periods)
@@ -203,7 +244,9 @@ class AdaptiveTrendFinderIndicator(BaseIndicator):
 
         for i, period in enumerate(self.periods):
             if len(df) >= period:
-                std_dev, pearson_r, slope, intercept = self._calc_log_regression(log_prices, period)
+                std_dev, pearson_r, slope, intercept = self._calc_log_regression(
+                    log_prices, period
+                )
                 results.append((std_dev, pearson_r, slope, intercept, period))
 
                 if not np.isnan(pearson_r) and pearson_r > highest_pearson_r:
@@ -236,13 +279,25 @@ class AdaptiveTrendFinderIndicator(BaseIndicator):
             # Calculate price position relative to the channel
             df["atf_above_upper"] = df[self.source_col] > df["atf_upper"]
             df["atf_below_lower"] = df[self.source_col] < df["atf_lower"]
-            df["atf_crossing_upper"] = (df[self.source_col] > df["atf_upper"]) & (df[self.source_col].shift(1) <= df["atf_upper"].shift(1))
-            df["atf_crossing_lower"] = (df[self.source_col] < df["atf_lower"]) & (df[self.source_col].shift(1) >= df["atf_lower"].shift(1))
-            df["atf_returning_from_upper"] = (df[self.source_col] < df["atf_upper"]) & (df[self.source_col].shift(1) >= df["atf_upper"].shift(1))
-            df["atf_returning_from_lower"] = (df[self.source_col] > df["atf_lower"]) & (df[self.source_col].shift(1) <= df["atf_lower"].shift(1))
+            df["atf_crossing_upper"] = (df[self.source_col] > df["atf_upper"]) & (
+                df[self.source_col].shift(1) <= df["atf_upper"].shift(1)
+            )
+            df["atf_crossing_lower"] = (df[self.source_col] < df["atf_lower"]) & (
+                df[self.source_col].shift(1) >= df["atf_lower"].shift(1)
+            )
+            df["atf_returning_from_upper"] = (df[self.source_col] < df["atf_upper"]) & (
+                df[self.source_col].shift(1) >= df["atf_upper"].shift(1)
+            )
+            df["atf_returning_from_lower"] = (df[self.source_col] > df["atf_lower"]) & (
+                df[self.source_col].shift(1) <= df["atf_lower"].shift(1)
+            )
 
             # Calculate position within the channel as a percentage (0% = lower band, 100% = upper band)
-            df["atf_channel_position"] = (df[self.source_col] - df["atf_lower"]) / (df["atf_upper"] - df["atf_lower"]) * 100
+            df["atf_channel_position"] = (
+                (df[self.source_col] - df["atf_lower"])
+                / (df["atf_upper"] - df["atf_lower"])
+                * 100
+            )
 
             return df
         else:
@@ -283,10 +338,19 @@ class AdaptiveTrendFinderIndicator(BaseIndicator):
         Returns:
             Signal object if conditions are met, None otherwise
         """
-        required_cols = ["atf_midline", "atf_upper", "atf_lower", "atf_confidence", "atf_slope", "atf_channel_position"]
+        required_cols = [
+            "atf_midline",
+            "atf_upper",
+            "atf_lower",
+            "atf_confidence",
+            "atf_slope",
+            "atf_channel_position",
+        ]
         for col in required_cols:
             if col not in data.columns:
-                logger.warning(f"Required column {col} missing in data, cannot generate signal")
+                logger.warning(
+                    f"Required column {col} missing in data, cannot generate signal"
+                )
                 return None
 
         if len(data) < 2:
@@ -298,7 +362,9 @@ class AdaptiveTrendFinderIndicator(BaseIndicator):
         symbol = latest.get("symbol", "UNKNOWN")
 
         # Check the slope (trend direction)
-        trend_is_up = latest["atf_slope"] < 0  # Note: In log regression with time reversed, negative slope = uptrend
+        trend_is_up = (
+            latest["atf_slope"] < 0
+        )  # Note: In log regression with time reversed, negative slope = uptrend
         confidence_str = latest["atf_confidence"]
         confidence_value = self._confidence_to_value(confidence_str)
 

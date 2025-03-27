@@ -8,12 +8,13 @@ import pandas as pd
 import pytest
 
 from app.core.trading_engine import TradingEngine
-from app.indicators.adaptive_supertrend_indicator import \
-    AdaptiveSupertrendIndicator
+from app.indicators.adaptive_supertrend_indicator import AdaptiveSupertrendIndicator
 from app.indicators.base_indicator import Signal, SignalDirection
 
 
-def test_adaptive_supertrend_integration(mock_connector, mock_risk_manager, trading_engine):
+def test_adaptive_supertrend_integration(
+    mock_connector, mock_risk_manager, trading_engine
+):
     """
     Test that the Adaptive SuperTrend indicator can generate signals that are properly
     processed by the trading engine.
@@ -22,8 +23,14 @@ def test_adaptive_supertrend_integration(mock_connector, mock_risk_manager, trad
     mock_connector.get_ticker.return_value = {"symbol": "ETH", "last_price": 1500.0}
 
     # Configure the mock risk manager
-    mock_risk_manager.calculate_position_size.return_value = (1.0, 5.0)  # size, leverage
-    mock_risk_manager.calculate_hedge_parameters.return_value = (0.2, 2.0)  # hedge size, hedge leverage
+    mock_risk_manager.calculate_position_size.return_value = (
+        1.0,
+        5.0,
+    )  # size, leverage
+    mock_risk_manager.calculate_hedge_parameters.return_value = (
+        0.2,
+        2.0,
+    )  # hedge size, hedge leverage
     mock_risk_manager.validate_trade.return_value = (True, "Trade validated")
 
     # Start the trading engine
@@ -37,8 +44,8 @@ def test_adaptive_supertrend_integration(mock_connector, mock_risk_manager, trad
                 "atr_length": 10,
                 "factor": 3.0,
                 "training_length": 50,  # Smaller training length for testing
-                "max_iterations": 5  # Fewer iterations for faster testing
-            }
+                "max_iterations": 5,  # Fewer iterations for faster testing
+            },
         )
 
         # Create synthetic price data with a trend and volatility change
@@ -48,39 +55,47 @@ def test_adaptive_supertrend_integration(mock_connector, mock_risk_manager, trad
 
         # Create a trend with changing direction
         base_trend = np.linspace(1000, 1300, num_periods // 2)
-        base_trend = np.concatenate([base_trend, np.linspace(1300, 1100, num_periods // 2)])
+        base_trend = np.concatenate(
+            [base_trend, np.linspace(1300, 1100, num_periods // 2)]
+        )
 
         # Create volatility regimes
         volatility = np.ones(num_periods) * 15  # Base volatility
 
         # High volatility in the beginning
-        volatility[:num_periods//3] = 30
+        volatility[: num_periods // 3] = 30
 
         # Medium volatility in the middle
-        volatility[num_periods//3:2*num_periods//3] = 20
+        volatility[num_periods // 3 : 2 * num_periods // 3] = 20
 
         # Low volatility at the end
-        volatility[2*num_periods//3:] = 10
+        volatility[2 * num_periods // 3 :] = 10
 
         # Add noise based on volatility
         noise = np.array([np.random.normal(0, v) for v in volatility])
         base_close = base_trend + noise
 
         # Create OHLC data
-        data = pd.DataFrame({
-            "timestamp": timestamps,
-            "symbol": "ETH",
-            "open": base_close - np.random.normal(0, 5, num_periods),
-            "high": base_close + np.random.normal(10, 5, num_periods),
-            "low": base_close - np.random.normal(10, 5, num_periods),
-            "close": base_close,
-            "volume": np.random.normal(1000, 200, num_periods),
-        })
+        data = pd.DataFrame(
+            {
+                "timestamp": timestamps,
+                "symbol": "ETH",
+                "open": base_close - np.random.normal(0, 5, num_periods),
+                "high": base_close + np.random.normal(10, 5, num_periods),
+                "low": base_close - np.random.normal(10, 5, num_periods),
+                "close": base_close,
+                "volume": np.random.normal(1000, 200, num_periods),
+            }
+        )
 
         # Ensure high is highest and low is lowest
         for i in range(len(data)):
-            data.loc[i, "high"] = max(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"])
-            data.loc[i, "low"] = min(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"])
+            data.loc[i, "high"] = max(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"]
+            )
+            data.loc[i, "low"] = min(
+                data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"]
+            )
 
         # Process the data with the AST indicator
         processed_data, signal = ast.process(data)
@@ -116,7 +131,9 @@ def test_adaptive_supertrend_integration(mock_connector, mock_risk_manager, trad
                     "supertrend": processed_data["ast_supertrend"].iloc[-1],
                     "volatility_regime": volatility_regime,
                     "atr": processed_data["ast_atr"].iloc[-1],
-                    "cluster": int(volatility_cluster) if not pd.isna(volatility_cluster) else 1,
+                    "cluster": int(volatility_cluster)
+                    if not pd.isna(volatility_cluster)
+                    else 1,
                     "trigger": "trend_change_bullish",
                 },
             )
@@ -130,7 +147,10 @@ def test_adaptive_supertrend_integration(mock_connector, mock_risk_manager, trad
             trading_engine.process_signal(signal)
 
             # Check that the trading engine processed the signal
-            assert len(trading_engine.active_trades) > 0 or len(trading_engine.get_trade_history()) > 0
+            assert (
+                len(trading_engine.active_trades) > 0
+                or len(trading_engine.get_trade_history()) > 0
+            )
 
             # Get the trades and check details
             if trading_engine.active_trades:
@@ -188,8 +208,8 @@ def test_adaptive_supertrend_volatility_regimes(mock_connector, mock_risk_manage
             "max_iterations": 10,  # More iterations for better convergence
             "high_vol_percentile": 0.9,  # Higher separation between volatility regimes
             "medium_vol_percentile": 0.5,
-            "low_vol_percentile": 0.1
-        }
+            "low_vol_percentile": 0.1,
+        },
     )
 
     # Create synthetic price data with extremely clear volatility regimes
@@ -217,20 +237,26 @@ def test_adaptive_supertrend_volatility_regimes(mock_connector, mock_risk_manage
     base_close = base_trend + noise
 
     # Create OHLC data with more realistic price action
-    data = pd.DataFrame({
-        "timestamp": timestamps,
-        "symbol": "ETH",
-        "open": base_close - volatility/4,  # Controlled price ranges
-        "high": base_close + volatility/2,
-        "low": base_close - volatility/2,
-        "close": base_close,
-        "volume": np.random.normal(1000, 200, num_periods),
-    })
+    data = pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "symbol": "ETH",
+            "open": base_close - volatility / 4,  # Controlled price ranges
+            "high": base_close + volatility / 2,
+            "low": base_close - volatility / 2,
+            "close": base_close,
+            "volume": np.random.normal(1000, 200, num_periods),
+        }
+    )
 
     # Ensure high/low constraints
     for i in range(len(data)):
-        data.loc[i, "high"] = max(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"])
-        data.loc[i, "low"] = min(data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"])
+        data.loc[i, "high"] = max(
+            data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "high"]
+        )
+        data.loc[i, "low"] = min(
+            data.loc[i, "open"], data.loc[i, "close"], data.loc[i, "low"]
+        )
 
     # Process data with the AST indicator
     processed_data = ast.calculate(data)
@@ -241,7 +267,9 @@ def test_adaptive_supertrend_volatility_regimes(mock_connector, mock_risk_manage
     high_vol_atr = processed_data["ast_atr"].iloc[200]  # Middle of high vol regime
 
     # Check that ATR values increase with volatility regimes
-    assert low_vol_atr < med_vol_atr < high_vol_atr, "ATR should increase with volatility"
+    assert (
+        low_vol_atr < med_vol_atr < high_vol_atr
+    ), "ATR should increase with volatility"
 
     # Instead of checking exact cluster assignments, which can vary,
     # let's check the quality of clustering by verifying that the ATR values
@@ -251,11 +279,15 @@ def test_adaptive_supertrend_volatility_regimes(mock_connector, mock_risk_manage
     low_centroid = processed_data["ast_low_centroid"].iloc[-1]
 
     # Centroids should be ordered by volatility
-    assert low_centroid < medium_centroid < high_centroid, "Centroids should reflect volatility levels"
+    assert (
+        low_centroid < medium_centroid < high_centroid
+    ), "Centroids should reflect volatility levels"
 
     # The high volatility centroid should be higher than the low one
     # Based on the actual observed values, we use a more realistic ratio
-    assert high_centroid > low_centroid * 1.5, "High volatility centroid should be larger than low volatility centroid"
+    assert (
+        high_centroid > low_centroid * 1.5
+    ), "High volatility centroid should be larger than low volatility centroid"
 
     # Print centroid values for debugging
     logging.info(f"Low volatility centroid: {low_centroid}")

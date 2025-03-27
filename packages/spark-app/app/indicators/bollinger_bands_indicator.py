@@ -4,8 +4,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
-from app.indicators.base_indicator import (BaseIndicator, Signal,
-                                           SignalDirection)
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,9 @@ class BollingerBandsIndicator(BaseIndicator):
         super().__init__(name, params)
         self.period = self.params.get("period", 20)
         self.std_dev = self.params.get("std_dev", 2)
-        self.mean_reversion_threshold = self.params.get("mean_reversion_threshold", 0.05)
+        self.mean_reversion_threshold = self.params.get(
+            "mean_reversion_threshold", 0.05
+        )
 
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -81,22 +82,24 @@ class BollingerBandsIndicator(BaseIndicator):
         # Calculate conditions for buy/sell signals
         # Price crossing below lower band (potential buy)
         df["price_below_lower"] = df["close"] < df["bb_lower"]
-        df["price_crossing_below_lower"] = (df["close"] < df["bb_lower"]) & (df["close"].shift(1) >= df["bb_lower"].shift(1))
+        df["price_crossing_below_lower"] = (df["close"] < df["bb_lower"]) & (
+            df["close"].shift(1) >= df["bb_lower"].shift(1)
+        )
 
         # Price crossing above upper band (potential sell)
         df["price_above_upper"] = df["close"] > df["bb_upper"]
-        df["price_crossing_above_upper"] = (df["close"] > df["bb_upper"]) & (df["close"].shift(1) <= df["bb_upper"].shift(1))
+        df["price_crossing_above_upper"] = (df["close"] > df["bb_upper"]) & (
+            df["close"].shift(1) <= df["bb_upper"].shift(1)
+        )
 
         # Mean reversion signals (price moving back from bands toward middle)
         df["mean_reversion_buy"] = (
-            (df["bb_%b"].shift(1) < self.mean_reversion_threshold) &
-            (df["bb_%b"] > df["bb_%b"].shift(1) + self.mean_reversion_threshold)
-        )
+            df["bb_%b"].shift(1) < self.mean_reversion_threshold
+        ) & (df["bb_%b"] > df["bb_%b"].shift(1) + self.mean_reversion_threshold)
 
         df["mean_reversion_sell"] = (
-            (df["bb_%b"].shift(1) > (1 - self.mean_reversion_threshold)) &
-            (df["bb_%b"] < df["bb_%b"].shift(1) - self.mean_reversion_threshold)
-        )
+            df["bb_%b"].shift(1) > (1 - self.mean_reversion_threshold)
+        ) & (df["bb_%b"] < df["bb_%b"].shift(1) - self.mean_reversion_threshold)
 
         return df
 
@@ -121,7 +124,9 @@ class BollingerBandsIndicator(BaseIndicator):
         required_cols = ["bb_middle", "bb_upper", "bb_lower", "bb_%b", "bb_width"]
         for col in required_cols:
             if col not in data.columns:
-                logger.warning(f"Required column {col} missing in data, cannot generate signal")
+                logger.warning(
+                    f"Required column {col} missing in data, cannot generate signal"
+                )
                 return None
 
         if len(data) < 2:

@@ -23,7 +23,7 @@ def test_moving_average_initialization():
         "fast_period": 5,
         "slow_period": 20,
         "ma_type": "ema",
-        "signal_threshold": 0.002
+        "signal_threshold": 0.002,
     }
     ma_custom = MovingAverageIndicator(name="custom_ma", params=custom_params)
     assert ma_custom.name == "custom_ma"
@@ -110,21 +110,25 @@ def test_moving_average_signal_generation():
     assert signal.params.get("trigger") == "golden_cross"
 
     # Test buy signal - Price crosses above slow MA
-    signal = ma.generate_signal(pd.DataFrame({
-        "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
-        "symbol": "ETH",
-        "close": [1490, 1530],
-        "fast_ma": [1500, 1505],
-        "slow_ma": [1500, 1510],
-        "ma_diff": [0, -5],
-        "ma_ratio": [1.0, 0.995],
-        "ma_crosses_above": [False, False],
-        "ma_crosses_below": [False, False],
-        "price_above_slow_ma": [False, True],
-        "price_below_slow_ma": [True, False],
-        "price_crosses_above_slow_ma": [False, True],
-        "price_crosses_below_slow_ma": [False, False]
-    }))
+    signal = ma.generate_signal(
+        pd.DataFrame(
+            {
+                "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+                "symbol": "ETH",
+                "close": [1490, 1530],
+                "fast_ma": [1500, 1505],
+                "slow_ma": [1500, 1510],
+                "ma_diff": [0, -5],
+                "ma_ratio": [1.0, 0.995],
+                "ma_crosses_above": [False, False],
+                "ma_crosses_below": [False, False],
+                "price_above_slow_ma": [False, True],
+                "price_below_slow_ma": [True, False],
+                "price_crosses_above_slow_ma": [False, True],
+                "price_crosses_below_slow_ma": [False, False],
+            }
+        )
+    )
     assert signal is not None
     assert signal.direction == SignalDirection.BUY
     assert signal.symbol == "ETH"
@@ -176,8 +180,7 @@ def test_moving_average_signal_generation():
 def test_moving_average_process_method(sample_price_data):
     """Test the combined process method."""
     ma = MovingAverageIndicator(
-        name="test_ma",
-        params={"fast_period": 5, "slow_period": 15, "ma_type": "ema"}
+        name="test_ma", params={"fast_period": 5, "slow_period": 15, "ma_type": "ema"}
     )  # Shorter periods for quicker signals
 
     # Manipulate data to create crossover scenarios
@@ -188,9 +191,9 @@ def test_moving_average_process_method(sample_price_data):
 
     # Define relative positions in the dataset
     down_start_idx = int(len(timestamps) * 0.15)  # Start downtrend at 15% through data
-    up_start_idx = int(len(timestamps) * 0.25)    # Start uptrend at 25% through data
-    up2_start_idx = int(len(timestamps) * 0.35)   # Start second uptrend at 35%
-    down2_start_idx = int(len(timestamps) * 0.45) # Start second downtrend at 45%
+    up_start_idx = int(len(timestamps) * 0.25)  # Start uptrend at 25% through data
+    up2_start_idx = int(len(timestamps) * 0.35)  # Start second uptrend at 35%
+    down2_start_idx = int(len(timestamps) * 0.45)  # Start second downtrend at 45%
 
     # Ensure we have enough data points
     trend_period = 20

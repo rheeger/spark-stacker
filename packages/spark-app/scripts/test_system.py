@@ -13,29 +13,73 @@ from pathlib import Path
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("SystemTest")
 
 # Get the root directory of the project
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+
+# Add the project root to Python path so tests can import from app
+sys.path.insert(0, ROOT_DIR)
 
 # Market data cache directory
 MARKET_DATA_CACHE_DIR = os.path.join(ROOT_DIR, "tests", "test_data", "market_data")
 
-# Path to virtual environment Python interpreter
-VENV_PYTHON = os.path.join(ROOT_DIR, ".venv", "bin", "python")
-if not os.path.exists(VENV_PYTHON):
-    # Windows uses Scripts/python.exe instead of bin/python
-    VENV_PYTHON = os.path.join(ROOT_DIR, ".venv", "Scripts", "python.exe")
 
-if not os.path.exists(VENV_PYTHON):
-    logger.error(f"Virtual environment Python not found at {VENV_PYTHON}")
-    logger.error("Please run 'scripts/setup_test_env.sh' first to create the virtual environment")
+def find_venv_python():
+    """Find the Python interpreter in the virtual environment."""
+    venv_dir = os.path.join(ROOT_DIR, ".venv")
+    if not os.path.exists(venv_dir):
+        logger.error(f"Virtual environment not found at {venv_dir}")
+        return None
+
+    # Try common locations
+    possible_paths = [
+        os.path.join(venv_dir, "bin", "python"),  # Unix
+        os.path.join(venv_dir, "bin", "python3"),  # Unix alternative
+        os.path.join(venv_dir, "Scripts", "python.exe"),  # Windows
+    ]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            logger.info(f"Found Python interpreter at: {path}")
+            return path
+
+    logger.error("Could not find Python interpreter in virtual environment")
+    return None
+
+
+# Find the virtual environment Python
+VENV_PYTHON = find_venv_python()
+if not VENV_PYTHON:
+    logger.error(
+        "Please run 'scripts/setup_test_env.sh' first to create the virtual environment"
+    )
     sys.exit(1)
-else:
-    logger.info(f"Using Python interpreter: {VENV_PYTHON}")
+
+
+def ensure_test_env():
+    """Ensure the test environment is properly set up."""
+    # Check if pytest is installed
+    try:
+        subprocess.run(
+            [VENV_PYTHON, "-c", "import pytest"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        logger.error("pytest not found in virtual environment")
+        logger.error("Running setup_test_env.sh to install dependencies...")
+        setup_script = os.path.join(SCRIPT_DIR, "setup_test_env.sh")
+        try:
+            subprocess.run([setup_script], check=True)
+        except subprocess.CalledProcessError:
+            logger.error("Failed to set up test environment")
+            return False
+    return True
 
 
 def ensure_data_cache_exists():
@@ -47,7 +91,12 @@ def ensure_data_cache_exists():
         bool: True if successful, False otherwise
     """
     logger.info("Ensuring market data cache exists...")
-    refresh_script = os.path.join(ROOT_DIR, "scripts", "refresh_test_market_data.py")
+    refresh_script = os.path.join(SCRIPT_DIR, "refresh_test_market_data.py")
+
+    if not os.path.exists(refresh_script):
+        logger.warning(f"Data refresh script not found at {refresh_script}")
+        logger.warning("Tests will use synthetic data")
+        return True
 
     try:
         # Run with --essential-only flag to only generate the minimal required data
@@ -65,15 +114,16 @@ def ensure_data_cache_exists():
 
         if result.returncode != 0:
             logger.error(f"Data cache preparation failed with code {result.returncode}")
-            logger.warning("Tests will still run but may use synthetic data or fail")
-            return False
+            logger.warning("Tests will use synthetic data")
+            return True
         else:
             logger.info("Data cache preparation successful")
             return True
 
     except Exception as e:
         logger.error(f"Error during data cache preparation: {str(e)}")
-        return False
+        logger.warning("Tests will use synthetic data")
+        return True
 
 
 def run_tests(test_path=None, verbose=False, capture_output=False):
@@ -88,6 +138,9 @@ def run_tests(test_path=None, verbose=False, capture_output=False):
     Returns:
         bool: True if tests passed, False otherwise
     """
+    if not ensure_test_env():
+        return False
+
     logger.info(f"Running tests: {test_path if test_path else 'all'}")
 
     # Build pytest command
@@ -95,17 +148,24 @@ def run_tests(test_path=None, verbose=False, capture_output=False):
     if verbose:
         cmd.append("-v")
 
+    # Add coverage reporting
+    cmd.extend(["--cov=app", "--cov-report=term-missing"])
+
     # Add path if specified
     if test_path:
         cmd.append(test_path)
     else:
-        cmd.append("tests/")
+        cmd.append(os.path.join(ROOT_DIR, "tests"))
 
     # Add flag to allow synthetic data as fallback
     cmd.append("--allow-synthetic-data")
 
     try:
         logger.info(f"Executing: {' '.join(cmd)}")
+        logger.info(f"Working directory: {ROOT_DIR}")
+
+        # Always run from the project root
+        os.chdir(ROOT_DIR)
 
         if capture_output:
             result = subprocess.run(
@@ -139,10 +199,21 @@ def run_tests(test_path=None, verbose=False, capture_output=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Run tests with data preparation")
-    parser.add_argument("--path", "-p", help="Path to test file or directory", default=None)
-    parser.add_argument("--verbose", "-v", help="Show verbose output", action="store_true")
-    parser.add_argument("--skip-data-prep", "-s", help="Skip data preparation", action="store_true")
-    parser.add_argument("--capture-output", "-c", help="Capture test output in logs", action="store_true")
+    parser.add_argument(
+        "--path", "-p", help="Path to test file or directory", default=None
+    )
+    parser.add_argument(
+        "--verbose", "-v", help="Show verbose output", action="store_true"
+    )
+    parser.add_argument(
+        "--skip-data-prep", "-s", help="Skip data preparation", action="store_true"
+    )
+    parser.add_argument(
+        "--capture-output",
+        "-c",
+        help="Capture test output in logs",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -160,7 +231,9 @@ def main():
 
     # Show summary
     logger.info(f"Testing completed in {elapsed_time:.2f} seconds")
-    logger.info(f"Data preparation: {'SKIPPED' if args.skip_data_prep else 'OK' if data_prep_ok else 'FAILED'}")
+    logger.info(
+        f"Data preparation: {'SKIPPED' if args.skip_data_prep else 'OK' if data_prep_ok else 'FAILED'}"
+    )
     logger.info(f"Test execution: {'PASSED' if test_ok else 'FAILED'}")
 
     # Exit with status code

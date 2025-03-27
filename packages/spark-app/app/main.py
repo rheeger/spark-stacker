@@ -27,6 +27,7 @@ from app.core.strategy_manager import StrategyManager
 from app.core.trading_engine import TradingEngine
 from app.indicators.indicator_factory import IndicatorFactory
 from app.risk_management.risk_manager import RiskManager
+
 # Import core components
 from app.utils.config import AppConfig, ConfigManager
 from app.utils.logging_setup import setup_logging

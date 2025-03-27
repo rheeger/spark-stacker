@@ -12,15 +12,17 @@ This document provides instructions for running the Spark Stacker trading system
 ### 1. Environment Configuration
 
 1. Copy the example environment file to create your own:
+
    ```bash
    cp .env.example .env
    ```
 
 2. Edit the `.env` file and fill in your own values:
+
    ```bash
    nano .env
    ```
-   
+
    The most important settings to change are:
    - `WALLET_ADDRESS`: Your Ethereum wallet address
    - `PRIVATE_KEY`: Your Ethereum private key
@@ -101,6 +103,7 @@ If the container starts but the application isn't working correctly:
 
 1. Verify your environment variables in the `.env` file
 2. Check that the config.json file has been properly processed with your environment variables:
+
    ```bash
    docker-compose exec app cat /app/config/config.json
    ```
@@ -118,4 +121,4 @@ If you're having trouble connecting to exchanges:
 1. **Never commit your `.env` file with real credentials to version control**
 2. Regularly rotate your API keys and authentication tokens
 3. Use strong, unique passwords for all credentials
-4. Consider using Docker secrets for production deployments 
+4. Consider using Docker secrets for production deployments

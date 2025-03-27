@@ -20,8 +20,14 @@ class TestClosingPositions:
 
         # Create risk manager
         self.risk_manager = MagicMock(spec=RiskManager)
-        self.risk_manager.calculate_position_size.return_value = (100.0, 5.0)  # (size, leverage)
-        self.risk_manager.calculate_hedge_parameters.return_value = (20.0, 2.0)  # (size, leverage)
+        self.risk_manager.calculate_position_size.return_value = (
+            100.0,
+            5.0,
+        )  # (size, leverage)
+        self.risk_manager.calculate_hedge_parameters.return_value = (
+            20.0,
+            2.0,
+        )  # (size, leverage)
         self.risk_manager.validate_trade.return_value = (True, "Trade validated")
 
         # Create trading engine
@@ -54,7 +60,9 @@ class TestClosingPositions:
         connector.get_account_balance.return_value = {"USD": 10000.0, "ETH": 5.0}
 
         # Define market types
-        connector.market_types = MarketType.PERPETUAL if name == "hyperliquid" else MarketType.SPOT
+        connector.market_types = (
+            MarketType.PERPETUAL if name == "hyperliquid" else MarketType.SPOT
+        )
 
         # Define position data - initially empty
         connector.get_positions.return_value = []
@@ -88,29 +96,33 @@ class TestClosingPositions:
         # Setup mock positions after opening a position
         self.mock_main_connector.get_positions.side_effect = [
             [],  # First call returns empty (before position is opened)
-            [{   # Second call returns the open position
-                "symbol": symbol,
-                "side": "LONG",
-                "size": 1.0,
-                "entry_price": 2000.0,
-                "leverage": 5.0,
-                "unrealized_pnl": 0.0,
-            }],
-            []   # Third call returns empty again (after position is closed)
+            [
+                {  # Second call returns the open position
+                    "symbol": symbol,
+                    "side": "LONG",
+                    "size": 1.0,
+                    "entry_price": 2000.0,
+                    "leverage": 5.0,
+                    "unrealized_pnl": 0.0,
+                }
+            ],
+            [],  # Third call returns empty again (after position is closed)
         ]
 
         # Setup mock positions for hedge connector
         self.mock_hedge_connector.get_positions.side_effect = [
             [],  # First call returns empty (before position is opened)
-            [{   # Second call returns the open position (hedge position is opposite)
-                "symbol": symbol,
-                "side": "SHORT",
-                "size": 0.2,
-                "entry_price": 2000.0,
-                "leverage": 2.0,
-                "unrealized_pnl": 0.0,
-            }],
-            []   # Third call returns empty again (after position is closed)
+            [
+                {  # Second call returns the open position (hedge position is opposite)
+                    "symbol": symbol,
+                    "side": "SHORT",
+                    "size": 0.2,
+                    "entry_price": 2000.0,
+                    "leverage": 2.0,
+                    "unrealized_pnl": 0.0,
+                }
+            ],
+            [],  # Third call returns empty again (after position is closed)
         ]
 
         # Step 1: Open a position using place_order directly
@@ -127,7 +139,7 @@ class TestClosingPositions:
                 "size": 0.2,
                 "entry_price": 2000.0,
                 "leverage": 2.0,
-            }
+            },
         }
 
         # Step 2: Get active trades to verify
@@ -169,11 +181,14 @@ class TestClosingPositions:
                 "side": "BUY",
                 "size": 1.0,
                 "entry_price": 2000.0,
-            }
+            },
         }
 
         # Setup account balance to return ETH balance
-        self.mock_main_connector.get_account_balance.return_value = {"USD": 10000.0, "ETH": 1.0}
+        self.mock_main_connector.get_account_balance.return_value = {
+            "USD": 10000.0,
+            "ETH": 1.0,
+        }
 
         # Close all positions
         close_result = self.engine.close_all_positions()
@@ -183,7 +198,10 @@ class TestClosingPositions:
 
         # In spot markets with BUY positions, we should place a SELL order
         assert self.mock_main_connector.place_order.called
-        place_order_args, place_order_kwargs = self.mock_main_connector.place_order.call_args
+        (
+            place_order_args,
+            place_order_kwargs,
+        ) = self.mock_main_connector.place_order.call_args
         assert place_order_kwargs["symbol"] == symbol
         assert place_order_kwargs["side"] == OrderSide.SELL
         assert place_order_kwargs["order_type"] == OrderType.MARKET
@@ -220,11 +238,13 @@ class TestClosingPositions:
                 "size": 1.0,
                 "entry_price": 2000.0,
                 "leverage": 5.0,
-            }
+            },
         }
 
         # Make close_position fail
-        self.mock_main_connector.close_position.side_effect = Exception("Simulated error")
+        self.mock_main_connector.close_position.side_effect = Exception(
+            "Simulated error"
+        )
 
         # Close all positions
         close_result = self.engine.close_all_positions()

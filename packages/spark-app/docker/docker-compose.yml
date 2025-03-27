@@ -2,7 +2,9 @@ version: '3'
 
 services:
   app:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: spark-stacker
     restart: unless-stopped
     ports:
@@ -10,6 +12,7 @@ services:
     volumes:
       - ../logs:/app/logs
       - ../../shared/config.json:/app/config.json
+      - ../data:/app/data
     env_file:
       - ../../shared/.env
     environment:

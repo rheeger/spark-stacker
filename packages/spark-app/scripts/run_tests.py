@@ -70,7 +70,9 @@ def check_market_data_cache():
     if oldest_file_time:
         age = datetime.now() - oldest_file_time
         if age > timedelta(hours=CACHE_MAX_AGE_HOURS):
-            logger.info(f"Market data cache is {age.total_seconds() / 3600:.1f} hours old (older than {CACHE_MAX_AGE_HOURS} hours)")
+            logger.info(
+                f"Market data cache is {age.total_seconds() / 3600:.1f} hours old (older than {CACHE_MAX_AGE_HOURS} hours)"
+            )
             return True
 
     logger.info("Market data cache is up to date")
@@ -100,7 +102,9 @@ def refresh_market_data():
             logger.info("Market data cache refreshed successfully")
             return True
         else:
-            logger.warning(f"Market data refresh completed with warnings/errors (code {result.returncode})")
+            logger.warning(
+                f"Market data refresh completed with warnings/errors (code {result.returncode})"
+            )
             return result.returncode == 0
 
     except Exception as e:
@@ -108,7 +112,13 @@ def refresh_market_data():
         return False
 
 
-def run_tests(test_path=None, coverage=True, verbose=False, failfast=False, allow_synthetic_data=False):
+def run_tests(
+    test_path=None,
+    coverage=True,
+    verbose=False,
+    failfast=False,
+    allow_synthetic_data=False,
+):
     """Run tests with optional coverage report."""
     logger.info("Running tests...")
 
@@ -285,7 +295,9 @@ if __name__ == "__main__":
     if args.refresh_data or (not args.skip_data_refresh and check_market_data_cache()):
         refresh_result = refresh_market_data()
         if not refresh_result and not args.allow_synthetic_data:
-            logger.warning("⚠️ Market data refresh failed. Tests may fail unless --allow-synthetic-data is used.")
+            logger.warning(
+                "⚠️ Market data refresh failed. Tests may fail unless --allow-synthetic-data is used."
+            )
 
     # Run type checking if requested
     if args.type_check or args.all_checks:

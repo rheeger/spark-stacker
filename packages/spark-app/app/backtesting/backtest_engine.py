@@ -17,10 +17,10 @@ from .simulation_engine import SimulationEngine
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 class BacktestResult:
     """Container for backtest results and performance metrics."""
@@ -34,7 +34,7 @@ class BacktestResult:
         final_balance: Dict[str, float],
         trades: List[Dict[str, Any]],
         equity_curve: pd.DataFrame,
-        metrics: Dict[str, Any]
+        metrics: Dict[str, Any],
     ):
         """
         Initialize backtest results.
@@ -53,12 +53,12 @@ class BacktestResult:
 
         # Convert dates to datetime if needed
         if isinstance(start_date, str):
-            self.start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
         else:
             self.start_date = start_date
 
         if isinstance(end_date, str):
-            self.end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
         else:
             self.end_date = end_date
 
@@ -76,21 +76,23 @@ class BacktestResult:
             row_dict = {}
             for col, val in row.items():
                 # Convert Timestamp to string or int
-                if pd.api.types.is_datetime64_any_dtype(val) or isinstance(val, pd.Timestamp):
-                    row_dict[col] = val.strftime('%Y-%m-%d %H:%M:%S')
+                if pd.api.types.is_datetime64_any_dtype(val) or isinstance(
+                    val, pd.Timestamp
+                ):
+                    row_dict[col] = val.strftime("%Y-%m-%d %H:%M:%S")
                 else:
                     row_dict[col] = val
             equity_curve_dict.append(row_dict)
 
         return {
-            'symbol': self.symbol,
-            'start_date': self.start_date.strftime('%Y-%m-%d'),
-            'end_date': self.end_date.strftime('%Y-%m-%d'),
-            'initial_balance': self.initial_balance,
-            'final_balance': self.final_balance,
-            'trades': self.trades,
-            'equity_curve': equity_curve_dict,
-            'metrics': self.metrics
+            "symbol": self.symbol,
+            "start_date": self.start_date.strftime("%Y-%m-%d"),
+            "end_date": self.end_date.strftime("%Y-%m-%d"),
+            "initial_balance": self.initial_balance,
+            "final_balance": self.final_balance,
+            "trades": self.trades,
+            "equity_curve": equity_curve_dict,
+            "metrics": self.metrics,
         }
 
     def save_to_file(self, file_path: str) -> None:
@@ -101,7 +103,7 @@ class BacktestResult:
             file_path: Path to save results
         """
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
         logger.info(f"Saved backtest results to {file_path}")
 
@@ -113,14 +115,16 @@ class BacktestResult:
             save_path: Optional path to save the plot
         """
         plt.figure(figsize=(12, 6))
-        plt.plot(self.equity_curve['timestamp'], self.equity_curve['equity'], label='Equity')
+        plt.plot(
+            self.equity_curve["timestamp"], self.equity_curve["equity"], label="Equity"
+        )
 
         # Format dates on x-axis
         plt.gcf().autofmt_xdate()
 
-        plt.title(f'Equity Curve - {self.symbol}')
-        plt.xlabel('Date')
-        plt.ylabel('Equity')
+        plt.title(f"Equity Curve - {self.symbol}")
+        plt.xlabel("Date")
+        plt.ylabel("Equity")
         plt.legend()
         plt.grid(True)
 
@@ -138,19 +142,24 @@ class BacktestResult:
         Args:
             save_path: Optional path to save the plot
         """
-        if 'drawdown' not in self.equity_curve.columns:
+        if "drawdown" not in self.equity_curve.columns:
             logger.warning("Drawdown data not available in equity curve")
             return
 
         plt.figure(figsize=(12, 6))
-        plt.plot(self.equity_curve['timestamp'], self.equity_curve['drawdown'] * 100, label='Drawdown %', color='red')
+        plt.plot(
+            self.equity_curve["timestamp"],
+            self.equity_curve["drawdown"] * 100,
+            label="Drawdown %",
+            color="red",
+        )
 
         # Format dates on x-axis
         plt.gcf().autofmt_xdate()
 
-        plt.title(f'Drawdown - {self.symbol}')
-        plt.xlabel('Date')
-        plt.ylabel('Drawdown %')
+        plt.title(f"Drawdown - {self.symbol}")
+        plt.xlabel("Date")
+        plt.ylabel("Drawdown %")
         plt.legend()
         plt.grid(True)
 
@@ -162,23 +171,23 @@ class BacktestResult:
             plt.show()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'BacktestResult':
+    def from_dict(cls, data: Dict[str, Any]) -> "BacktestResult":
         """Create a BacktestResult from a dictionary."""
         return cls(
-            symbol=data['symbol'],
-            start_date=data['start_date'],
-            end_date=data['end_date'],
-            initial_balance=data['initial_balance'],
-            final_balance=data['final_balance'],
-            trades=data['trades'],
-            equity_curve=pd.DataFrame(data['equity_curve']),
-            metrics=data['metrics']
+            symbol=data["symbol"],
+            start_date=data["start_date"],
+            end_date=data["end_date"],
+            initial_balance=data["initial_balance"],
+            final_balance=data["final_balance"],
+            trades=data["trades"],
+            equity_curve=pd.DataFrame(data["equity_curve"]),
+            metrics=data["metrics"],
         )
 
     @classmethod
-    def load_from_file(cls, file_path: str) -> 'BacktestResult':
+    def load_from_file(cls, file_path: str) -> "BacktestResult":
         """Load results from a JSON file."""
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -191,11 +200,11 @@ class BacktestEngine:
     def __init__(
         self,
         data_manager: DataManager,
-        initial_balance: Dict[str, float] = {'USD': 10000.0},
+        initial_balance: Dict[str, float] = {"USD": 10000.0},
         maker_fee: float = 0.0001,  # 0.01%
         taker_fee: float = 0.0005,  # 0.05%
-        slippage_model: str = 'random',
-        trading_days_per_year: int = 365
+        slippage_model: str = "random",
+        trading_days_per_year: int = 365,
     ):
         """
         Initialize the backtest engine.
@@ -225,7 +234,7 @@ class BacktestEngine:
         data_source_name: str,
         strategy_params: Dict[str, Any] = None,
         leverage: float = 1.0,
-        indicators: List[Any] = None
+        indicators: List[Any] = None,
     ) -> BacktestResult:
         """
         Run a backtest for a given strategy.
@@ -246,31 +255,37 @@ class BacktestEngine:
         """
         # Convert dates to timestamps if needed
         if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
 
         if isinstance(end_date, str):
-            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
         # Convert to milliseconds
         start_time_ms = int(start_date.timestamp() * 1000)
         end_time_ms = int(end_date.timestamp() * 1000)
 
         # Get historical data
-        logger.info(f"Fetching historical data for {symbol} from {start_date} to {end_date}")
+        logger.info(
+            f"Fetching historical data for {symbol} from {start_date} to {end_date}"
+        )
         historical_data = self.data_manager.get_data(
             source_name=data_source_name,
             symbol=symbol,
             interval=interval,
             start_time=start_time_ms,
-            end_time=end_time_ms
+            end_time=end_time_ms,
         )
 
         # Clean data
         historical_data = self.data_manager.clean_data(historical_data)
 
         if historical_data.empty:
-            logger.error(f"No historical data available for {symbol} in the specified date range")
-            raise ValueError(f"No historical data available for {symbol} in the specified date range")
+            logger.error(
+                f"No historical data available for {symbol} in the specified date range"
+            )
+            raise ValueError(
+                f"No historical data available for {symbol} in the specified date range"
+            )
 
         logger.info(f"Running backtest with {len(historical_data)} candles")
 
@@ -279,7 +294,7 @@ class BacktestEngine:
             initial_balance=self.initial_balance.copy(),
             maker_fee=self.maker_fee,
             taker_fee=self.taker_fee,
-            slippage_model=self.slippage_model
+            slippage_model=self.slippage_model,
         )
 
         # Prepare indicators if provided
@@ -289,8 +304,12 @@ class BacktestEngine:
                 # Calculate indicator values for the entire dataset
                 indicator_data = indicator.calculate(historical_data)
                 # Store indicator columns in a dictionary
-                non_ohlcv_columns = [col for col in indicator_data.columns
-                                    if col not in ['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+                non_ohlcv_columns = [
+                    col
+                    for col in indicator_data.columns
+                    if col
+                    not in ["timestamp", "open", "high", "low", "close", "volume"]
+                ]
                 indicator_values[indicator.name] = indicator_data[non_ohlcv_columns]
 
         # Run simulation
@@ -318,45 +337,51 @@ class BacktestEngine:
                 for indicator_name, values in indicator_values.items():
                     if i < len(values):
                         for col in values.columns:
-                            strategy_params[f"{indicator_name}_{col}"] = values.iloc[i][col]
+                            strategy_params[f"{indicator_name}_{col}"] = values.iloc[i][
+                                col
+                            ]
 
             # Call the strategy function
             strategy_func(
-                historical_data.iloc[:i+1].copy(),
+                historical_data.iloc[: i + 1].copy(),
                 simulation_engine,
                 {
-                    'symbol': symbol,
-                    'current_candle': current_candle,
-                    'leverage': leverage,
-                    **strategy_params
-                }
+                    "symbol": symbol,
+                    "current_candle": current_candle,
+                    "leverage": leverage,
+                    **strategy_params,
+                },
             )
 
             # Record equity for this timestamp
-            current_prices = {symbol: current_candle['close']}
+            current_prices = {symbol: current_candle["close"]}
             equity = simulation_engine.calculate_equity(current_prices)
 
-            equity_data.append({
-                'timestamp': current_candle['timestamp'],
-                'equity': equity,
-                'close_price': current_candle['close']
-            })
+            equity_data.append(
+                {
+                    "timestamp": current_candle["timestamp"],
+                    "equity": equity,
+                    "close_price": current_candle["close"],
+                }
+            )
 
             # Log progress every 10% of the simulation
             if i % max(1, len(historical_data) // 10) == 0:
                 progress = (i / len(historical_data)) * 100
-                logger.info(f"Simulation progress: {progress:.1f}% - Current equity: {equity:.2f}")
+                logger.info(
+                    f"Simulation progress: {progress:.1f}% - Current equity: {equity:.2f}"
+                )
 
         # Calculate performance metrics
         equity_df = pd.DataFrame(equity_data)
-        equity_df['datetime'] = pd.to_datetime(equity_df['timestamp'], unit='ms')
+        equity_df["datetime"] = pd.to_datetime(equity_df["timestamp"], unit="ms")
         equity_df = self._calculate_drawdown(equity_df)
 
         metrics = self._calculate_metrics(
             equity_df=equity_df,
             trades=simulation_engine.get_trade_history(),
             initial_balance=sum(self.initial_balance.values()),
-            final_balance=sum(simulation_engine.get_balance().values())
+            final_balance=sum(simulation_engine.get_balance().values()),
         )
 
         # Create and return backtest result
@@ -368,7 +393,7 @@ class BacktestEngine:
             final_balance=simulation_engine.get_balance(),
             trades=simulation_engine.get_trade_history(),
             equity_curve=equity_df,
-            metrics=metrics
+            metrics=metrics,
         )
 
         return result
@@ -384,11 +409,11 @@ class BacktestEngine:
             DataFrame with added drawdown column
         """
         # Calculate rolling maximum equity
-        equity_df['peak'] = equity_df['equity'].cummax()
+        equity_df["peak"] = equity_df["equity"].cummax()
 
         # Calculate drawdown in absolute and percentage terms
-        equity_df['drawdown_abs'] = equity_df['peak'] - equity_df['equity']
-        equity_df['drawdown'] = equity_df['drawdown_abs'] / equity_df['peak']
+        equity_df["drawdown_abs"] = equity_df["peak"] - equity_df["equity"]
+        equity_df["drawdown"] = equity_df["drawdown_abs"] / equity_df["peak"]
 
         return equity_df
 
@@ -397,7 +422,7 @@ class BacktestEngine:
         equity_df: pd.DataFrame,
         trades: List[Dict[str, Any]],
         initial_balance: float,
-        final_balance: float
+        final_balance: float,
     ) -> Dict[str, Any]:
         """
         Calculate performance metrics.
@@ -415,96 +440,120 @@ class BacktestEngine:
         metrics = {}
 
         # Basic metrics
-        metrics['total_trades'] = len(trades)
+        metrics["total_trades"] = len(trades)
 
         # Calculate winning and losing trades
-        winning_trades = [t for t in trades if 'realized_pnl' in t and t['realized_pnl'] > 0]
-        losing_trades = [t for t in trades if 'realized_pnl' in t and t['realized_pnl'] < 0]
+        winning_trades = [
+            t for t in trades if "realized_pnl" in t and t["realized_pnl"] > 0
+        ]
+        losing_trades = [
+            t for t in trades if "realized_pnl" in t and t["realized_pnl"] < 0
+        ]
 
-        metrics['winning_trades'] = len(winning_trades)
-        metrics['losing_trades'] = len(losing_trades)
+        metrics["winning_trades"] = len(winning_trades)
+        metrics["losing_trades"] = len(losing_trades)
 
         # Win rate
-        if metrics['total_trades'] > 0:
-            metrics['win_rate'] = metrics['winning_trades'] / metrics['total_trades']
+        if metrics["total_trades"] > 0:
+            metrics["win_rate"] = metrics["winning_trades"] / metrics["total_trades"]
         else:
-            metrics['win_rate'] = 0.0
+            metrics["win_rate"] = 0.0
 
         # Calculate profit and loss metrics
         if winning_trades:
-            metrics['avg_profit'] = sum(t['realized_pnl'] for t in winning_trades) / len(winning_trades)
-            metrics['max_profit'] = max(t['realized_pnl'] for t in winning_trades)
+            metrics["avg_profit"] = sum(
+                t["realized_pnl"] for t in winning_trades
+            ) / len(winning_trades)
+            metrics["max_profit"] = max(t["realized_pnl"] for t in winning_trades)
         else:
-            metrics['avg_profit'] = 0.0
-            metrics['max_profit'] = 0.0
+            metrics["avg_profit"] = 0.0
+            metrics["max_profit"] = 0.0
 
         if losing_trades:
-            metrics['avg_loss'] = sum(t['realized_pnl'] for t in losing_trades) / len(losing_trades)
-            metrics['max_loss'] = min(t['realized_pnl'] for t in losing_trades)
+            metrics["avg_loss"] = sum(t["realized_pnl"] for t in losing_trades) / len(
+                losing_trades
+            )
+            metrics["max_loss"] = min(t["realized_pnl"] for t in losing_trades)
         else:
-            metrics['avg_loss'] = 0.0
-            metrics['max_loss'] = 0.0
+            metrics["avg_loss"] = 0.0
+            metrics["max_loss"] = 0.0
 
         # Profit factor (ratio of gross profit to gross loss)
-        gross_profit = sum(t['realized_pnl'] for t in winning_trades)
-        gross_loss = abs(sum(t['realized_pnl'] for t in losing_trades))
+        gross_profit = sum(t["realized_pnl"] for t in winning_trades)
+        gross_loss = abs(sum(t["realized_pnl"] for t in losing_trades))
 
         if gross_loss > 0:
-            metrics['profit_factor'] = gross_profit / gross_loss
+            metrics["profit_factor"] = gross_profit / gross_loss
         else:
-            metrics['profit_factor'] = float('inf') if gross_profit > 0 else 0.0
+            metrics["profit_factor"] = float("inf") if gross_profit > 0 else 0.0
 
         # Calculate returns
-        metrics['total_return'] = (final_balance - initial_balance) / initial_balance if initial_balance > 0 else 0.0
+        metrics["total_return"] = (
+            (final_balance - initial_balance) / initial_balance
+            if initial_balance > 0
+            else 0.0
+        )
 
         # Calculate annualized return
-        days = (equity_df['datetime'].max() - equity_df['datetime'].min()).days
+        days = (equity_df["datetime"].max() - equity_df["datetime"].min()).days
         if days > 0:
             years = days / 365
-            metrics['annualized_return'] = (1 + metrics['total_return']) ** (1 / years) - 1
+            metrics["annualized_return"] = (1 + metrics["total_return"]) ** (
+                1 / years
+            ) - 1
         else:
-            metrics['annualized_return'] = 0.0
+            metrics["annualized_return"] = 0.0
 
         # Calculate maximum drawdown
-        metrics['max_drawdown'] = equity_df['drawdown'].max()
-        metrics['max_drawdown_abs'] = equity_df['drawdown_abs'].max()
+        metrics["max_drawdown"] = equity_df["drawdown"].max()
+        metrics["max_drawdown_abs"] = equity_df["drawdown_abs"].max()
 
         # Calculate Sharpe ratio (annualized)
         if len(equity_df) > 1:
             # Calculate daily returns
-            equity_df['daily_return'] = equity_df['equity'].pct_change()
+            equity_df["daily_return"] = equity_df["equity"].pct_change()
 
             # Annualized Sharpe ratio
-            daily_returns = equity_df['daily_return'].dropna()
+            daily_returns = equity_df["daily_return"].dropna()
             if len(daily_returns) > 0 and daily_returns.std() > 0:
-                sharpe_ratio = (daily_returns.mean() / daily_returns.std()) * np.sqrt(self.trading_days_per_year)
-                metrics['sharpe_ratio'] = sharpe_ratio
+                sharpe_ratio = (daily_returns.mean() / daily_returns.std()) * np.sqrt(
+                    self.trading_days_per_year
+                )
+                metrics["sharpe_ratio"] = sharpe_ratio
             else:
-                metrics['sharpe_ratio'] = 0.0
+                metrics["sharpe_ratio"] = 0.0
         else:
-            metrics['sharpe_ratio'] = 0.0
+            metrics["sharpe_ratio"] = 0.0
 
         # Calculate Sortino ratio (annualized)
         if len(equity_df) > 1:
             # Calculate daily returns
-            daily_returns = equity_df['daily_return'].dropna()
+            daily_returns = equity_df["daily_return"].dropna()
 
             # Calculate downside deviation (std dev of negative returns)
             negative_returns = daily_returns[daily_returns < 0]
 
             if len(negative_returns) > 0 and negative_returns.std() > 0:
-                sortino_ratio = (daily_returns.mean() / negative_returns.std()) * np.sqrt(self.trading_days_per_year)
-                metrics['sortino_ratio'] = sortino_ratio
+                sortino_ratio = (
+                    daily_returns.mean() / negative_returns.std()
+                ) * np.sqrt(self.trading_days_per_year)
+                metrics["sortino_ratio"] = sortino_ratio
             else:
-                metrics['sortino_ratio'] = float('inf') if daily_returns.mean() > 0 else 0.0
+                metrics["sortino_ratio"] = (
+                    float("inf") if daily_returns.mean() > 0 else 0.0
+                )
         else:
-            metrics['sortino_ratio'] = 0.0
+            metrics["sortino_ratio"] = 0.0
 
         # Calculate Calmar ratio (annualized return / maximum drawdown)
-        if metrics['max_drawdown'] > 0:
-            metrics['calmar_ratio'] = metrics['annualized_return'] / metrics['max_drawdown']
+        if metrics["max_drawdown"] > 0:
+            metrics["calmar_ratio"] = (
+                metrics["annualized_return"] / metrics["max_drawdown"]
+            )
         else:
-            metrics['calmar_ratio'] = float('inf') if metrics['annualized_return'] > 0 else 0.0
+            metrics["calmar_ratio"] = (
+                float("inf") if metrics["annualized_return"] > 0 else 0.0
+            )
 
         return metrics
 
@@ -517,9 +566,9 @@ class BacktestEngine:
         end_date: Union[str, datetime],
         data_source_name: str,
         param_grid: Dict[str, List[Any]],
-        metric_to_optimize: str = 'sharpe_ratio',
+        metric_to_optimize: str = "sharpe_ratio",
         leverage: float = 1.0,
-        indicators: List[Any] = None
+        indicators: List[Any] = None,
     ) -> Tuple[Dict[str, Any], BacktestResult]:
         """
         Optimize strategy parameters using grid search.
@@ -541,20 +590,25 @@ class BacktestEngine:
         """
         # Generate all parameter combinations
         import itertools
+
         param_keys = list(param_grid.keys())
         param_values = list(param_grid.values())
         param_combinations = list(itertools.product(*param_values))
 
-        logger.info(f"Running parameter optimization with {len(param_combinations)} combinations")
+        logger.info(
+            f"Running parameter optimization with {len(param_combinations)} combinations"
+        )
 
-        best_value = float('-inf')
+        best_value = float("-inf")
         best_params = None
         best_result = None
 
         for i, combination in enumerate(param_combinations):
             params = dict(zip(param_keys, combination))
 
-            logger.info(f"Testing combination {i+1}/{len(param_combinations)}: {params}")
+            logger.info(
+                f"Testing combination {i+1}/{len(param_combinations)}: {params}"
+            )
 
             try:
                 # Run backtest with these parameters
@@ -567,18 +621,20 @@ class BacktestEngine:
                     data_source_name=data_source_name,
                     strategy_params=params,
                     leverage=leverage,
-                    indicators=indicators
+                    indicators=indicators,
                 )
 
                 # Check if this result is better than current best
-                current_value = result.metrics.get(metric_to_optimize, float('-inf'))
+                current_value = result.metrics.get(metric_to_optimize, float("-inf"))
 
                 if current_value > best_value:
                     best_value = current_value
                     best_params = params
                     best_result = result
 
-                    logger.info(f"New best parameters found: {best_params} with {metric_to_optimize} = {best_value}")
+                    logger.info(
+                        f"New best parameters found: {best_params} with {metric_to_optimize} = {best_value}"
+                    )
 
             except Exception as e:
                 logger.error(f"Error testing parameters {params}: {e}")
@@ -598,10 +654,10 @@ class BacktestEngine:
         data_source_name: str,
         param_grid: Dict[str, List[Any]],
         train_size: int = 6,  # months
-        test_size: int = 2,   # months
-        metric_to_optimize: str = 'sharpe_ratio',
+        test_size: int = 2,  # months
+        metric_to_optimize: str = "sharpe_ratio",
         leverage: float = 1.0,
-        indicators: List[Any] = None
+        indicators: List[Any] = None,
     ) -> List[Dict[str, Any]]:
         """
         Perform walk-forward analysis.
@@ -625,10 +681,10 @@ class BacktestEngine:
         """
         # Convert dates to datetime if needed
         if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
 
         if isinstance(end_date, str):
-            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
         # Generate time windows for walk-forward analysis
         from dateutil.relativedelta import relativedelta
@@ -646,12 +702,14 @@ class BacktestEngine:
                 test_end = end_date
 
             if test_start < end_date:  # Only add window if test period is valid
-                windows.append({
-                    'train_start': current_start,
-                    'train_end': train_end,
-                    'test_start': test_start,
-                    'test_end': test_end
-                })
+                windows.append(
+                    {
+                        "train_start": current_start,
+                        "train_end": train_end,
+                        "test_start": test_start,
+                        "test_end": test_end,
+                    }
+                )
 
             current_start = test_end
 
@@ -661,8 +719,12 @@ class BacktestEngine:
 
         for i, window in enumerate(windows):
             logger.info(f"Processing window {i+1}/{len(windows)}")
-            logger.info(f"Training period: {window['train_start']} to {window['train_end']}")
-            logger.info(f"Testing period: {window['test_start']} to {window['test_end']}")
+            logger.info(
+                f"Training period: {window['train_start']} to {window['train_end']}"
+            )
+            logger.info(
+                f"Testing period: {window['test_start']} to {window['test_end']}"
+            )
 
             try:
                 # Optimize parameters on training data
@@ -670,13 +732,13 @@ class BacktestEngine:
                     strategy_func=strategy_func,
                     symbol=symbol,
                     interval=interval,
-                    start_date=window['train_start'],
-                    end_date=window['train_end'],
+                    start_date=window["train_start"],
+                    end_date=window["train_end"],
                     data_source_name=data_source_name,
                     param_grid=param_grid,
                     metric_to_optimize=metric_to_optimize,
                     leverage=leverage,
-                    indicators=indicators
+                    indicators=indicators,
                 )
 
                 logger.info(f"Best parameters found: {best_params}")
@@ -686,29 +748,31 @@ class BacktestEngine:
                     strategy_func=strategy_func,
                     symbol=symbol,
                     interval=interval,
-                    start_date=window['test_start'],
-                    end_date=window['test_end'],
+                    start_date=window["test_start"],
+                    end_date=window["test_end"],
                     data_source_name=data_source_name,
                     strategy_params=best_params,
                     leverage=leverage,
-                    indicators=indicators
+                    indicators=indicators,
                 )
 
                 # Save results
                 window_result = {
-                    'window': i + 1,
-                    'train_start': window['train_start'].strftime('%Y-%m-%d'),
-                    'train_end': window['train_end'].strftime('%Y-%m-%d'),
-                    'test_start': window['test_start'].strftime('%Y-%m-%d'),
-                    'test_end': window['test_end'].strftime('%Y-%m-%d'),
-                    'best_params': best_params,
-                    'train_metrics': train_result.metrics,
-                    'test_metrics': test_result.metrics
+                    "window": i + 1,
+                    "train_start": window["train_start"].strftime("%Y-%m-%d"),
+                    "train_end": window["train_end"].strftime("%Y-%m-%d"),
+                    "test_start": window["test_start"].strftime("%Y-%m-%d"),
+                    "test_end": window["test_end"].strftime("%Y-%m-%d"),
+                    "best_params": best_params,
+                    "train_metrics": train_result.metrics,
+                    "test_metrics": test_result.metrics,
                 }
 
                 results.append(window_result)
 
-                logger.info(f"Window {i+1} metrics - Train {metric_to_optimize}: {train_result.metrics[metric_to_optimize]:.4f}, Test {metric_to_optimize}: {test_result.metrics[metric_to_optimize]:.4f}")
+                logger.info(
+                    f"Window {i+1} metrics - Train {metric_to_optimize}: {train_result.metrics[metric_to_optimize]:.4f}, Test {metric_to_optimize}: {test_result.metrics[metric_to_optimize]:.4f}"
+                )
 
             except Exception as e:
                 logger.error(f"Error processing window {i+1}: {e}")
@@ -729,10 +793,10 @@ class BacktestEngine:
         crossover_rate: float = 0.7,
         mutation_rate: float = 0.2,
         tournament_size: int = 3,
-        metric_to_optimize: str = 'sharpe_ratio',
+        metric_to_optimize: str = "sharpe_ratio",
         leverage: float = 1.0,
         indicators: List[Any] = None,
-        random_seed: Optional[int] = None
+        random_seed: Optional[int] = None,
     ) -> Tuple[Dict[str, Any], BacktestResult]:
         """
         Optimize strategy parameters using a genetic algorithm.
@@ -770,7 +834,9 @@ class BacktestEngine:
             random.seed(random_seed)
             np.random.seed(random_seed)
 
-        logger.info(f"Starting genetic algorithm optimization with population size {population_size} and {generations} generations")
+        logger.info(
+            f"Starting genetic algorithm optimization with population size {population_size} and {generations} generations"
+        )
 
         # Helper functions for genetic algorithm
         def create_individual():
@@ -783,7 +849,11 @@ class BacktestEngine:
                 elif isinstance(param_range, tuple) and len(param_range) == 3:
                     # Continuous range (min, max, step)
                     min_val, max_val, step = param_range
-                    if isinstance(min_val, int) and isinstance(max_val, int) and isinstance(step, int):
+                    if (
+                        isinstance(min_val, int)
+                        and isinstance(max_val, int)
+                        and isinstance(step, int)
+                    ):
                         # Integer parameters
                         steps = int((max_val - min_val) / step) + 1
                         value = min_val + random.randint(0, steps - 1) * step
@@ -794,7 +864,9 @@ class BacktestEngine:
                         value = min_val + random.randint(0, steps - 1) * step
                         individual[param_name] = value
                 else:
-                    raise ValueError(f"Invalid parameter range for {param_name}: {param_range}")
+                    raise ValueError(
+                        f"Invalid parameter range for {param_name}: {param_range}"
+                    )
             return individual
 
         def evaluate_fitness(individual):
@@ -809,14 +881,14 @@ class BacktestEngine:
                     data_source_name=data_source_name,
                     strategy_params=individual,
                     leverage=leverage,
-                    indicators=indicators
+                    indicators=indicators,
                 )
 
                 # Return the metric to optimize
-                return result.metrics.get(metric_to_optimize, float('-inf')), result
+                return result.metrics.get(metric_to_optimize, float("-inf")), result
             except Exception as e:
                 logger.error(f"Error evaluating individual {individual}: {e}")
-                return float('-inf'), None
+                return float("-inf"), None
 
         def tournament_selection(population, fitnesses):
             """Select parent using tournament selection"""
@@ -825,7 +897,9 @@ class BacktestEngine:
             tournament_fitnesses = [fitnesses[i][0] for i in tournament_indices]
 
             # Return the best individual from tournament
-            best_idx = tournament_indices[tournament_fitnesses.index(max(tournament_fitnesses))]
+            best_idx = tournament_indices[
+                tournament_fitnesses.index(max(tournament_fitnesses))
+            ]
             return population[best_idx]
 
         def crossover(parent1, parent2):
@@ -855,7 +929,11 @@ class BacktestEngine:
                     elif isinstance(param_range, tuple) and len(param_range) == 3:
                         # Continuous range (min, max, step)
                         min_val, max_val, step = param_range
-                        if isinstance(min_val, int) and isinstance(max_val, int) and isinstance(step, int):
+                        if (
+                            isinstance(min_val, int)
+                            and isinstance(max_val, int)
+                            and isinstance(step, int)
+                        ):
                             # Integer parameters
                             steps = int((max_val - min_val) / step) + 1
                             value = min_val + random.randint(0, steps - 1) * step
@@ -872,7 +950,7 @@ class BacktestEngine:
 
         # Initialize tracking for best individual
         best_individual = None
-        best_fitness = float('-inf')
+        best_fitness = float("-inf")
         best_result = None
 
         # Evolve over generations
@@ -882,7 +960,9 @@ class BacktestEngine:
             # Evaluate fitness for current population
             fitness_results = []
             for i, individual in enumerate(population):
-                logger.info(f"Evaluating individual {i+1}/{population_size}: {individual}")
+                logger.info(
+                    f"Evaluating individual {i+1}/{population_size}: {individual}"
+                )
                 fitness, result = evaluate_fitness(individual)
                 fitness_results.append((fitness, result))
 
@@ -891,7 +971,9 @@ class BacktestEngine:
                     best_fitness = fitness
                     best_individual = individual
                     best_result = result
-                    logger.info(f"New best individual found: {best_individual} with {metric_to_optimize} = {best_fitness}")
+                    logger.info(
+                        f"New best individual found: {best_individual} with {metric_to_optimize} = {best_fitness}"
+                    )
 
             # Early stopping check - if last generation, break the loop
             if generation == generations - 1:
@@ -919,6 +1001,8 @@ class BacktestEngine:
             population = new_population
 
         if best_individual is None:
-            raise ValueError("No valid parameter combination found during genetic optimization")
+            raise ValueError(
+                "No valid parameter combination found during genetic optimization"
+            )
 
         return best_individual, best_result

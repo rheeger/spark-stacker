@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 # Add parent directory to path to access app modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import project components
 from app.connectors.connector_factory import ConnectorFactory
@@ -24,19 +24,23 @@ from tests.conftest import MARKET_DATA_CACHE_DIR
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Market data specifications
 EXCHANGES = ["hyperliquid", "coinbase"]  # List of exchange connectors to use
 SYMBOLS = {
-    "hyperliquid": ["BTC-USD", "ETH-USD", "SOL-USD"],  # Adjust based on available markets
-    "coinbase": ["BTC-USD", "ETH-USD", "SOL-USD"]  # Adjust based on available markets
+    "hyperliquid": [
+        "BTC-USD",
+        "ETH-USD",
+        "SOL-USD",
+    ],  # Adjust based on available markets
+    "coinbase": ["BTC-USD", "ETH-USD", "SOL-USD"],  # Adjust based on available markets
 }
 TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"]
 DATA_DAYS = 60  # Number of days of historical data to fetch
+
 
 def generate_synthetic_data(symbol, timeframe, days=DATA_DAYS):
     """
@@ -67,13 +71,13 @@ def generate_synthetic_data(symbol, timeframe, days=DATA_DAYS):
         volatility = 50
 
     # Determine time interval based on timeframe
-    if timeframe.endswith('m'):
+    if timeframe.endswith("m"):
         minutes = int(timeframe[:-1])
         freq = f"{minutes}min"
-    elif timeframe.endswith('h'):
+    elif timeframe.endswith("h"):
         hours = int(timeframe[:-1])
         freq = f"{hours}H"
-    elif timeframe.endswith('d'):
+    elif timeframe.endswith("d"):
         days_tf = int(timeframe[:-1])
         freq = f"{days_tf}D"
     else:
@@ -97,28 +101,31 @@ def generate_synthetic_data(symbol, timeframe, days=DATA_DAYS):
 
     # Generate OHLCV data
     data = {
-        'timestamp': timestamps,
-        'symbol': symbol,
-        'open': close_prices * (1 + np.random.normal(0, 0.005, periods)),
-        'high': close_prices * (1 + np.random.uniform(0.001, 0.02, periods)),
-        'low': close_prices * (1 - np.random.uniform(0.001, 0.02, periods)),
-        'close': close_prices,
-        'volume': np.random.normal(base_price * 100, base_price * 20, periods)
+        "timestamp": timestamps,
+        "symbol": symbol,
+        "open": close_prices * (1 + np.random.normal(0, 0.005, periods)),
+        "high": close_prices * (1 + np.random.uniform(0.001, 0.02, periods)),
+        "low": close_prices * (1 - np.random.uniform(0.001, 0.02, periods)),
+        "close": close_prices,
+        "volume": np.random.normal(base_price * 100, base_price * 20, periods),
     }
 
     # Ensure high is always the highest and low is always the lowest
     df = pd.DataFrame(data)
     for i in range(len(df)):
-        df.loc[i, 'high'] = max(df.loc[i, 'open'], df.loc[i, 'close'], df.loc[i, 'high'])
-        df.loc[i, 'low'] = min(df.loc[i, 'open'], df.loc[i, 'close'], df.loc[i, 'low'])
+        df.loc[i, "high"] = max(
+            df.loc[i, "open"], df.loc[i, "close"], df.loc[i, "high"]
+        )
+        df.loc[i, "low"] = min(df.loc[i, "open"], df.loc[i, "close"], df.loc[i, "low"])
 
     # Ensure volume is positive
-    df['volume'] = np.abs(df['volume'])
+    df["volume"] = np.abs(df["volume"])
 
     # Set timestamp as index
-    df.set_index('timestamp', inplace=True)
+    df.set_index("timestamp", inplace=True)
 
     return df
+
 
 def fetch_and_cache_market_data(exchange_name, symbol, timeframe, days=DATA_DAYS):
     """
@@ -134,8 +141,11 @@ def fetch_and_cache_market_data(exchange_name, symbol, timeframe, days=DATA_DAYS
         True if successful, False otherwise
     """
     # Generate cache filename
-    symbol_normalized = symbol.replace('/', '_').replace('-', '_')
-    cache_file = Path(MARKET_DATA_CACHE_DIR) / f"{exchange_name}_{symbol_normalized}_{timeframe}.csv"
+    symbol_normalized = symbol.replace("/", "_").replace("-", "_")
+    cache_file = (
+        Path(MARKET_DATA_CACHE_DIR)
+        / f"{exchange_name}_{symbol_normalized}_{timeframe}.csv"
+    )
 
     try:
         # Create connector instance
@@ -147,19 +157,24 @@ def fetch_and_cache_market_data(exchange_name, symbol, timeframe, days=DATA_DAYS
 
         # Fetch data from connector
         logger.info(f"Fetching {symbol} {timeframe} data from {exchange_name}")
-        ohlcv_data = connector.get_historical_candles(symbol, timeframe, start_time, end_time)
+        ohlcv_data = connector.get_historical_candles(
+            symbol, timeframe, start_time, end_time
+        )
 
         # Convert to DataFrame if needed
         if not isinstance(ohlcv_data, pd.DataFrame):
-            df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
+            df = pd.DataFrame(
+                ohlcv_data,
+                columns=["timestamp", "open", "high", "low", "close", "volume"],
+            )
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            df.set_index("timestamp", inplace=True)
         else:
             df = ohlcv_data
 
         # Add symbol column if not present
-        if 'symbol' not in df.columns:
-            df['symbol'] = symbol
+        if "symbol" not in df.columns:
+            df["symbol"] = symbol
 
         # Cache the data
         logger.info(f"Caching data to {cache_file}")
@@ -171,7 +186,9 @@ def fetch_and_cache_market_data(exchange_name, symbol, timeframe, days=DATA_DAYS
         logger.error(f"Error fetching {exchange_name} {symbol} {timeframe} data: {e}")
 
         # Generate synthetic data instead
-        logger.warning(f"Generating synthetic data for {exchange_name} {symbol} {timeframe}")
+        logger.warning(
+            f"Generating synthetic data for {exchange_name} {symbol} {timeframe}"
+        )
         df = generate_synthetic_data(symbol, timeframe, days)
 
         # Cache the synthetic data
@@ -181,9 +198,12 @@ def fetch_and_cache_market_data(exchange_name, symbol, timeframe, days=DATA_DAYS
         # Mark as successful since we've generated usable data
         return True
 
+
 def refresh_market_data_cache():
     """Refresh the market data cache for all exchanges, symbols, and timeframes."""
-    logger.info(f"Starting market data refresh. Cache directory: {MARKET_DATA_CACHE_DIR}")
+    logger.info(
+        f"Starting market data refresh. Cache directory: {MARKET_DATA_CACHE_DIR}"
+    )
 
     start_time = datetime.now()
     failure_count = 0
@@ -204,22 +224,32 @@ def refresh_market_data_cache():
                         logger.info(f"Fetching {exchange} {symbol} {timeframe} data...")
 
                         # Fetch and cache data
-                        if fetch_and_cache_market_data(exchange, symbol, timeframe, DATA_DAYS):
-                            logger.info(f"✓ Successfully cached data for {exchange} {symbol} {timeframe}")
+                        if fetch_and_cache_market_data(
+                            exchange, symbol, timeframe, DATA_DAYS
+                        ):
+                            logger.info(
+                                f"✓ Successfully cached data for {exchange} {symbol} {timeframe}"
+                            )
                             success_count += 1
                         else:
-                            logger.warning(f"✗ Retrieved empty dataset for {exchange} {symbol} {timeframe}")
+                            logger.warning(
+                                f"✗ Retrieved empty dataset for {exchange} {symbol} {timeframe}"
+                            )
                             failure_count += 1
 
                     except Exception as e:
-                        logger.error(f"✗ Error fetching {exchange} {symbol} {timeframe}: {e}")
+                        logger.error(
+                            f"✗ Error fetching {exchange} {symbol} {timeframe}: {e}"
+                        )
                         failure_count += 1
 
         except Exception as e:
             logger.error(f"✗ Failed to create connector for {exchange}: {e}")
 
             # Generate synthetic data for all symbols/timeframes for this exchange
-            logger.warning(f"Generating synthetic data for all {exchange} symbols due to connector error")
+            logger.warning(
+                f"Generating synthetic data for all {exchange} symbols due to connector error"
+            )
             for symbol in SYMBOLS.get(exchange, []):
                 for timeframe in TIMEFRAMES:
                     try:
@@ -227,15 +257,20 @@ def refresh_market_data_cache():
                         df = generate_synthetic_data(symbol, timeframe, DATA_DAYS)
 
                         # Generate cache filename
-                        symbol_normalized = symbol.replace('/', '_').replace('-', '_')
-                        cache_file = Path(MARKET_DATA_CACHE_DIR) / f"{exchange}_{symbol_normalized}_{timeframe}.csv"
+                        symbol_normalized = symbol.replace("/", "_").replace("-", "_")
+                        cache_file = (
+                            Path(MARKET_DATA_CACHE_DIR)
+                            / f"{exchange}_{symbol_normalized}_{timeframe}.csv"
+                        )
 
                         # Cache the data
                         logger.info(f"Caching synthetic data to {cache_file}")
                         df.to_csv(cache_file)
                         success_count += 1
                     except Exception as synthetic_err:
-                        logger.error(f"✗ Error generating synthetic data: {synthetic_err}")
+                        logger.error(
+                            f"✗ Error generating synthetic data: {synthetic_err}"
+                        )
                         failure_count += 1
 
     elapsed_time = (datetime.now() - start_time).total_seconds()
@@ -243,6 +278,7 @@ def refresh_market_data_cache():
     logger.info(f"Summary: {success_count} successful, {failure_count} failed")
 
     return success_count, failure_count
+
 
 def ensure_required_data_exists():
     """
@@ -256,8 +292,11 @@ def ensure_required_data_exists():
     ]
 
     for exchange, symbol, timeframe in essential_files:
-        symbol_normalized = symbol.replace('/', '_').replace('-', '_')
-        cache_file = Path(MARKET_DATA_CACHE_DIR) / f"{exchange}_{symbol_normalized}_{timeframe}.csv"
+        symbol_normalized = symbol.replace("/", "_").replace("-", "_")
+        cache_file = (
+            Path(MARKET_DATA_CACHE_DIR)
+            / f"{exchange}_{symbol_normalized}_{timeframe}.csv"
+        )
 
         if not cache_file.exists():
             logger.info(f"Essential file missing: {cache_file}")
@@ -266,12 +305,15 @@ def ensure_required_data_exists():
                     # If API fetch fails, create synthetic data
                     df = generate_synthetic_data(symbol, timeframe)
                     df.to_csv(cache_file)
-                    logger.info(f"Created synthetic data for essential file: {cache_file}")
+                    logger.info(
+                        f"Created synthetic data for essential file: {cache_file}"
+                    )
             except Exception as e:
                 logger.error(f"Failed to create essential data file {cache_file}: {e}")
                 return False
 
     return True
+
 
 if __name__ == "__main__":
     # Create cache directory if it doesn't exist
@@ -293,7 +335,9 @@ if __name__ == "__main__":
             logger.info("✅ SUCCESS: All market data refreshed successfully")
             sys.exit(0)
         elif success > 0 and essential_ok:
-            logger.warning("⚠️ PARTIAL SUCCESS: Some market data refreshed, essential data is available")
+            logger.warning(
+                "⚠️ PARTIAL SUCCESS: Some market data refreshed, essential data is available"
+            )
             sys.exit(0)  # Still exit with success if essential data is available
         else:
             logger.error("❌ FAILURE: No market data was refreshed")

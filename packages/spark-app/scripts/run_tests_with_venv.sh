@@ -6,10 +6,10 @@ set -e # Exit immediately if a command exits with non-zero status
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Get the root directory of the project
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get the package root directory
+PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-cd "$ROOT_DIR"
+cd "$PACKAGE_DIR"
 
 # Check if virtual environment exists, create if it doesn't
 if [ ! -d ".venv" ]; then
@@ -37,5 +37,5 @@ if ! python -c "import numpy" &>/dev/null; then
     exit 1
 fi
 
-# Run the test system with given arguments
+# Run tests from the package directory
 python "$SCRIPT_DIR/test_system.py" "$@"

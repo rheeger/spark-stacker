@@ -4,8 +4,7 @@ from typing import Any, Dict, Literal, Optional
 import numpy as np
 import pandas as pd
 
-from app.indicators.base_indicator import (BaseIndicator, Signal,
-                                           SignalDirection)
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 
@@ -88,21 +87,17 @@ class MovingAverageIndicator(BaseIndicator):
         df["ma_ratio"] = df["fast_ma"] / df["slow_ma"]
 
         # Calculate crossovers
-        df["ma_crosses_above"] = (
-            (df["ma_diff"] > 0) & (df["ma_diff"].shift(1) <= 0)
-        )
-        df["ma_crosses_below"] = (
-            (df["ma_diff"] < 0) & (df["ma_diff"].shift(1) >= 0)
-        )
+        df["ma_crosses_above"] = (df["ma_diff"] > 0) & (df["ma_diff"].shift(1) <= 0)
+        df["ma_crosses_below"] = (df["ma_diff"] < 0) & (df["ma_diff"].shift(1) >= 0)
 
         # Calculate price relative to MAs
         df["price_above_slow_ma"] = df["close"] > df["slow_ma"]
         df["price_below_slow_ma"] = df["close"] < df["slow_ma"]
-        df["price_crosses_above_slow_ma"] = (
-            (df["close"] > df["slow_ma"]) & (df["close"].shift(1) <= df["slow_ma"].shift(1))
+        df["price_crosses_above_slow_ma"] = (df["close"] > df["slow_ma"]) & (
+            df["close"].shift(1) <= df["slow_ma"].shift(1)
         )
-        df["price_crosses_below_slow_ma"] = (
-            (df["close"] < df["slow_ma"]) & (df["close"].shift(1) >= df["slow_ma"].shift(1))
+        df["price_crosses_below_slow_ma"] = (df["close"] < df["slow_ma"]) & (
+            df["close"].shift(1) >= df["slow_ma"].shift(1)
         )
 
         return df
@@ -128,7 +123,9 @@ class MovingAverageIndicator(BaseIndicator):
         required_cols = ["fast_ma", "slow_ma", "ma_diff", "ma_ratio"]
         for col in required_cols:
             if col not in data.columns:
-                logger.warning(f"Required column {col} missing in data, cannot generate signal")
+                logger.warning(
+                    f"Required column {col} missing in data, cannot generate signal"
+                )
                 return None
 
         if len(data) < 2:

@@ -13,9 +13,19 @@ echo "Processing config file: $CONFIG_FILE"
 echo "Config file content before substitution:"
 cat "$CONFIG_FILE"
 
-# Use envsubst to replace environment variables in the config file
-# Create a temporary file that we can write to
-envsubst <"$CONFIG_FILE" >"$PROCESSED_CONFIG"
+# Copy the original config file to the processed location
+cp "$CONFIG_FILE" "$PROCESSED_CONFIG"
+
+# Replace environment variables in the config file
+for var in $(env | cut -d= -f1); do
+  # Skip some common env vars that we don't want to replace
+  if [[ "$var" =~ ^(PWD|HOME|PATH|SHELL|TERM|USER|HOSTNAME)$ ]]; then
+    continue
+  fi
+  # Use sed to replace ${VAR} with the actual value
+  val=$(eval echo \$$var)
+  sed -i "s|\${$var}|$val|g" "$PROCESSED_CONFIG"
+done
 
 echo "Config file processed successfully to $PROCESSED_CONFIG"
 

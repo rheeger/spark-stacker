@@ -57,18 +57,24 @@ def test_get_optimal_limit_price_buy_order(connector):
 
         # For a BUY order, we should be using the ask side
         # Instead of checking for an exact price, we'll verify the price is reasonable
-        assert result["price"] > 1910.0  # Should be higher than the best ask that covers our amount
+        assert (
+            result["price"] > 1910.0
+        )  # Should be higher than the best ask that covers our amount
         assert result["price"] < 1925.0  # Should not be too much higher
         assert result["enough_liquidity"] == True
 
         # Check the batches - should have batches for each price level needed
         # Order should span first price level (1905) and part of second (1910)
-        assert len(result["batches"]) >= 0  # May have batches or not depending on implementation
+        assert (
+            len(result["batches"]) >= 0
+        )  # May have batches or not depending on implementation
 
         # If there are batches, check they're reasonable
         if len(result["batches"]) > 0:
             total_batch_amount = sum(batch["size"] for batch in result["batches"])
-            assert abs(total_batch_amount - 1.5) < 0.01  # Total batch size should match order size
+            assert (
+                abs(total_batch_amount - 1.5) < 0.01
+            )  # Total batch size should match order size
 
         assert result["slippage"] < 1.0  # Small order should have minimal slippage
 
@@ -98,7 +104,9 @@ def test_get_optimal_limit_price_sell_order(connector):
         # If there are batches, check they're reasonable
         if len(result["batches"]) > 0:
             total_batch_amount = sum(batch["size"] for batch in result["batches"])
-            assert abs(total_batch_amount - 1.5) < 0.01  # Total batch size should match order size
+            assert (
+                abs(total_batch_amount - 1.5) < 0.01
+            )  # Total batch size should match order size
 
         assert result["slippage"] < 1.0  # Small order should have minimal slippage
 
@@ -122,12 +130,16 @@ def test_get_optimal_limit_price_large_buy_order(connector):
         # Check price is in a reasonable range rather than exact match
         assert result["price"] > 1915.0  # Should be higher than the highest ask needed
         assert result["price"] < 1930.0  # But not too high
-        assert result["enough_liquidity"] == True  # We have enough in the orderbook to fill
+        assert (
+            result["enough_liquidity"] == True
+        )  # We have enough in the orderbook to fill
         assert result["slippage"] > 0.001  # Should have some slippage, even if minimal
 
         # We should have calculated the total cost approximately
         expected_total_cost = (1905.0 * 1.0) + (1910.0 * 2.0) + (1915.0 * 2.0)
-        assert abs(result["total_cost"] - expected_total_cost) < expected_total_cost * 0.05  # Within 5%
+        assert (
+            abs(result["total_cost"] - expected_total_cost) < expected_total_cost * 0.05
+        )  # Within 5%
 
 
 def test_get_optimal_limit_price_insufficient_liquidity(connector):
