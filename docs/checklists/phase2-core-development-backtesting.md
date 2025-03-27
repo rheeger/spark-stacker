@@ -28,7 +28,8 @@
   - ✅ Added account information endpoints
   - 🔲 Trading functionality needs completion (order execution, position management)
   - 🔲 Hedging capabilities need refinement
-- ✅ Created ConnectorFactory for dynamic connector instantiation (app/connectors/connector_factory.py)
+- ✅ Created ConnectorFactory for dynamic connector instantiation
+  (app/connectors/connector_factory.py)
   - ✅ Implemented registration mechanism for new connectors
   - ✅ Added configuration-based connector creation
   - ✅ Built environment variable substitution for secure credentials
@@ -49,7 +50,19 @@
   - ✅ Implemented registration mechanism
   - ✅ Added configuration-based indicator instantiation
   - ✅ Built parameter validation and type checking
-- 🔲 Additional indicators not yet implemented (MACD, Bollinger Bands, etc.)
+- ✅ Implemented additional indicators
+  - ✅ MACD indicator (app/indicators/macd_indicator.py)
+    - ✅ Configurable fast, slow, and signal periods
+    - ✅ Signal generation for crossovers and zero-line crossings
+    - ✅ Confidence calculation based on histogram values
+  - ✅ Bollinger Bands indicator (app/indicators/bollinger_bands_indicator.py)
+    - ✅ Configurable period and standard deviation bands
+    - ✅ Price-band crossover signals
+    - ✅ Mean reversion signal detection
+  - ✅ Moving Average indicator (app/indicators/moving_average_indicator.py)
+    - ✅ Support for both SMA and EMA types
+    - ✅ Golden/death cross signal generation
+    - ✅ Price-MA crossover signals
 
 ## Order Execution
 
@@ -85,6 +98,58 @@
   - ✅ Implemented liquidation prevention mechanisms
   - ✅ Created automatic deleveraging when approaching limits
 
+## Unit Testing Implementation
+
+- ✅ Implemented BaseConnector tests (tests/unit/test_base_connector.py)
+  - ✅ Verified interface method definitions
+  - ✅ Tested error handling and retry logic
+  - ✅ Validated authentication flow
+  - ✅ Confirmed logging functionality
+- ✅ Created Indicator tests
+  - ✅ RSI indicator tests (tests/unit/test_rsi_indicator.py)
+    - ✅ Tested initialization with default and custom parameters
+    - ✅ Verified calculation with sample data produces correct RSI values
+    - ✅ Validated signal generation for oversold/overbought conditions
+    - ✅ Tested error handling and edge cases
+  - ✅ MACD indicator tests (tests/unit/test_macd_indicator.py)
+    - ✅ Verified initialization and parameter configuration
+    - ✅ Tested MACD line, signal line, and histogram calculation
+    - ✅ Validated signal generation for crossovers
+  - ✅ Bollinger Bands tests (tests/unit/test_bollinger_bands_indicator.py)
+    - ✅ Tested band calculation with different standard deviation settings
+    - ✅ Verified signal generation for price-band interactions
+    - ✅ Validated mean reversion signal detection
+- ✅ Implemented IndicatorFactory tests (tests/unit/test_indicator_factory.py)
+  - ✅ Tested indicator registration mechanism
+  - ✅ Verified dynamic indicator instantiation
+  - ✅ Validated parameter passing to indicators
+- ✅ Created ConnectorFactory tests (tests/unit/test_connector_factory.py)
+  - ✅ Tested connector registration
+  - ✅ Verified connector instantiation from configuration
+  - ✅ Validated environment variable substitution for credentials
+- ✅ Implemented RiskManager tests (tests/unit/test_risk_manager.py)
+  - ✅ Tested position sizing calculations
+  - ✅ Verified leverage limit enforcement
+  - ✅ Validated hedge position calculations
+  - ✅ Tested drawdown monitoring logic
+- ✅ Created TradingEngine tests (tests/unit/test_trading_engine.py)
+  - ✅ Tested signal processing
+  - ✅ Verified order execution flow
+  - ✅ Validated position tracking
+  - ✅ Confirmed error handling during trading operations
+- ✅ Implemented Coinbase connector tests (tests/unit/test_coinbase_connector.py)
+  - ✅ Tested authentication and API interaction
+  - ✅ Verified market data retrieval
+  - ✅ Validated account information methods
+- ✅ Created optimal limit price tests (tests/unit/test_optimal_limit_price.py)
+  - ✅ Tested price calculation based on order book depth
+  - ✅ Verified slippage protection logic
+- 🔲 WebhookServer tests (tests/unit/test_webhook_server.py) need expansion
+  - ✅ Basic server initialization tests
+  - 🔲 Missing comprehensive endpoint testing
+  - 🔲 Missing payload validation tests
+  - 🔲 Missing authentication and security tests
+
 ## Backtesting Framework (CRITICAL PATH)
 
 - 🔲 Historical data retrieval and storage not implemented
@@ -108,15 +173,59 @@
   - 🔲 Genetic algorithm optimization
   - 🔲 Walk-forward analysis
 
+## Backtesting Test Requirements
+
+- 🔲 Unit tests for historical data retrieval
+  - 🔲 Test data source connections
+  - 🔲 Verify data cleaning and normalization
+  - 🔲 Validate storage and retrieval operations
+- 🔲 Tests for indicator performance evaluation
+  - 🔲 Verify historical signal generation
+  - 🔲 Test metric calculation accuracy
+  - 🔲 Validate parameter optimization logic
+- 🔲 Trade simulation tests
+  - 🔲 Test fee calculation accuracy
+  - 🔲 Validate slippage modeling
+  - 🔲 Verify order matching logic
+- 🔲 Performance metric tests
+  - 🔲 Test return calculation accuracy
+  - 🔲 Verify risk metric implementations
+  - 🔲 Validate optimization algorithms
+
 ## Current Implementation Status
 
-Phase 2 is approximately 75% complete. The core components for live trading functionality are operational, with robust exchange connectivity (particularly for Hyperliquid), basic indicator functionality (RSI), and comprehensive risk management.
+Phase 2 is approximately 80% complete. The core components for live trading functionality are
+operational, with robust exchange connectivity (particularly for Hyperliquid), comprehensive
+technical indicators (RSI, MACD, Bollinger Bands, Moving Averages), and comprehensive risk
+management.
 
-The Coinbase connector is partially implemented, focusing on data retrieval capabilities, but lacks full trading functionality. One technical indicator (RSI) is fully implemented with a well-designed framework that makes adding additional indicators straightforward.
+The Coinbase connector is partially implemented, focusing on data retrieval capabilities, but lacks
+full trading functionality. Multiple technical indicators (RSI, MACD, Bollinger Bands, Moving
+Averages) are fully implemented with a well-designed framework that makes adding additional
+indicators straightforward.
 
-The risk management system is fully operational, with thorough implementations of position sizing, leverage control, and hedging mechanics. The hedging functionality is a key differentiator, allowing for sophisticated capital protection while maintaining significant upside exposure.
+The risk management system is fully operational, with thorough implementations of position sizing,
+leverage control, and hedging mechanics. The hedging functionality is a key differentiator, allowing
+for sophisticated capital protection while maintaining significant upside exposure.
 
-The main gap is the backtesting framework, which is entirely unimplemented. This prevents proper historical validation of trading strategies and parameter optimization before live deployment.
+The main gap is the backtesting framework, which is entirely unimplemented. This prevents proper
+historical validation of trading strategies and parameter optimization before live deployment.
+
+## Unit Testing Status
+
+Unit testing for core components is largely complete and thorough, with good coverage of:
+
+- Exchange connectors and factory
+- Indicators and indicator factory
+- Risk manager
+- Trading engine
+
+All implemented indicators have comprehensive tests validating their calculations and signal
+generation logic. The trading engine and risk manager tests verify their core functionality.
+However, some aspects of the webhook server need more thorough testing coverage.
+
+Additionally, no tests have been implemented for the backtesting framework as it hasn't been
+developed yet.
 
 ## Next Steps (Prioritized)
 
@@ -127,7 +236,7 @@ The main gap is the backtesting framework, which is entirely unimplemented. This
 2. Finish Coinbase connector implementation
    - Complete trading functionality
    - Implement hedging capabilities
-3. Add additional technical indicators
-   - MACD
-   - Bollinger Bands
-   - Moving Averages
+3. Add comprehensive tests for backtesting components as they are developed
+   - Create tests for historical data processing
+   - Implement validation tests for performance metrics
+   - Add tests for simulation accuracy
