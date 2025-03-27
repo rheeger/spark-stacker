@@ -1,6 +1,6 @@
 # Spark Stacker
 
-Spark Stacker is an advanced on-chain perpetual trading system with integrated hedging capabilities. It's designed to interact with multiple exchanges, implement technical indicators, and execute trading strategies with risk management.
+Spark Stacker is an advanced on-chain perpetual trading system with integrated hedging capabilities, organized as an NX monorepo. It's designed to interact with multiple exchanges, implement technical indicators, and execute trading strategies with risk management.
 
 ## Features
 
@@ -14,6 +14,39 @@ Spark Stacker is an advanced on-chain perpetual trading system with integrated h
 - **Monitoring**: Grafana dashboards for real-time system and trading performance monitoring
 - **Control Interface**: Web-based UI for managing strategies and positions
 
+## Project Structure
+
+The project is organized as an NX monorepo with multiple packages:
+
+```tree
+spark-stacker/
+├── packages/
+│   ├── spark-app/         # Python trading application
+│   │   ├── app/           # Main application code
+│   │   ├── docker/        # Docker configuration files
+│   │   ├── scripts/       # Utility scripts
+│   │   └── tests/         # Test files
+│   ├── monitoring/        # Monitoring and dashboard application
+│   │   ├── apis/          # API endpoints
+│   │   ├── dashboards/    # Dashboard components
+│   │   ├── docker/        # Docker setup for monitoring stack
+│   │   ├── exporters/     # Custom Prometheus exporters
+│   │   └── frontend/      # Web UI
+│   └── shared/            # Shared configuration and types
+│       ├── docs/          # Project documentation
+│       ├── examples/      # Example scripts and implementations
+│       ├── .env           # Environment variables
+│       ├── .env.example   # Example environment file
+│       ├── config.json    # Application configuration
+│       ├── .prettierrc    # Prettier configuration
+│       └── .markdownlint.json # Markdown linting rules
+├── node_modules/          # Node.js dependencies (managed by Yarn)
+├── nx.json                # NX configuration
+├── package.json           # Root package definition
+├── tsconfig.json          # TypeScript configuration
+└── yarn.lock              # Yarn lock file
+```
+
 ## Architecture
 
 Spark Stacker is built with a modular architecture:
@@ -25,19 +58,24 @@ Spark Stacker is built with a modular architecture:
 - **Webhook Server**: Receives external signals via HTTP
 - **Monitoring System**: Grafana dashboards for performance tracking and analysis
 
-## Setup
-
-### Prerequisites
+## Prerequisites
 
 - Python 3.11 or higher
-- Docker (optional, for containerized deployment)
-- Node.js 18+ (for the monitoring and control interface)
+- Node.js 18.x or higher
+- Yarn 1.22.x or higher
+- Docker and Docker Compose (for containerized deployment)
+
+## Setup and Installation
 
 ### Configuration
 
-1. Copy `config.json` to create your own configuration file
-2. Fill in your exchange credentials and strategy parameters
+All shared configuration files are located in the `packages/shared` directory:
+
+1. Copy `.env.example` to `.env` and set your environment variables
+2. Configure your trading settings in `config.json`
 3. Set `dry_run` to `true` for testing without executing trades
+
+Example configuration:
 
 ```json
 {
@@ -87,34 +125,67 @@ Spark Stacker is built with a modular architecture:
 }
 ```
 
-### Installation
-
-#### Local Installation
+### Local Development
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/spark-stacker.git
 cd spark-stacker
 
-# Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Install Node dependencies
+yarn install
 
-# Install dependencies
-pip install -r requirements.txt
+# Set up Python virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r packages/spark-app/requirements.txt
 
-# Run the application
+# Run the trading application
+cd packages/spark-app
 python app/main.py
 ```
 
-#### Docker Installation
+### Docker Deployment
+
+Docker files for the trading application are located in `packages/spark-app/docker/`:
 
 ```bash
-# Build the Docker image
-docker build -t spark-stacker .
+# From the root directory
+docker-compose -f packages/spark-app/docker/docker-compose.yml up
+```
 
-# Run the container
-docker run -p 8080:8080 --name spark-stacker -v $(pwd)/config.json:/app/config.json spark-stacker
+## Development Workflow
+
+### Working with NX Monorepo
+
+```bash
+# Build all packages
+yarn build
+
+# Run tests
+yarn test
+
+# Serve a specific application
+yarn nx serve monitoring
+```
+
+### Running the Trading Application
+
+```bash
+# From the root directory
+cd packages/spark-app
+python app/main.py
+```
+
+### Starting the Monitoring Stack
+
+```bash
+# From the root directory
+cd packages/monitoring
+make start-monitoring
+
+# Access Grafana at http://localhost:3000
+# Default credentials: admin/admin
 ```
 
 ## Monitoring & Control Interface
@@ -129,18 +200,6 @@ Spark Stacker includes a comprehensive monitoring and control system based on Gr
 - **Performance Analysis**: Track historical performance with detailed metrics
 - **Alerting**: Receive notifications for critical events (liquidation risks, errors, etc.)
 
-### Monitoring Setup
-
-```bash
-# Start the monitoring stack
-cd packages/monitoring
-docker-compose up -d
-
-# Access the Grafana interface
-# Default credentials: admin/admin
-open http://localhost:3000
-```
-
 ### Available Dashboards
 
 - **System Health**: Resource utilization, container status, and application health
@@ -148,19 +207,27 @@ open http://localhost:3000
 - **Exchange Integration**: API call rates, order execution metrics, and connection status
 - **Risk Management**: Margin utilization, liquidation risks, and position sizing metrics
 
-For more information, see the [Grafana Monitoring System](docs/grafana-monitoring-plan.md) documentation.
+## Metrics
 
-## Adding New Components
+The application exposes Prometheus metrics on port 8000. The following metrics are available:
+
+- `spark_stacker_uptime_seconds`: Application uptime
+- `spark_stacker_trades_total`: Trade count
+- `spark_stacker_active_positions`: Current positions
+- `spark_stacker_api_requests_total`: API calls
+- And more...
+
+## Extending the Platform
 
 ### Adding a New Indicator
 
-1. Create a new file in `app/indicators/` directory
+1. Create a new file in `packages/spark-app/app/indicators/` directory
 2. Implement your indicator by extending the `BaseIndicator` class
 3. Register your indicator in the `IndicatorFactory`
 
 ### Adding a New Exchange Connector
 
-1. Create a new file in `app/connectors/` directory
+1. Create a new file in `packages/spark-app/app/connectors/` directory
 2. Implement the connector by extending the `BaseConnector` class
 3. Register your connector in the `ConnectorFactory`
 
@@ -170,9 +237,16 @@ For more information, see the [Grafana Monitoring System](docs/grafana-monitorin
 2. Export the dashboard to JSON
 3. Save the JSON file in `packages/monitoring/dashboards/`
 
+## Documentation
+
+For detailed documentation on each package, see the README.md file in each package directory:
+
+- [Trading Application Documentation](./packages/spark-app/README.md)
+- [Monitoring System Documentation](./packages/monitoring/README.md)
+
 ## Development Roadmap
 
-See [ROADMAP.md](docs/roadmap.md) for the project development roadmap and progress tracking.
+See [ROADMAP.md](packages/shared/docs/roadmap.md) for the project development roadmap and progress tracking.
 
 ## Contributing
 

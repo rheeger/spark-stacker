@@ -1,0 +1,21 @@
+{
+  "name": "@spark-stacker/monitoring",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monitoring and control interface for Spark Stacker",
+  "scripts": {
+    "build": "nx build",
+    "test": "nx test",
+    "lint": "nx lint",
+    "start": "nx serve"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}

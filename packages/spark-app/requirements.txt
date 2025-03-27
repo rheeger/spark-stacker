@@ -1,0 +1,48 @@
+# Core dependencies
+pandas
+numpy
+flask
+waitress
+
+# Exchange interaction
+requests
+websocket-client
+eth-account
+web3
+
+# For hyperliquid connector
+hyperliquid-python-sdk
+
+# For coinbase connector
+coinbase-advanced-py
+
+# Utilities
+python-dotenv
+pydantic
+PyYAML
+
+# Technical analysis
+# ta-lib is not included here as it requires separate binary installation
+# Instead, we use pandas-ta which is a pure Python implementation
+pandas-ta
+
+# Visualization and monitoring (optional)
+matplotlib
+seaborn
+prometheus-client  # For metrics collection and exposure
+
+# For progress bars in CLI
+tqdm
+yaspin
+
+# Testing dependencies
+pytest
+pytest-mock
+pytest-cov
+coverage
+
+# Development tools
+watchdog  # For file watching
+black     # Code formatting
+pylint    # Linting
+mypy      # Type checking

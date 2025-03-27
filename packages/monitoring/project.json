@@ -1,0 +1,82 @@
+{
+  "name": "monitoring",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/monitoring",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "@nx/webpack:webpack",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/packages/monitoring",
+        "index": "packages/monitoring/frontend/index.html",
+        "main": "packages/monitoring/frontend/main.tsx",
+        "polyfills": "packages/monitoring/frontend/polyfills.ts",
+        "tsConfig": "packages/monitoring/tsconfig.app.json",
+        "assets": [
+          "packages/monitoring/frontend/favicon.ico",
+          "packages/monitoring/frontend/assets"
+        ],
+        "styles": ["packages/monitoring/frontend/styles.css"],
+        "scripts": [],
+        "webpackConfig": "packages/monitoring/webpack.config.js"
+      },
+      "configurations": {
+        "development": {
+          "extractLicenses": false,
+          "optimization": false,
+          "sourceMap": true,
+          "vendorChunk": true
+        },
+        "production": {
+          "fileReplacements": [
+            {
+              "replace": "packages/monitoring/frontend/environments/environment.ts",
+              "with": "packages/monitoring/frontend/environments/environment.prod.ts"
+            }
+          ],
+          "optimization": true,
+          "outputHashing": "all",
+          "sourceMap": false,
+          "namedChunks": false,
+          "extractLicenses": true,
+          "vendorChunk": false
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/webpack:dev-server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "monitoring:build",
+        "hmr": true
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "monitoring:build:development"
+        },
+        "production": {
+          "buildTarget": "monitoring:build:production",
+          "hmr": false
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/linter:eslint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["packages/monitoring/**/*.{ts,tsx,js,jsx}"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/packages/monitoring"],
+      "options": {
+        "jestConfig": "packages/monitoring/jest.config.ts",
+        "passWithNoTests": true
+      }
+    }
+  },
+  "tags": []
+}

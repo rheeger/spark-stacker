@@ -1,0 +1,11 @@
+{
+  "name": "@spark-stacker/spark-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trading application for crypto markets",
+  "main": "app/main.py",
+  "scripts": {
+    "start": "python app/main.py",
+    "test": "pytest"
+  }
+}

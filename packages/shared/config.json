@@ -1,0 +1,64 @@
+{
+  "log_level": "DEBUG",
+  "logging": {
+    "log_to_file": true,
+    "enable_console": true,
+    "connector_log_level": "INFO",
+    "show_market_details": false,
+    "show_zero_balances": false
+  },
+  "webhook_enabled": true,
+  "webhook_port": 8000,
+  "webhook_host": "127.0.0.1",
+  "max_parallel_trades": 5,
+  "polling_interval": 30,
+  "dry_run": true,
+  "exchanges": [
+    {
+      "name": "hyperliquid",
+      "exchange_type": "hyperliquid",
+      "wallet_address": "${WALLET_ADDRESS}",
+      "private_key": "${PRIVATE_KEY}",
+      "testnet": "${HYPERLIQUID_TESTNET}",
+      "enabled": true,
+      "use_as_main": true,
+      "use_as_hedge": true
+    },
+    {
+      "name": "coinbase",
+      "exchange_type": "coinbase",
+      "api_key": "${COINBASE_API_KEY}",
+      "api_secret": "${COINBASE_API_SECRET}",
+      "use_sandbox": "${COINBASE_USE_SANDBOX}",
+      "enabled": true,
+      "use_as_main": false,
+      "use_as_hedge": false
+    }
+  ],
+  "strategies": [
+    {
+      "name": "rsi_eth_strategy",
+      "market": "ETH",
+      "enabled": false,
+      "main_leverage": 2.0,
+      "hedge_leverage": 1.0,
+      "hedge_ratio": 0.2,
+      "stop_loss_pct": 5.0,
+      "take_profit_pct": 10.0,
+      "max_position_size": 50.0
+    }
+  ],
+  "indicators": [
+    {
+      "name": "eth_rsi",
+      "type": "rsi",
+      "enabled": false,
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    }
+  ]
+} 

@@ -22,6 +22,19 @@ wheels/
 MANIFEST
 config.py
 
+# Nx
+.nx/
+
+# Cursor
+.cursor/
+
+# Node
+node_modules/
+
+# Test files & data
+tests/test_data/
+tests/test_results/
+
 # Virtualenv
 venv/
 ENV/
@@ -108,3 +121,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+.nx/cache
+.nx/workspace-data
