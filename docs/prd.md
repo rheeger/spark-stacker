@@ -2,7 +2,10 @@
 
 ## Overview
 
-The **On-Chain Perpetual Trading System** is designed to execute high-leverage trades on decentralized perpetual futures exchanges, with sophisticated hedging mechanics to protect principal while maximizing returns. The system follows technical indicators to initiate positions and implements risk management techniques to control drawdowns.
+The **On-Chain Perpetual Trading System** is designed to execute high-leverage trades on
+decentralized perpetual futures exchanges, with sophisticated hedging mechanics to protect principal
+while maximizing returns. The system follows technical indicators to initiate positions and
+implements risk management techniques to control drawdowns.
 
 ## Key Features
 
@@ -90,7 +93,8 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 
 ### 1. **Strategy Configuration**
 
-- **As a trader,** I want to configure my preferred indicators and risk settings, so the system can execute trades based on my strategy.
+- **As a trader,** I want to configure my preferred indicators and risk settings, so the system can
+  execute trades based on my strategy.
 - **Acceptance Criteria:**
   - User can select built-in indicators or connect TradingView alerts
   - User can define risk parameters (max leverage, hedge ratio, stop-loss)
@@ -98,7 +102,8 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 
 ### 2. **Hedged Trade Execution**
 
-- **As a trader,** I want the system to automatically hedge my position to reduce risk while maximizing potential returns.
+- **As a trader,** I want the system to automatically hedge my position to reduce risk while
+  maximizing potential returns.
 - **Acceptance Criteria:**
   - System executes a primary high-leverage trade based on the indicator signal
   - A smaller hedge trade is placed in the opposite direction
@@ -107,7 +112,8 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 
 ### 3. **Risk Management & Monitoring**
 
-- **As a trader,** I want to protect my principal while still capturing significant upside on correct signals.
+- **As a trader,** I want to protect my principal while still capturing significant upside on
+  correct signals.
 - **Acceptance Criteria:**
   - System never risks entire principal on a single trade
   - Hedge positions provide meaningful protection during adverse moves
@@ -129,7 +135,8 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
 
 **Outcome Scenarios:**
 
-1. **Market rises 5%**: 
+1. **Market rises 5%**:
+
    - Long position: +$40 profit
    - Short hedge: -$5 loss
    - Net result: +$35 profit (35% return on $100 principal)
@@ -139,12 +146,56 @@ The **On-Chain Perpetual Trading System** is designed to execute high-leverage t
    - Short hedge: +$5 profit
    - Net result: -$35 loss (35% loss on principal, but 12.5% less than unhedged)
 
-The hedging strategy provides significant upside capture while reducing drawdowns and preventing catastrophic losses.
+The hedging strategy provides significant upside capture while reducing drawdowns and preventing
+catastrophic losses.
 
 ## System Constraints
 
 - API connectivity must be robust with automatic reconnection
 - Execution time must be optimized to avoid slippage
 - System should handle network interruptions gracefully
-- Security measures must be in place for API keys and private keys 
+- Security measures must be in place for API keys and private keys
 - Backtesting and paper trading environments must accurately simulate real conditions
+
+## Testing Infrastructure
+
+### Real Market Data Integration
+
+- System must support real market data in test environments
+- Automatic caching system for exchange data to prevent redundant API calls
+- Synthetic data generation as fallback when real data is unavailable
+- Visual analysis tools for signal and position inspection
+- Daily refresh functionality for market data to keep tests current
+- Offline testing capability for CI/CD environments
+
+### Test Environment Requirements
+
+- Support for both unit and integration testing with real market conditions
+- Consistent virtual environment management through wrapper scripts
+- Comprehensive test coverage for:
+  - Exchange connectivity and order execution
+  - Indicator signal generation and validation
+  - Risk management and position sizing
+  - Hedging mechanics and strategy validation
+  - Position closing and management
+- Visual inspection capabilities for signal generation and backtesting results
+- Environment isolation to ensure reproducible test results
+
+### Data Management
+
+- Efficient storage and retrieval of historical market data
+- Support for multiple data sources (Exchange APIs, CSV, databases)
+- Data cleaning and normalization pipelines
+- Automatic refresh scheduling for test data currency
+- Smart caching system with TTL (Time-To-Live) of 24 hours
+- Local storage of market data for fast test execution
+
+### Performance Validation
+
+- Automated verification of indicator calculations
+- Signal generation accuracy testing
+- Position management and execution validation
+- Integration testing with full trading workflow
+- Visual analysis tools for strategy performance review
+- Chart generation for signal visualization and inspection
+- MACD and other indicator visualization for verification
