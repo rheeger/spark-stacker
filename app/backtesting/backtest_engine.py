@@ -714,3 +714,211 @@ class BacktestEngine:
                 logger.error(f"Error processing window {i+1}: {e}")
 
         return results
+
+    def genetic_optimize(
+        self,
+        strategy_func: Callable[[pd.DataFrame, SimulationEngine, Dict[str, Any]], None],
+        symbol: str,
+        interval: str,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+        data_source_name: str,
+        param_space: Dict[str, Union[List[Any], Tuple[float, float, float]]],
+        population_size: int = 20,
+        generations: int = 10,
+        crossover_rate: float = 0.7,
+        mutation_rate: float = 0.2,
+        tournament_size: int = 3,
+        metric_to_optimize: str = 'sharpe_ratio',
+        leverage: float = 1.0,
+        indicators: List[Any] = None,
+        random_seed: Optional[int] = None
+    ) -> Tuple[Dict[str, Any], BacktestResult]:
+        """
+        Optimize strategy parameters using a genetic algorithm.
+
+        Args:
+            strategy_func: Function that implements the trading strategy
+            symbol: Market symbol to backtest
+            interval: Timeframe interval (e.g., '1m', '1h', '1d')
+            start_date: Start date for backtest
+            end_date: End date for backtest
+            data_source_name: Name of the data source to use
+            param_space: Dictionary of parameter names to either:
+                        - List of discrete values to choose from
+                        - Tuple of (min, max, step) for continuous values
+            population_size: Size of the population in each generation
+            generations: Number of generations to evolve
+            crossover_rate: Probability of crossover (0.0 to 1.0)
+            mutation_rate: Probability of mutation (0.0 to 1.0)
+            tournament_size: Size of tournament for parent selection
+            metric_to_optimize: Metric to optimize for
+            leverage: Default leverage to use
+            indicators: List of indicator instances to use
+            random_seed: Optional seed for random number generation
+
+        Returns:
+            Tuple of (best_parameters, best_result)
+        """
+        import random
+        from copy import deepcopy
+
+        import numpy as np
+
+        # Set random seed if provided
+        if random_seed is not None:
+            random.seed(random_seed)
+            np.random.seed(random_seed)
+
+        logger.info(f"Starting genetic algorithm optimization with population size {population_size} and {generations} generations")
+
+        # Helper functions for genetic algorithm
+        def create_individual():
+            """Create a random individual (set of parameters)"""
+            individual = {}
+            for param_name, param_range in param_space.items():
+                if isinstance(param_range, list):
+                    # Select from discrete values
+                    individual[param_name] = random.choice(param_range)
+                elif isinstance(param_range, tuple) and len(param_range) == 3:
+                    # Continuous range (min, max, step)
+                    min_val, max_val, step = param_range
+                    if isinstance(min_val, int) and isinstance(max_val, int) and isinstance(step, int):
+                        # Integer parameters
+                        steps = int((max_val - min_val) / step) + 1
+                        value = min_val + random.randint(0, steps - 1) * step
+                        individual[param_name] = value
+                    else:
+                        # Float parameters
+                        steps = int((max_val - min_val) / step) + 1
+                        value = min_val + random.randint(0, steps - 1) * step
+                        individual[param_name] = value
+                else:
+                    raise ValueError(f"Invalid parameter range for {param_name}: {param_range}")
+            return individual
+
+        def evaluate_fitness(individual):
+            """Evaluate fitness of an individual"""
+            try:
+                result = self.run_backtest(
+                    strategy_func=strategy_func,
+                    symbol=symbol,
+                    interval=interval,
+                    start_date=start_date,
+                    end_date=end_date,
+                    data_source_name=data_source_name,
+                    strategy_params=individual,
+                    leverage=leverage,
+                    indicators=indicators
+                )
+
+                # Return the metric to optimize
+                return result.metrics.get(metric_to_optimize, float('-inf')), result
+            except Exception as e:
+                logger.error(f"Error evaluating individual {individual}: {e}")
+                return float('-inf'), None
+
+        def tournament_selection(population, fitnesses):
+            """Select parent using tournament selection"""
+            # Randomly select tournament_size individuals
+            tournament_indices = random.sample(range(len(population)), tournament_size)
+            tournament_fitnesses = [fitnesses[i][0] for i in tournament_indices]
+
+            # Return the best individual from tournament
+            best_idx = tournament_indices[tournament_fitnesses.index(max(tournament_fitnesses))]
+            return population[best_idx]
+
+        def crossover(parent1, parent2):
+            """Perform crossover between two parents"""
+            if random.random() > crossover_rate:
+                return deepcopy(parent1)
+
+            child = {}
+            for param_name in parent1.keys():
+                # Randomly select from either parent
+                if random.random() < 0.5:
+                    child[param_name] = parent1[param_name]
+                else:
+                    child[param_name] = parent2[param_name]
+            return child
+
+        def mutate(individual):
+            """Mutate an individual"""
+            mutated = deepcopy(individual)
+
+            for param_name, param_range in param_space.items():
+                # Apply mutation with probability mutation_rate
+                if random.random() < mutation_rate:
+                    if isinstance(param_range, list):
+                        # Select new random value from discrete options
+                        mutated[param_name] = random.choice(param_range)
+                    elif isinstance(param_range, tuple) and len(param_range) == 3:
+                        # Continuous range (min, max, step)
+                        min_val, max_val, step = param_range
+                        if isinstance(min_val, int) and isinstance(max_val, int) and isinstance(step, int):
+                            # Integer parameters
+                            steps = int((max_val - min_val) / step) + 1
+                            value = min_val + random.randint(0, steps - 1) * step
+                            mutated[param_name] = value
+                        else:
+                            # Float parameters
+                            steps = int((max_val - min_val) / step) + 1
+                            value = min_val + random.randint(0, steps - 1) * step
+                            mutated[param_name] = value
+            return mutated
+
+        # Create initial population
+        population = [create_individual() for _ in range(population_size)]
+
+        # Initialize tracking for best individual
+        best_individual = None
+        best_fitness = float('-inf')
+        best_result = None
+
+        # Evolve over generations
+        for generation in range(generations):
+            logger.info(f"Generation {generation+1}/{generations}")
+
+            # Evaluate fitness for current population
+            fitness_results = []
+            for i, individual in enumerate(population):
+                logger.info(f"Evaluating individual {i+1}/{population_size}: {individual}")
+                fitness, result = evaluate_fitness(individual)
+                fitness_results.append((fitness, result))
+
+                # Update best individual if needed
+                if fitness > best_fitness:
+                    best_fitness = fitness
+                    best_individual = individual
+                    best_result = result
+                    logger.info(f"New best individual found: {best_individual} with {metric_to_optimize} = {best_fitness}")
+
+            # Early stopping check - if last generation, break the loop
+            if generation == generations - 1:
+                break
+
+            # Create new population
+            new_population = []
+
+            # Elitism: Keep the best individual
+            new_population.append(deepcopy(best_individual))
+
+            # Fill the rest of the population with offspring
+            while len(new_population) < population_size:
+                # Select parents using tournament selection
+                parent1 = tournament_selection(population, fitness_results)
+                parent2 = tournament_selection(population, fitness_results)
+
+                # Create offspring through crossover and mutation
+                offspring = crossover(parent1, parent2)
+                offspring = mutate(offspring)
+
+                new_population.append(offspring)
+
+            # Replace old population with new population
+            population = new_population
+
+        if best_individual is None:
+            raise ValueError("No valid parameter combination found during genetic optimization")
+
+        return best_individual, best_result

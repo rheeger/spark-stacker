@@ -239,3 +239,55 @@ class TestBacktestEngine:
 
         # First equity value should equal initial balance
         assert abs(result.equity_curve['equity'].iloc[0] - 10000.0) < 1e-6
+
+    def test_genetic_optimization(self, data_manager):
+        """Test genetic algorithm optimization functionality."""
+        # Create a BacktestEngine
+        engine = BacktestEngine(
+            data_manager=data_manager,
+            initial_balance={'USD': 10000.0}
+        )
+
+        # Define parameter space
+        param_space = {
+            'fast_period': [5, 10, 15],                # Discrete options
+            'slow_period': (20, 40, 5),                # Range (min, max, step)
+            'position_size': [0.3, 0.5, 0.7]           # Discrete options
+        }
+
+        # Run genetic optimization with small population and generations for testing
+        best_params, best_result = engine.genetic_optimize(
+            strategy_func=simple_moving_average_crossover_strategy,
+            symbol='ETH-USD',
+            interval='1d',
+            start_date='2020-01-01',
+            end_date='2020-04-10',
+            data_source_name='csv',
+            param_space=param_space,
+            population_size=5,
+            generations=2,
+            metric_to_optimize='sharpe_ratio',
+            random_seed=42  # For reproducible tests
+        )
+
+        # Verify results
+        assert isinstance(best_params, dict)
+        assert set(best_params.keys()) == {'fast_period', 'slow_period', 'position_size'}
+
+        # Check parameter bounds
+        assert best_params['fast_period'] in [5, 10, 15]
+        assert 20 <= best_params['slow_period'] <= 40
+        assert best_params['position_size'] in [0.3, 0.5, 0.7]
+
+        # Verify best result is a valid BacktestResult
+        assert isinstance(best_result, type(engine.run_backtest(
+            strategy_func=simple_moving_average_crossover_strategy,
+            symbol='ETH-USD',
+            interval='1d',
+            start_date='2020-01-01',
+            end_date='2020-04-10',
+            data_source_name='csv'
+        )))
+
+        # Ensure sharpe ratio is calculated
+        assert 'sharpe_ratio' in best_result.metrics
