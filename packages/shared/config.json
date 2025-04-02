@@ -8,8 +8,10 @@
     "show_zero_balances": false
   },
   "webhook_enabled": true,
-  "webhook_port": 8000,
-  "webhook_host": "127.0.0.1",
+  "webhook_port": 8080,
+  "webhook_host": "0.0.0.0",
+  "metrics_port": 9000,
+  "metrics_host": "0.0.0.0",
   "max_parallel_trades": 5,
   "polling_interval": 30,
   "dry_run": true,
@@ -61,4 +63,4 @@
       }
     }
   ]
-} 
+}

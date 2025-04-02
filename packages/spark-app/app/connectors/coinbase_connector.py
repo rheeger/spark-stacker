@@ -6,20 +6,14 @@ from io import StringIO
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 # Import the BaseConnector interface
-from app.connectors.base_connector import (
-    BaseConnector,
-    MarketType,
-    OrderSide,
-    OrderStatus,
-    OrderType,
-    TimeInForce,
-)
-from app.utils.logging_setup import (
-    setup_connector_balance_logger,
-    setup_connector_markets_logger,
-    setup_connector_orders_logger,
-)
-
+from app.connectors.base_connector import (BaseConnector, MarketType,
+                                           OrderSide, OrderStatus, OrderType,
+                                           TimeInForce)
+# Import decorators
+from app.metrics.decorators import track_api_latency, update_rate_limit
+from app.utils.logging_setup import (setup_connector_balance_logger,
+                                     setup_connector_markets_logger,
+                                     setup_connector_orders_logger)
 # Import Coinbase Advanced API client
 from coinbase.rest import RESTClient
 
@@ -100,6 +94,11 @@ class CoinbaseConnector(BaseConnector):
         # Reverse mapping
         self.reverse_symbol_map = {v: k for k, v in self.symbol_map.items()}
 
+        # Cache for market data to reduce API calls
+        self._markets_cache = None
+        self._last_markets_update = 0
+        self._markets_cache_ttl = 3600  # 1 hour in seconds
+
     def _get_product_id(self, symbol: str) -> str:
         """Convert our standard symbol to Coinbase product ID."""
         if symbol in self.symbol_map:
@@ -136,6 +135,7 @@ class CoinbaseConnector(BaseConnector):
         except Exception as e:
             logger.debug(f"Failed to debug {name}: {e}")
 
+    @track_api_latency(exchange="coinbase", endpoint="connect")
     def connect(self) -> bool:
         """
         Establish connection to the Coinbase Advanced API.
@@ -214,6 +214,7 @@ class CoinbaseConnector(BaseConnector):
             self._is_connected = False
             return False
 
+    @track_api_latency(exchange="coinbase", endpoint="disconnect")
     def disconnect(self) -> bool:
         """
         Disconnect from the Coinbase API.
@@ -268,6 +269,7 @@ class CoinbaseConnector(BaseConnector):
             logger.error(f"Error in _make_request ({method} {endpoint}): {e}")
             return None
 
+    @track_api_latency(exchange="coinbase", endpoint="get_markets")
     def get_markets(self) -> List[Dict[str, Any]]:
         """
         Get available markets from Coinbase.
@@ -367,6 +369,7 @@ class CoinbaseConnector(BaseConnector):
             return len(str_val) - str_val.index(".") - 1
         return 0
 
+    @track_api_latency(exchange="coinbase", endpoint="get_ticker")
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
         """
         Get ticker data for a symbol.
@@ -416,6 +419,7 @@ class CoinbaseConnector(BaseConnector):
                 "timestamp": int(time.time() * 1000),
             }
 
+    @track_api_latency(exchange="coinbase", endpoint="get_orderbook")
     def get_orderbook(
         self, symbol: str, depth: int = 10
     ) -> Dict[str, List[List[float]]]:
@@ -474,6 +478,7 @@ class CoinbaseConnector(BaseConnector):
             # Return empty order book on error
             return {"bids": [], "asks": []}
 
+    @track_api_latency(exchange="coinbase", endpoint="get_account_balance")
     def get_account_balance(self) -> Dict[str, float]:
         """
         Get account balances for all assets.
@@ -597,12 +602,15 @@ class CoinbaseConnector(BaseConnector):
             self.balance_logger.error(f"Failed to get account balances: {e}")
             return {}
 
+    @track_api_latency(exchange="coinbase", endpoint="get_positions")
     def get_positions(self) -> List[Dict[str, Any]]:
         """
         Get current open positions.
 
+        For Coinbase, which is spot-only, this returns account holdings.
+
         Returns:
-            List[Dict[str, Any]]: List of position data dictionaries
+            List[Dict[str, Any]]: List of holdings with details
         """
         try:
             if not self.client:
@@ -660,25 +668,25 @@ class CoinbaseConnector(BaseConnector):
             logger.error(f"Failed to get positions: {e}")
             return []
 
+    @track_api_latency(exchange="coinbase", endpoint="place_order")
     def place_order(
         self,
         symbol: str,
         side: OrderSide,
         order_type: OrderType,
         amount: float,
-        leverage: float,
+        leverage: Optional[float] = None,
         price: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Place a new order on Coinbase.
-        Uses /api/v3/brokerage/orders endpoint.
 
         Args:
-            symbol: The market symbol (e.g., 'ETH')
+            symbol: The market symbol (e.g., 'BTC-USD')
             side: Buy or sell
             order_type: Market or limit
             amount: The amount/size to trade
-            leverage: Leverage multiplier to use (not applicable for spot)
+            leverage: Ignored for Coinbase (spot only)
             price: Limit price (required for limit orders)
 
         Returns:
@@ -821,9 +829,10 @@ class CoinbaseConnector(BaseConnector):
         }
         return status_map.get(coinbase_status.lower(), OrderStatus.OPEN.value)
 
+    @track_api_latency(exchange="coinbase", endpoint="cancel_order")
     def cancel_order(self, order_id: str) -> bool:
         """
-        Cancel an existing order on Coinbase.
+        Cancel an existing order.
 
         Args:
             order_id: The ID of the order to cancel
@@ -877,6 +886,7 @@ class CoinbaseConnector(BaseConnector):
             logger.error(error_msg)
             return False
 
+    @track_api_latency(exchange="coinbase", endpoint="get_order_status")
     def get_order_status(self, order_id: str) -> Dict[str, Any]:
         """
         Get the status of an order.
@@ -989,18 +999,16 @@ class CoinbaseConnector(BaseConnector):
             logger.error(error_msg)
             return {"error": error_msg}
 
+    @track_api_latency(exchange="coinbase", endpoint="close_position")
     def close_position(
         self, symbol: str, position_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Close an open position for a given symbol.
-
-        For spot markets like Coinbase, this means selling all available holdings
-        of the specified asset.
+        Close an open position (sell entire holding for spot markets).
 
         Args:
-            symbol: The market symbol (e.g., 'ETH')
-            position_id: Optional position ID if the exchange requires it (not used for Coinbase)
+            symbol: The market symbol (e.g., 'BTC-USD')
+            position_id: Ignored for Coinbase
 
         Returns:
             Dict[str, Any]: Result of the close operation
@@ -1302,6 +1310,7 @@ class CoinbaseConnector(BaseConnector):
                     "slippage": 0.0,
                 }
 
+    @track_api_latency(exchange="coinbase", endpoint="get_historical_candles")
     def get_historical_candles(
         self,
         symbol: str,
@@ -1314,7 +1323,7 @@ class CoinbaseConnector(BaseConnector):
         Get historical candlestick data.
 
         Args:
-            symbol: The market symbol (e.g., 'ETH')
+            symbol: The market symbol (e.g., 'BTC-USD')
             interval: Time interval (e.g., '1m', '5m', '1h')
             start_time: Start time in milliseconds
             end_time: End time in milliseconds

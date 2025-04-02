@@ -14,37 +14,50 @@ scrape_configs:
       - targets:
           - localhost
         labels:
-          job: system
+          job: varlogs
           __path__: /var/log/*log
 
-  - job_name: spark-stacker-logs
+  - job_name: spark-stacker
     static_configs:
       - targets:
           - localhost
         labels:
           job: spark-stacker
-          __path__: /logs/*.log
+          app: spark-stacker
+          __path__: /logs/**/spark_stacker.log
+    pipeline_stages:
+      - regex:
+          expression: '(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (?P<logger>[\w\.]+) - (?P<level>\w+) - (?P<message>.*)'
+      - labels:
+          level:
+          logger:
 
-  - job_name: spark-stacker-json-logs
+  - job_name: connector-logs
     static_configs:
       - targets:
           - localhost
         labels:
-          job: spark-stacker-json
-          __path__: /logs/*.json
+          job: spark-stacker
+          app: spark-stacker
+          log_type: connector
+          __path__: /logs/**/*/markets.log
+      - targets:
+          - localhost
+        labels:
+          job: spark-stacker
+          app: spark-stacker
+          log_type: connector
+          __path__: /logs/**/*/balance.log
+      - targets:
+          - localhost
+        labels:
+          job: spark-stacker
+          app: spark-stacker
+          log_type: connector
+          __path__: /logs/**/*/orders.log
     pipeline_stages:
-      - json:
-          expressions:
-            timestamp: timestamp
-            level: level
-            message: message
-            category: category
-            trace_id: trace_id
-            data: data
+      - regex:
+          expression: '(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (?P<connector>[\w\.]+) - (?P<level>\w+) - (?P<message>.*)'
       - labels:
           level:
-          category:
-          trace_id:
-      - timestamp:
-          source: timestamp
-          format: RFC3339Nano
+          connector:

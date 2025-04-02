@@ -80,7 +80,7 @@ services:
     volumes:
       - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
       - /var/log:/var/log
-      - ../../../../logs:/logs
+      - ../../../packages/spark-app/logs:/logs
     command: -config.file=/etc/promtail/promtail-config.yml
     restart: unless-stopped
     depends_on:
@@ -130,22 +130,22 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  mock-metrics:
-    image: python:3.9-slim
-    container_name: mock-metrics
+  # Log metrics exporter service
+  log-metrics:
+    build:
+      context: ../..
+      dockerfile: monitoring/docker/log-metrics/Dockerfile
+    container_name: log-metrics
     volumes:
-      - ../exporters:/app
-    command: >
-      bash -c "pip install prometheus_client &&
-              ls -la /app &&
-              python /app/mock-metrics.py"
+      - ../../../packages/spark-app/logs:/logs
+    environment:
+      - LOG_DIR=/logs
+      - PORT=9001
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "9001:9001"
     networks:
       - monitoring
-    depends_on:
-      - prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

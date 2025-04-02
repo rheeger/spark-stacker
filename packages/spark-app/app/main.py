@@ -26,8 +26,9 @@ from app.connectors.connector_factory import ConnectorFactory
 from app.core.strategy_manager import StrategyManager
 from app.core.trading_engine import TradingEngine
 from app.indicators.indicator_factory import IndicatorFactory
+# Import metrics components
+from app.metrics import initialize_metrics
 from app.risk_management.risk_manager import RiskManager
-
 # Import core components
 from app.utils.config import AppConfig, ConfigManager
 from app.utils.logging_setup import setup_logging
@@ -196,15 +197,18 @@ def create_trading_engine(
 
 
 def setup_webhook_server(
-    config: AppConfig, trading_engine: TradingEngine
+    config: Dict[str, Any], trading_engine: TradingEngine
 ) -> Optional[WebhookServer]:
     """Set up webhook server if enabled in config"""
-    if not config.webhook_enabled:
+    if not config.get("webhook_enabled", False):
         logger.info("Webhook server disabled in configuration")
         return None
 
+    webhook_host = config.get("webhook_host", "0.0.0.0")
+    webhook_port = config.get("webhook_port", 8080)
+
     logger.info(
-        f"Setting up webhook server on {config.webhook_host}:{config.webhook_port}..."
+        f"Setting up webhook server on {webhook_host}:{webhook_port}..."
     )
 
     # Define the signal handler function
@@ -214,14 +218,14 @@ def setup_webhook_server(
 
     # Create and start the webhook server
     server = WebhookServer(
-        host=config.webhook_host,
-        port=config.webhook_port,
+        host=webhook_host,
+        port=webhook_port,
         signal_handlers=[handle_webhook_signal],
     )
 
     if server.start():
         logger.info(
-            f"Webhook server started at http://{config.webhook_host}:{config.webhook_port}"
+            f"Webhook server started at http://{webhook_host}:{webhook_port}"
         )
         return server
     else:
@@ -332,6 +336,13 @@ def main():
 
         logger.info("Initializing Spark Stacker...")
         logger.info("Configuration loaded successfully")
+
+        # Start metrics server on a different port than webhook
+        metrics_port = config.get("metrics_port", 9000)  # Use port 9000 by default for metrics
+        metrics_host = config.get("metrics_host", "0.0.0.0")  # Bind to all interfaces by default
+        logger.info(f"Starting metrics server on {metrics_host}:{metrics_port}")
+        initialize_metrics(port=metrics_port)
+        logger.info(f"Metrics server started at http://{metrics_host}:{metrics_port}/metrics")
 
         # Initialize exchange connectors
         connector_factory = ConnectorFactory()
@@ -464,6 +475,13 @@ def main():
             logger.error("Failed to start trading engine")
             sys.exit(1)
 
+        # Initialize and start webhook server if enabled
+        if config.get("webhook_enabled", False):
+            global webhook_server
+            webhook_server = setup_webhook_server(config, engine)
+            if not webhook_server:
+                logger.warning("Failed to start webhook server, continuing without webhook support")
+
         # Main trading loop
         try:
             logger.info("Starting main trading loop")
@@ -491,6 +509,12 @@ def main():
             # Cleanup
             logger.info("Cleaning up resources")
             engine.stop()
+
+            # Stop webhook server if running
+            if webhook_server:
+                logger.info("Stopping webhook server")
+                webhook_server.stop()
+
             for connector in exchange_connectors.values():
                 connector.cleanup()
     except Exception as e:

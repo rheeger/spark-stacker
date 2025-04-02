@@ -1,69 +1,66 @@
-# Spark Stacker Monitoring
+# Spark Stacker Monitoring System
 
-This package contains the monitoring and control interface for the Spark Stacker trading
-application.
+This directory contains the monitoring stack for the Spark Stacker trading application, including:
 
-## Components
+- Grafana dashboards for visualizing performance metrics
+- Prometheus for metrics collection
+- Loki for log aggregation
+- Log metrics exporter for extracting metrics from log files
 
-- **Prometheus & Grafana**: For metric collection, visualization, and alerting
-- **Loki & Promtail**: For log aggregation and analysis
-- **React Frontend**: For the control interface and dashboard views
-- **Backend APIs**: For interacting with the trading application
+## Key Features
+
+- Real-time connection status monitoring for all exchanges (Hyperliquid, Coinbase)
+- Connection error tracking with categorization and visualization
+- Exchange account balance monitoring
+- Websocket ping/pong latency metrics
+- Overall system status and configuration display
+- Advanced visualization of market metrics
+
+## Dashboard Components
+
+The main dashboard provides:
+
+1. **Connection Status Panel** - Shows the current status of all exchange connections
+2. **Service Status Panel** - Displays webhook and metrics server status
+3. **Websocket Health Panel** - Monitors websocket ping/pong latency
+4. **Error Tracking Panel** - Displays connection errors by type and exchange
+5. **Account Balances** - Shows current account balances by exchange and currency
+6. **System Information** - Provides build info, configuration, and market counts
 
 ## Getting Started
 
-### Starting the Monitoring Stack
+### Prerequisites
+
+- Docker and Docker Compose
+- Access to the Spark Stacker log files
+
+### Running the Monitoring Stack
+
+From the `packages/monitoring` directory:
 
 ```bash
-# Start the monitoring stack
-make start-monitoring
-
-# Access Grafana at http://localhost:3000
-# Default credentials: admin/admin
-
-# View Prometheus at http://localhost:9090
+cd docker
+docker-compose up -d
 ```
 
-### Development
+Access the dashboard at http://localhost:3000 (default credentials: admin/admin)
 
-```bash
-# Install dependencies
-make install
+## Log Metrics Exporter
 
-# Build the frontend
-make build
+The custom log metrics exporter (`packages/monitoring/exporters/log-metrics.py`) parses the Spark Stacker log files and exposes metrics for Prometheus to scrape. Key metrics include:
 
-# Start the frontend in development mode
-make start
-```
+- `spark_stacker_exchange_connection_status` - Connection status (1=up, 0=down)
+- `spark_stacker_connection_errors_total` - Count of connection errors by type
+- `spark_stacker_websocket_ping_latency_ms` - Websocket ping/pong latency
+- `spark_stacker_account_balance` - Account balances by currency
+- `spark_stacker_market_count` - Available markets on each exchange
 
-### Stopping the Monitoring Stack
+## Troubleshooting
 
-```bash
-# Stop the monitoring stack
-make stop-monitoring
+If metrics aren't appearing in the dashboard:
 
-# Remove all data volumes
-make clean-monitoring
-```
+1. Check that the log metrics exporter is running: `docker-compose ps log-metrics`
+2. Verify that Prometheus can scrape metrics: `curl http://localhost:9001/metrics`
+3. Ensure the log files directory is properly mounted in the Docker container
 
-## Directory Structure
-
-- `docker/`: Docker configuration for the monitoring stack
-- `frontend/`: React-based control interface
-- `apis/`: Backend APIs for the control interface
-- `dashboards/`: Grafana dashboard definitions
-- `exporters/`: Custom metric exporters
-
-## Metrics
-
-Prometheus scrapes metrics from the trading application on `host.docker.internal:8000/metrics`. The
-following metrics are collected:
-
-- `spark_stacker_uptime_seconds`: Application uptime
-- `spark_stacker_trades_total`: Trade count
-- `spark_stacker_active_positions`: Current positions
-- `spark_stacker_api_requests_total`: API calls
-- `spark_stacker_api_latency_seconds`: API latency
-- `spark_stacker_margin_ratio`: Position margin ratios
-- `spark_stacker_pnl_percent`: PnL metrics
+For log data issues, check the Loki logs using the Explore tab in Grafana.

@@ -1,6 +1,13 @@
 import abc
-from typing import Dict, Any, List, Optional, Tuple
+import functools
+import logging
+import time
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+from app.metrics.decorators import track_api_latency, update_rate_limit
+
+logger = logging.getLogger(__name__)
 
 
 class OrderSide(str, Enum):
@@ -67,11 +74,9 @@ class BaseConnector(abc.ABC):
 
     def setup_loggers(self):
         """Set up dedicated loggers for this connector."""
-        from app.utils.logging_setup import (
-            setup_connector_balance_logger,
-            setup_connector_markets_logger,
-            setup_connector_orders_logger,
-        )
+        from app.utils.logging_setup import (setup_connector_balance_logger,
+                                             setup_connector_markets_logger,
+                                             setup_connector_orders_logger)
 
         # Create dedicated loggers
         self.balance_logger = setup_connector_balance_logger(self.name)

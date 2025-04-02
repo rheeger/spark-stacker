@@ -8,19 +8,21 @@ from prometheus_client import REGISTRY, start_http_server
 logger = logging.getLogger(__name__)
 
 # Default metrics port
-DEFAULT_METRICS_PORT = 8000
+DEFAULT_METRICS_PORT = 9000
+DEFAULT_METRICS_HOST = "0.0.0.0"  # Bind to all interfaces
 
 # Server instance reference
 _server_thread: Optional[threading.Thread] = None
 _is_running = False
 
 
-def start_metrics_server(port: int = DEFAULT_METRICS_PORT) -> None:
+def start_metrics_server(port: int = DEFAULT_METRICS_PORT, host: str = DEFAULT_METRICS_HOST) -> None:
     """
     Start the Prometheus metrics server on the specified port.
 
     Args:
-        port: The port to expose metrics on (default: 8000)
+        port: The port to expose metrics on (default: 9000)
+        host: The host interface to bind to (default: 0.0.0.0)
     """
     global _server_thread, _is_running
 
@@ -31,10 +33,10 @@ def start_metrics_server(port: int = DEFAULT_METRICS_PORT) -> None:
     def _run_server() -> None:
         global _is_running
         try:
-            logger.info(f"Starting metrics server on port {port}")
-            start_http_server(port)
+            logger.info(f"Starting metrics server on {host}:{port}")
+            start_http_server(port, addr=host)
             _is_running = True
-            logger.info(f"Metrics server started on port {port}")
+            logger.info(f"Metrics server started on {host}:{port}")
 
             # Keep the thread alive
             while _is_running:

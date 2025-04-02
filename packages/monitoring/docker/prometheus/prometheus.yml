@@ -32,30 +32,21 @@ scrape_configs:
 
   - job_name: 'spark-stacker'
     metrics_path: /metrics
+    scrape_interval: 5s
     static_configs:
-      - targets: ['mock-metrics:8000']
+      - targets: ['spark-stacker:9000']
         labels:
           app: 'spark-stacker'
-          environment: 'development'
+          environment: 'production'
 
-  # Add a mock job for the application metrics until they're implemented
-  - job_name: 'spark-stacker-mock'
+  # Log metrics exporter job
+  - job_name: 'log-metrics'
     metrics_path: /metrics
+    scrape_interval: 5s
     static_configs:
-      - targets: ['prometheus:9090']
+      - targets: ['log-metrics:9001']
         labels:
-          app: 'spark-stacker-mock'
-          environment: 'development'
-    metric_relabel_configs:
-      - source_labels: [__name__]
-        regex: 'up'
-        target_label: __name__
-        replacement: spark_stacker_uptime_seconds
-      - source_labels: [__name__]
-        regex: 'process_cpu_seconds_total'
-        target_label: __name__
-        replacement: spark_stacker_trades_total
-      - source_labels: [__name__]
-        regex: 'prometheus_engine_query_duration_seconds'
-        target_label: __name__
-        replacement: spark_stacker_api_latency_seconds
+          app: 'spark-stacker-logs'
+          environment: 'production'
+
+  # Removed mock metrics - using real metrics from spark-stacker container
