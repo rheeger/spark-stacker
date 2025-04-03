@@ -183,6 +183,95 @@ Testing coverage is good for individual components but lacking in end-to-end sys
 performance assessment. The dry run mode works well on the Hyperliquid testnet, but needs more
 thorough validation and stress testing.
 
+## MACD Strategy Implementation for Hyperliquid ETH-USD (MVP)
+
+This MVP implementation is a critical test to prove the system's functionality with a minimal viable
+product focused on a single strategy with minimal risk exposure.
+
+### Strategy Configuration
+
+- 🔲 Create MACDStrategy class extending BaseStrategy
+  - 🔲 Configure MACD parameters (fast=8, slow=21, signal=5)
+  - 🔲 Implement strategy initialization with parameters validation
+  - 🔲 Add signal processing logic
+  - 🔲 Implement position management rules
+- 🔲 Configure strategy in config.yml
+  ```yaml
+  strategies:
+    macd_eth_usd:
+      name: 'MACD ETH-USD 1m'
+      type: 'MACD'
+      exchange: 'hyperliquid'
+      market: 'ETH-USD'
+      timeframe: '1m'
+      parameters:
+        fast_period: 8
+        slow_period: 21
+        signal_period: 5
+      risk_parameters:
+        max_position_size: 1.00 # $1.00 maximum position
+        leverage: 10
+        stop_loss_percent: -5.0
+        take_profit_percent: 10.0
+        hedge_ratio: 0.2 # 20% of main position as hedge
+      enabled: true
+  ```
+
+### Hyperliquid Connector Enhancement
+
+- 🔲 Optimize Hyperliquid connector for 1-minute timeframe data
+  - 🔲 Implement efficient market data polling
+  - 🔲 Add rate-limiting protection for high-frequency requests
+  - 🔲 Optimize WebSocket connection for real-time data
+- 🔲 Add 1-minute candle data retrieval
+  - 🔲 Implement caching mechanism to prevent redundant API calls
+  - 🔲 Add fallback mechanism for data gaps
+- 🔲 Enhance order execution for micro-size orders
+  - 🔲 Test minimum order size requirements
+  - 🔲 Implement precision handling for small position sizes
+  - 🔲 Add special handling for $1.00 positions
+
+### Integration Testing
+
+- 🔲 Create MACD strategy unit tests
+  - 🔲 Test signal generation with known input data
+  - 🔲 Validate parameter handling
+  - 🔲 Test edge cases (crossovers, signal reversals)
+- 🔲 Implement integration test for MACD strategy
+  - 🔲 Verify strategy-to-engine integration
+  - 🔲 Test full order lifecycle with mock connectors
+  - 🔲 Validate position tracking
+- 🔲 Create Hyperliquid-specific tests
+  - 🔲 Test order placement with minimum size ($1.00)
+  - 🔲 Verify leverage configuration
+  - 🔲 Test order execution timing
+
+### Dry Run Implementation
+
+- 🔲 Configure MACD strategy for Hyperliquid testnet
+  - 🔲 Set up testnet credentials
+  - 🔲 Configure minimal test capital
+  - 🔲 Implement logging for strategy executions
+- 🔲 Test execution with 1-minute timeframe
+  - 🔲 Validate data freshness
+  - 🔲 Test signal generation frequency
+  - 🔲 Monitor execution latency
+- 🔲 Monitor and validate positions
+  - 🔲 Track position entry and exit
+  - 🔲 Validate hedge position creation
+  - 🔲 Monitor P&L calculation accuracy
+
+### Documentation
+
+- 🔲 Update strategy documentation
+  - 🔲 Document MACD strategy implementation
+  - 🔲 Add parameter explanation
+  - 🔲 Create usage examples
+- 🔲 Create operational guide
+  - 🔲 Document strategy activation process
+  - 🔲 Add monitoring instructions
+  - 🔲 Include troubleshooting guide
+
 ## Testing Status
 
 Unit testing coverage is strong for core components, with comprehensive tests for connectors,

@@ -358,6 +358,233 @@
   - 🔲 Backup and recovery procedures
   - 🔲 Scaling guidelines
 
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
 ## Next Steps (Prioritized)
 
 1. Set up NX monorepo structure (CRITICAL PATH)
@@ -503,28 +730,4774 @@ The following components have been successfully implemented:
    - Configured dashboard provisioning
    - Removed duplicate dashboards for simpler maintenance
 
-### Next Steps
+## MACD Strategy Monitoring Implementation (MVP)
 
-The foundation for the monitoring system is now in place. The following areas require focus next:
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
 
-1. 🔲 **Metric Collection Integration**:
+### Core Metrics Implementation
 
-   - Implement custom metrics in the trading application
-   - Configure Prometheus recording rules and alerts
+- 🔲 Define and implement MACD strategy-specific metrics
 
-2. 🔲 **Dashboard Enhancement**:
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
 
-   - Populate placeholder panels with actual trading data
-   - Develop additional specialized dashboards as needed
+- 🔲 Implement indicator value metrics for visualization
 
-3. 🔲 **Log Analysis**:
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
 
-   - Configure log parsing rules
-   - Create log-based alerts
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
 
-4. 🔲 **Control Interface Development**:
-   - Begin API development for strategy management
-   - Start frontend application setup
+### Dashboard Implementation
 
-The monitoring infrastructure is now operational, providing a solid foundation for the development
-of more advanced monitoring features and the control interface components.
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:35:00.123Z",
+      "level": "INFO",
+      "category": "trading",
+      "strategy": "macd_eth_usd",
+      "message": "Position opened",
+      "data": {
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "side": "BUY",
+        "size": 0.0003,
+        "usd_value": 1.0,
+        "price": 3333.33,
+        "leverage": 10.0
+      }
+    }
+    ```
+
+- 🔲 Create log parsing rules for Loki
+  - 🔲 Extract structured data for querying
+  - 🔲 Create derived fields for quick linking
+
+### Control Interface Components
+
+- 🔲 Implement strategy control panel
+
+  - 🔲 MACD parameter adjustment interface
+  - 🔲 Strategy enable/disable toggle
+  - 🔲 Position size control
+  - 🔲 Manual position close button
+  - 🔲 Stop-loss/take-profit adjustment sliders
+
+- 🔲 Add backtest comparison feature
+  - 🔲 Run backtest with current parameters
+  - 🔲 Compare live performance to backtest expectations
+  - 🔲 Parameter optimization suggestions
+
+## Next Steps (Prioritized)
+
+1. Set up NX monorepo structure (CRITICAL PATH)
+
+   - Initialize NX workspace
+   - Configure TypeScript
+   - Set up package structure
+
+2. Implement basic monitoring (CRITICAL PATH)
+
+   - Set up Prometheus and Grafana
+   - Configure basic metrics collection
+   - Create essential dashboards
+
+3. Develop core control interface (CRITICAL PATH)
+
+   - Create basic API endpoints
+   - Implement essential frontend features
+   - Add authentication
+
+4. Add advanced features incrementally
+
+   - Additional dashboards
+   - Advanced control features
+   - Extended monitoring capabilities
+
+5. Develop comprehensive testing strategy
+   - Implement unit tests for frontend and backend
+   - Create integration tests for monitoring stack
+   - Build end-to-end tests for user workflows
+
+## Technical Requirements
+
+### Hardware Requirements
+
+- ✅ Ensure minimum requirements are met:
+  - ✅ 4GB RAM
+  - ✅ 2 CPU cores
+  - ✅ 20GB disk space
+- 🟡 Recommended configuration:
+  - 🟡 8GB RAM
+  - 🟡 4 CPU cores
+  - 🟡 100GB SSD
+
+### Software Requirements
+
+- ✅ Verify required software versions:
+  - ✅ Docker Engine 20.10.x or higher
+  - ✅ Docker Compose 2.x or higher
+  - ✅ Node.js 18.x or higher
+  - ✅ NX 16.x or higher
+  - ✅ Grafana 9.x or higher (using 10.1.0)
+  - ✅ Prometheus 2.40.x or higher (using 2.46.0)
+  - ✅ Loki 2.7.x or higher (using 2.9.0)
+
+### Network Requirements
+
+- ✅ Configure required inbound ports:
+  - ✅ 3000 (Grafana UI)
+  - ✅ 9090 (Prometheus, optional)
+  - ✅ 3100 (Loki, optional)
+  - 🔲 8080 (Control API)
+- ✅ Set up internal networking between containers
+- 🔲 Configure optional external access via reverse proxy with TLS
+
+## Security Implementation
+
+- 🔲 Implement authentication & access control
+  - 🔲 Secure authentication for all components
+  - 🔲 Role-based access control for dashboards and controls
+  - 🔲 API token-based authentication for programmatic access
+- 🔲 Configure data protection
+  - 🔲 Encryption of sensitive data in transit and at rest
+  - 🔲 Secure storage of API keys and credentials
+  - 🔲 Data retention policies and cleanup
+- 🔲 Set up network security
+  - 🔲 Firewall rules to restrict access
+  - 🔲 TLS for all external connections
+  - 🔲 Internal network isolation where possible
+- 🔲 Implement vulnerability management
+  - 🔲 Regular updates of all components
+  - 🔲 Security scanning of container images
+  - 🔲 Dependency auditing and updates
+
+## Progress Tracking
+
+| Component      | Task                | Status         | Assigned To | Target Date | Notes                                                                                                                         |
+| -------------- | ------------------- | -------------- | ----------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Infrastructure | NX Setup            | ✅ Completed   |             |             |                                                                                                                               |
+| Infrastructure | Docker Config       | ✅ Completed   |             |             | Successfully set up Docker Compose for monitoring stack with Prometheus, Grafana, Loki, Promtail, Node Exporter, and cAdvisor |
+| Monitoring     | Core Metrics        | 🟡 In Progress |             |             | Basic metrics are being collected, but custom metrics still need implementation                                               |
+| Monitoring     | Log Collection      | ✅ Completed   |             |             | Loki and Promtail configured for log collection                                                                               |
+| Monitoring     | Dashboards          | ✅ Completed   |             |             | Created consolidated home dashboard with system metrics and placeholder panels for application metrics                        |
+| Control        | API Development     | Not Started    |             |             |                                                                                                                               |
+| Control        | Frontend            | Not Started    |             |             |                                                                                                                               |
+| Control        | Authentication      | Not Started    |             |             |                                                                                                                               |
+| Security       | Auth Implementation | Not Started    |             |             |                                                                                                                               |
+| Security       | Encryption          | Not Started    |             |             |                                                                                                                               |
+| Testing        | Performance Testing | 🟡 In Progress |             |             | Initial testing of monitoring stack performed                                                                                 |
+| Testing        | Security Testing    | Not Started    |             |             |                                                                                                                               |
+| Documentation  | User Docs           | Not Started    |             |             |                                                                                                                               |
+| Documentation  | Deployment Guide    | Not Started    |             |             |                                                                                                                               |
+
+## Current Implementation Status
+
+Phase 4 is currently in progress, with significant advances in the monitoring infrastructure setup.
+The following components have been successfully implemented:
+
+### Monitoring Stack Implementation
+
+1. ✅ **Docker Compose Configuration**: A comprehensive docker-compose.yml has been created and
+   tested for the monitoring stack, including:
+
+   - Prometheus (v2.46.0) for metrics collection
+   - Grafana (v10.1.0) for visualization dashboards
+   - Loki (v2.9.0) for log aggregation
+   - Promtail for log collection
+   - Node Exporter for host metrics
+   - cAdvisor for container metrics
+
+2. ✅ **Container Network**: All components are successfully connected through a dedicated
+   monitoring network.
+
+3. ✅ **Volume Management**: Persistent volumes have been configured for Prometheus, Grafana, and
+   Loki data.
+
+4. ✅ **Loki Configuration**:
+
+   - Fixed permission issues with the Loki WAL directory
+   - Implemented proper initialization for data directories
+   - Created environment file for Loki configuration
+
+5. ✅ **Service Accessibility**:
+
+   - Grafana UI is accessible on port 3000
+   - Prometheus UI is accessible on port 9090
+   - Loki API is accessible on port 3100
+   - cAdvisor metrics are available on port 8090
+
+6. ✅ **Dashboard Implementation**:
+   - Created consolidated home dashboard with system metrics
+   - Added placeholder panels for application-specific metrics
+   - Configured dashboard provisioning
+   - Removed duplicate dashboards for simpler maintenance
+
+## MACD Strategy Monitoring Implementation (MVP)
+
+The following monitoring enhancements are required to support the MACD ETH-USD strategy on
+Hyperliquid with 1-minute timeframe and $1.00 maximum positions.
+
+### Core Metrics Implementation
+
+- 🔲 Define and implement MACD strategy-specific metrics
+
+  - 🔲
+    `spark_stacker_strategy_active{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD"}`:
+    Boolean indicating if strategy is active
+  - 🔲
+    `spark_stacker_strategy_position{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge", side="long|short"}`:
+    Current position size
+  - 🔲
+    `spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", exchange="hyperliquid", market="ETH-USD", type="main|hedge"}`:
+    Current P&L percentage
+  - 🔲 `spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd", signal="buy|sell"}`:
+    Counter for generated signals
+  - 🔲
+    `spark_stacker_strategy_trade_executed_total{strategy="macd_eth_usd", result="success|failure"}`:
+    Counter for executed trades
+
+- 🔲 Implement indicator value metrics for visualization
+
+  - 🔲 `spark_stacker_macd_value{strategy="macd_eth_usd", component="macd|signal|histogram"}`:
+    Current MACD indicator values
+  - 🔲 `spark_stacker_macd_crossover_total{strategy="macd_eth_usd", direction="bullish|bearish"}`:
+    Counter for MACD crossovers
+
+- 🔲 Add time-series metrics for performance tracking
+  - 🔲
+    `spark_stacker_strategy_execution_seconds{strategy="macd_eth_usd", phase="signal_generation|position_sizing|order_execution"}`:
+    Timing metrics for strategy execution phases
+  - 🔲 `spark_stacker_strategy_trades_total{strategy="macd_eth_usd", outcome="win|loss"}`: Counter
+    for trade outcomes
+
+### Dashboard Implementation
+
+- 🔲 Create dedicated MACD Strategy Dashboard
+
+  - 🔲 Strategy Overview Panel
+
+    - 🔲 Strategy status (active/inactive)
+    - 🔲 Current positions (main and hedge)
+    - 🔲 Current P&L
+    - 🔲 Win/loss ratio
+    - 🔲 MACD parameter display (8-21-5)
+
+  - 🔲 MACD Indicator Visualization
+
+    - 🔲 Time-series chart of MACD, signal line, and histogram
+    - 🔲 Visual indicators for buy/sell signals
+    - 🔲 Crossover event markers
+    - 🔲 Current values prominently displayed
+
+  - 🔲 Position History Panel
+
+    - 🔲 Table of recent trades with entry/exit prices
+    - 🔲 P&L visualization per trade
+    - 🔲 Position duration statistics
+    - 🔲 Histogram of trade outcomes
+
+  - 🔲 Performance Metrics Panel
+
+    - 🔲 Trade success rate
+    - 🔲 Average P&L per trade
+    - 🔲 Maximum drawdown
+    - 🔲 Sharpe ratio (if available)
+    - 🔲 Strategy execution timing
+
+  - 🔲 Hyperliquid Connection Panel
+    - 🔲 API latency for ETH-USD market data
+    - 🔲 Order execution success rate
+    - 🔲 WebSocket connection status
+    - 🔲 Recent error count
+
+- 🔲 Update Home Dashboard with MACD Strategy Status
+  - 🔲 Add MACD strategy card to strategies panel
+  - 🔲 Include current position and P&L in overview
+
+### Alert Configuration
+
+- 🔲 Create strategy-specific alerts
+
+  - 🔲 Configure alerts for signal generation
+
+    ```yaml
+    - alert: MACDSignalGenerated
+      expr: increase(spark_stacker_strategy_signal_generated_total{strategy="macd_eth_usd"}[5m]) > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy generated a new {{ $labels.signal }} signal'
+    ```
+
+  - 🔲 Set up position monitoring alerts
+
+    ```yaml
+    - alert: MACDPositionOpened
+      expr: spark_stacker_strategy_position{strategy="macd_eth_usd", type="main"} > 0
+      labels:
+        severity: info
+      annotations:
+        summary: 'MACD strategy opened a {{ $labels.side }} position'
+        details: 'Position size: {{ $value }}'
+    ```
+
+  - 🔲 Configure performance alerts
+
+    ```yaml
+    - alert: MACDStrategyLoss
+      expr: spark_stacker_strategy_pnl_percent{strategy="macd_eth_usd", type="main"} < -3
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'MACD strategy experiencing sustained loss'
+        details: 'Current P&L: {{ $value }}%'
+    ```
+
+### Logging Enhancements
+
+- 🔲 Implement structured logging for MACD strategy
+
+  - 🔲 Log signal generation events
+
+    ```json
+    {
+      "timestamp": "2023-03-15T12:34:56.789Z",
+      "level": "INFO",
+      "category": "strategy",
+      "strategy": "macd_eth_usd",
+      "message": "MACD signal generated",
+      "data": {
+        "signal": "BUY",
+        "macd_value": 0.25,
+        "signal_value": 0.15,
+        "histogram": 0.1,
+        "confidence": 0.85
+      }
+    }
+    ```
+
+  - 🔲 Log position events
+
+    ```json
+    {
+      "timestamp": "2023-03
+    ```

@@ -277,6 +277,255 @@ def monitor_position_health(combined_position):
     return True  # Position is healthy
 ```
 
+## MVP MACD Strategy Implementation
+
+As a critical proof-of-concept for validating system functionality, we'll implement a specific MACD
+strategy on Hyperliquid's ETH-USD market with minimal position sizes. This section details the
+technical implementation of this MVP strategy.
+
+### Strategy Class Implementation
+
+```python
+from app.indicators.macd_indicator import MACDIndicator
+from app.strategies.base_strategy import BaseStrategy
+from app.core.types import Market, Timeframe, Signal, SignalDirection
+
+class MACDStrategy(BaseStrategy):
+    """
+    MACD strategy for 1-minute ETH-USD on Hyperliquid with custom parameters.
+    Uses Fast(8), Slow(21), Signal(5) for increased sensitivity on short timeframes.
+    """
+
+    def __init__(self, market: Market, exchange: str = "hyperliquid"):
+        super().__init__(
+            name="MACD_ETH_USD_1m",
+            market=market,
+            exchange=exchange,
+            timeframe=Timeframe.ONE_MINUTE
+        )
+        # Initialize MACD indicator with custom parameters
+        self.macd = MACDIndicator(
+            name="MACD_8_21_5",
+            params={
+                "fast_period": 8,
+                "slow_period": 21,
+                "signal_period": 5
+            }
+        )
+        # Initialize position management parameters
+        self.max_position_size = 1.0  # $1.00 max position
+        self.leverage = 10.0
+        self.hedge_ratio = 0.2  # 20% hedge
+        self.stop_loss_percent = -5.0
+        self.take_profit_percent = 10.0
+        self.max_position_duration = 60 * 24  # 24 hours (in minutes)
+
+    async def process_market_data(self, market_data):
+        """Process incoming market data and generate signals."""
+        # Apply MACD indicator to market data
+        processed_data, signal = self.macd.process(market_data)
+
+        # Log current indicator values for monitoring
+        self._log_indicator_values(processed_data)
+
+        # Return signal if one was generated
+        return signal
+
+    def _log_indicator_values(self, processed_data):
+        """Log current MACD values for monitoring systems."""
+        if len(processed_data) == 0:
+            return
+
+        last_row = processed_data.iloc[-1]
+        self.logger.info(
+            "MACD indicator values updated",
+            extra={
+                "strategy": self.name,
+                "macd_value": float(last_row["macd"]),
+                "signal_value": float(last_row["macd_signal"]),
+                "histogram": float(last_row["macd_histogram"]),
+                "timestamp": int(last_row.name.timestamp() * 1000)
+            }
+        )
+
+        # Export metrics for monitoring
+        if hasattr(self, "metrics_client"):
+            self.metrics_client.gauge(
+                "spark_stacker_macd_value",
+                float(last_row["macd"]),
+                {"strategy": self.name, "component": "macd"}
+            )
+            self.metrics_client.gauge(
+                "spark_stacker_macd_value",
+                float(last_row["macd_signal"]),
+                {"strategy": self.name, "component": "signal"}
+            )
+            self.metrics_client.gauge(
+                "spark_stacker_macd_value",
+                float(last_row["macd_histogram"]),
+                {"strategy": self.name, "component": "histogram"}
+            )
+
+    def calculate_position_size(self, signal, current_price):
+        """Calculate position size based on strategy parameters."""
+        # For MVP, we use fixed position size of $1.00
+        notional_size = self.max_position_size
+
+        # Convert notional size to asset amount
+        asset_amount = notional_size / current_price
+
+        # Calculate hedge position
+        hedge_notional = notional_size * self.hedge_ratio
+        hedge_amount = hedge_notional / current_price
+
+        return {
+            "main_position": {
+                "amount": asset_amount,
+                "notional": notional_size,
+                "leverage": self.leverage,
+                "direction": signal.direction
+            },
+            "hedge_position": {
+                "amount": hedge_amount,
+                "notional": hedge_notional,
+                "leverage": self.leverage * 0.5,  # Half the leverage for hedge
+                "direction": SignalDirection.SELL if signal.direction == SignalDirection.BUY else SignalDirection.BUY
+            }
+        }
+```
+
+### Market Data Collection
+
+For 1-minute timeframe data from Hyperliquid, we'll implement an optimized collector with WebSocket
+support for real-time updates:
+
+```python
+class HyperliquidMinuteDataCollector:
+    """Specialized collector for 1-minute data from Hyperliquid."""
+
+    def __init__(self, symbol="ETH-USD", websocket_manager=None):
+        self.symbol = symbol
+        self.websocket_manager = websocket_manager
+        self.candle_cache = {}
+        self.current_candle = None
+
+    async def setup(self):
+        """Initialize WebSocket connection and historical data."""
+        # Subscribe to trades for building 1-minute candles
+        await self.websocket_manager.subscribe_trades(self.symbol, self._process_trade)
+
+        # Get initial historical data
+        await self.fetch_historical_data()
+
+    async def fetch_historical_data(self, lookback_periods=100):
+        """Fetch initial historical 1-minute candles."""
+        # Get historical 1-minute candles from REST API
+        # Implementation depends on Hyperliquid API
+        pass
+
+    def _process_trade(self, trade_data):
+        """Process incoming trade to build 1-minute candles in real-time."""
+        # Update current candle with trade data
+        # When minute changes, finalize candle and begin new one
+        pass
+
+    async def get_current_data(self, periods=30):
+        """Get the most recent n periods of 1-minute data."""
+        # Return DataFrame with OHLCV data for the requested periods
+        pass
+```
+
+### Configuration
+
+Strategy configuration in the system's `config.yml`:
+
+```yaml
+strategies:
+  macd_eth_usd:
+    name: 'MACD ETH-USD 1m'
+    type: 'MACD'
+    class_name: 'MACDStrategy'
+    enabled: true
+    exchange: 'hyperliquid'
+    market: 'ETH-USD'
+    timeframe: '1m'
+    parameters:
+      fast_period: 8
+      slow_period: 21
+      signal_period: 5
+    risk_parameters:
+      max_position_size: 1.00
+      leverage: 10
+      stop_loss_percent: -5.0
+      take_profit_percent: 10.0
+      hedge_ratio: 0.2
+      max_position_duration_minutes: 1440 # 24 hours
+```
+
+### Monitoring Integration
+
+To enable real-time monitoring of the strategy, we'll add metrics export:
+
+```python
+# In strategy initialization
+self.metrics_client.gauge(
+    "spark_stacker_strategy_active",
+    1,
+    {"strategy": "macd_eth_usd", "exchange": "hyperliquid", "market": "ETH-USD"}
+)
+
+# On signal generation
+self.metrics_client.counter(
+    "spark_stacker_strategy_signal_generated_total",
+    1,
+    {"strategy": "macd_eth_usd", "signal": signal.direction.name.lower()}
+)
+
+# On trade execution
+self.metrics_client.counter(
+    "spark_stacker_strategy_trade_executed_total",
+    1,
+    {"strategy": "macd_eth_usd", "result": "success" if success else "failure"}
+)
+
+# On position update
+self.metrics_client.gauge(
+    "spark_stacker_strategy_position",
+    position_size,
+    {
+        "strategy": "macd_eth_usd",
+        "exchange": "hyperliquid",
+        "market": "ETH-USD",
+        "type": "main",
+        "side": position_direction.name.lower()
+    }
+)
+```
+
+### Performance Optimizations for 1-Minute Data
+
+For high-frequency trading with 1-minute candles, several optimizations are necessary:
+
+1. **Cache Management**:
+
+   - Implement rolling cache for historical data
+   - Store preprocessed indicator values to avoid recalculation
+   - Use TTL-based caching for API responses
+
+2. **Connection Resilience**:
+
+   - Implement heartbeat for WebSocket connections
+   - Automatic reconnection with exponential backoff
+   - Duplicate connection paths for critical data
+
+3. **Trade Execution**:
+   - Optimize order placement for minimal latency
+   - Implement retry logic with timeout controls
+   - Add circuit breakers for error conditions
+
+This MVP implementation provides a comprehensive test of all critical system components while
+minimizing financial risk through small position sizes.
+
 ## Performance & Latency Considerations
 
 - **Execution Speed Optimization:**

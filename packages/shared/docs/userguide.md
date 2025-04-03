@@ -267,6 +267,145 @@ The system will:
 
 Monitor system performance closely during initial deployment.
 
+## MACD Strategy Implementation Guide
+
+This section provides a step-by-step guide for implementing and running our MVP MACD strategy on
+Hyperliquid's ETH-USD market with minimal risk ($1.00 positions).
+
+### Strategy Overview
+
+- **Indicator:** MACD with Fast=8, Slow=21, Signal=5 periods
+- **Market:** ETH-USD on Hyperliquid
+- **Timeframe:** 1-minute candles
+- **Position Size:** $1.00 maximum per position
+- **Risk Parameters:** 10× leverage, 5% stop-loss, 10% take-profit, 20% hedge ratio
+
+### Implementation Steps
+
+#### 1. Configure the MACD Strategy
+
+Create a strategy configuration in your `config.yml` file:
+
+```yaml
+strategies:
+  macd_eth_usd:
+    name: 'MACD ETH-USD 1m'
+    type: 'MACD'
+    enabled: true
+    exchange: 'hyperliquid'
+    market: 'ETH-USD'
+    timeframe: '1m'
+    parameters:
+      fast_period: 8
+      slow_period: 21
+      signal_period: 5
+    risk_parameters:
+      max_position_size: 1.00 # $1.00 maximum position
+      leverage: 10
+      stop_loss_percent: -5.0
+      take_profit_percent: 10.0
+      hedge_ratio: 0.2 # 20% of main position as hedge
+      max_position_duration_minutes: 1440 # 24 hours
+```
+
+#### 2. Configure Hyperliquid Exchange Connection
+
+Ensure your Hyperliquid API credentials are properly set in your `.env` file:
+
+```env
+# Hyperliquid Configuration
+HYPERLIQUID_API_KEY=your_api_key
+HYPERLIQUID_PRIVATE_KEY=your_signed_key
+HYPERLIQUID_TESTNET=true  # Set to false for mainnet
+```
+
+#### 3. Test the Strategy in Paper Trading Mode
+
+Run the strategy in paper trading mode first to validate its functionality:
+
+```bash
+python run_bot.py --mode paper --strategy macd_eth_usd --duration 24
+```
+
+This will run the strategy for 24 hours in paper trading mode, simulating trades without using real
+capital.
+
+#### 4. Analyze Paper Trading Results
+
+Review the generated logs and performance reports:
+
+```bash
+python analyze_performance.py --strategy macd_eth_usd --start-date 2023-04-01 --end-date 2023-04-02
+```
+
+Verify key performance metrics:
+
+- Signal accuracy
+- Trade frequency
+- Average profit/loss
+- Maximum drawdown
+- Hedge effectiveness
+
+#### 5. Launch in Live Trading Mode
+
+Once satisfied with paper trading results, launch the strategy with minimal capital:
+
+```bash
+python run_bot.py --mode live --strategy macd_eth_usd --capital 5.00
+```
+
+This will allocate $5.00 to the strategy, with each position limited to $1.00 maximum.
+
+#### 6. Monitor Live Performance
+
+Access the strategy monitoring dashboard:
+
+```bash
+http://localhost:3000/d/macd-strategy-dashboard
+```
+
+The MACD Strategy Dashboard provides:
+
+- Real-time strategy status
+- Current MACD values and signals
+- Position information (size, entry price, P&L)
+- Execution metrics and performance statistics
+- Alerts for significant events (signals, trades, errors)
+
+### Strategy Customization
+
+You can fine-tune the strategy by adjusting these parameters:
+
+#### MACD Parameters
+
+- **Fast Period:** Controls responsiveness to recent price changes (lower = more responsive)
+- **Slow Period:** Provides longer-term trend context (higher = smoother)
+- **Signal Period:** Affects signal sensitivity (lower = more signals, higher = fewer false signals)
+
+#### Risk Parameters
+
+- **Leverage:** Amplifies potential gains and losses (10× is recommended for the MVP)
+- **Stop-Loss:** Percentage of adverse movement before closing position (5% recommended)
+- **Take-Profit:** Percentage of favorable movement before taking profits (10% recommended)
+- **Hedge Ratio:** Percentage of counter-position for risk reduction (20% recommended)
+
+### Interpreting Results
+
+The MACD strategy generates signals based on these conditions:
+
+- **Buy Signal:** MACD line crosses above the Signal line
+- **Sell Signal:** MACD line crosses below the Signal line
+
+Performance should be evaluated based on:
+
+1. **Win Rate:** Percentage of profitable trades
+2. **Average P&L:** Mean profitability per trade
+3. **Max Drawdown:** Largest peak-to-trough decline
+4. **Risk-Adjusted Return:** Returns relative to risk taken
+
+This MVP implementation serves as a validation of the entire system with minimal financial risk
+while providing a foundation for future strategy development.
+
 ## 6. **Monitoring Your Trades**
 
 ### 6.1 Live Dashboard

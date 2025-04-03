@@ -110,6 +110,54 @@ Core activities:
 | 5: Deployment & Live Trading      | 🔲 Planned     |      0%      | Phase 3, Phase 4  | Dry run completion, monitoring readiness     |
 | 6: Continuous Improvement         | 🔲 Planned     |      0%      | None              | Independent features                         |
 
+## Critical MVP MACD Strategy Implementation
+
+A critical milestone in our development roadmap is the implementation of a MACD-based trading
+strategy as a proof-of-concept for the entire system. This will serve as a practical validation of
+all system components before full-scale deployment.
+
+### MVP Strategy Details
+
+- **Indicator:** MACD with parameters Fast=8, Slow=21, Signal=5
+- **Market:** ETH-USD perpetual futures on Hyperliquid
+- **Timeframe:** 1-minute candles
+- **Position Size:** $1.00 maximum per position
+- **Risk Parameters:**
+  - Leverage: 10×
+  - Stop-loss: 5%
+  - Take-profit: 10%
+  - Hedge ratio: 20%
+
+### Implementation Priorities
+
+1. **Phase 2 Dependencies:**
+
+   - Complete MACD indicator implementation with custom parameters
+   - Ensure market data retrieval for 1-minute timeframes works properly
+   - Adapt position sizing for micro-positions ($1.00 max)
+
+2. **Phase 3 Integration:**
+
+   - Configure strategy parameters in production-ready code
+   - Implement end-to-end testing with Hyperliquid testnet
+   - Verify strategy execution and trade lifecycle management
+
+3. **Phase 4 Monitoring:**
+
+   - Create dedicated MACD strategy dashboard
+   - Implement strategy-specific metrics and alerts
+   - Ensure real-time monitoring of indicator values and trading signals
+
+4. **Validation Criteria:**
+   - Successfully identify and act on MACD crossovers
+   - Execute trades with proper position sizing and hedging
+   - Monitor and visualize strategy performance in real-time
+   - Implement all risk management features (stop-loss, take-profit, etc.)
+
+This MVP implementation is a critical step in proving the system's functionality. Successful
+execution of this strategy with minimal capital ($1.00 positions) will validate all core components
+while minimizing financial risk during the evaluation phase.
+
 ## Development Timeline
 
 ```mermaid

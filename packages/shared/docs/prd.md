@@ -149,6 +149,80 @@ implements risk management techniques to control drawdowns.
 The hedging strategy provides significant upside capture while reducing drawdowns and preventing
 catastrophic losses.
 
+## MVP Implementation: MACD Strategy on Hyperliquid
+
+To validate the system's core functionality, we will implement a specific Minimum Viable Product
+(MVP) strategy with the following characteristics:
+
+### Strategy Specification
+
+- **Indicator:** MACD (Moving Average Convergence Divergence)
+  - **Parameters:** Fast=8, Slow=21, Signal=5
+  - **Rationale:** These non-standard parameters provide more responsiveness on shorter timeframes
+    compared to traditional settings (12, 26, 9)
+- **Market:** ETH-USD Perpetual Futures
+  - **Exchange:** Hyperliquid
+  - **Contract Type:** Perpetual Futures (no expiry)
+- **Timeframe:** 1-minute candles
+  - **Rationale:** Provides higher frequency trading opportunities for rapid system validation
+- **Position Sizing:** $1.00 maximum per position
+  - **Rationale:** Minimal risk exposure while proving system functionality
+- **Hedging:** 20% counter-position
+  - **Example:** $0.80 main position with $0.20 hedge position
+- **Leverage:** 10×
+  - **Rationale:** High enough to demonstrate meaningful returns on small positions
+
+### Implementation Details
+
+1. **Signal Generation**
+
+   - MACD Line = 8-period EMA minus 21-period EMA
+   - Signal Line = 5-period EMA of MACD Line
+   - Histogram = MACD Line minus Signal Line
+   - **Buy Signal:** MACD Line crosses above Signal Line
+   - **Sell Signal:** MACD Line crosses below Signal Line
+
+2. **Position Management**
+
+   - Enter positions on signal confirmation
+   - Set stop-loss at 5% adverse movement
+   - Take profit at 10% favorable movement
+   - Close positions on opposing signal or after 24 hours (maximum hold time)
+
+3. **Performance Metrics**
+   - Track signal accuracy (% of successful trades)
+   - Monitor average trade duration
+   - Calculate net P&L with commission costs
+   - Evaluate hedge effectiveness (reduction in drawdowns)
+
+### Success Criteria
+
+This MVP implementation will be considered successful if it achieves:
+
+1. **Technical Validation**
+
+   - System correctly identifies MACD crossovers
+   - Orders are properly executed on Hyperliquid
+   - Positions are tracked and managed accurately
+   - Stop-loss and take-profit orders function correctly
+
+2. **Monitoring Effectiveness**
+
+   - Real-time visibility of active positions
+   - Accurate tracking of P&L
+   - Timely alerts for system events (signals, trades, errors)
+   - Visualization of MACD signals in dashboards
+
+3. **Risk Management Verification**
+   - Hedge positions are created correctly
+   - Position sizes remain within defined limits
+   - Leverage is applied correctly
+   - System operates within loss tolerance
+
+This MVP approach provides a controlled environment to verify all critical system components with
+minimal financial risk, while still exercising the full trade lifecycle from signal generation to
+position closing.
+
 ## System Constraints
 
 - API connectivity must be robust with automatic reconnection
