@@ -23,6 +23,44 @@
   "panels": [
     {
       "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "description": "App logs will appear here when your application is tagged with app=\"spark-stacker\"",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 9,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          },
+          "editorMode": "builder",
+          "expr": "{app=\"spark-stacker\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
@@ -31,7 +69,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 3
       },
       "id": 15,
       "options": {
@@ -40,7 +78,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "### System Information\n\nContainer Build ID: 5bf9c734\nBuild Timestamp: 2025-04-02-01:59:45\nTrading Mode: Dry Run (dry_run=True)\nHedging: Enabled (hedging_enabled=True)\n\n**Market Counts**\n- Hyperliquid Markets: 187\n- Coinbase Markets: 730",
+        "content": "Build ID: 5bf9c734\nBuild Timestamp: 2025-04-02-01:59:45 \nTrading Mode: Dry Run (dry_run=True) \nHedging: Enabled (hedging_enabled=True)\n\n**Market Counts**\n- Hyperliquid Markets: 187\n- Coinbase Markets: 730",
         "mode": "markdown"
       },
       "pluginVersion": "10.1.0",
@@ -81,10 +119,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 3,
+        "h": 6,
         "w": 6,
         "x": 12,
-        "y": 0
+        "y": 3
       },
       "id": 6,
       "options": {
@@ -151,10 +189,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 3,
+        "h": 6,
         "w": 6,
         "x": 18,
-        "y": 0
+        "y": 3
       },
       "id": 7,
       "options": {
@@ -183,85 +221,6 @@
       ],
       "title": "PnL Percentage",
       "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Account balances by exchange",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 3
-      },
-      "id": 14,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "spark_stacker_account_balance",
-          "format": "table",
-          "legendFormat": "{{exchange}} - {{currency}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Account Balances",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "indexByName": {},
-            "renameByName": {}
-          }
-        }
-      ],
-      "type": "table"
     },
     {
       "datasource": {
@@ -310,7 +269,7 @@
         "h": 6,
         "w": 3,
         "x": 0,
-        "y": 6
+        "y": 9
       },
       "id": 2,
       "options": {
@@ -407,7 +366,7 @@
         "h": 12,
         "w": 3,
         "x": 3,
-        "y": 6
+        "y": 9
       },
       "id": 3,
       "options": {
@@ -432,19 +391,9 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "container_memory_usage_bytes{container_name=~\".+\"}",
-          "legendFormat": "{{container_name}}",
+          "expr": "container_memory_working_set_bytes{id=~\"/docker/.*\"}",
+          "legendFormat": "{{id}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "container_memory_usage_bytes{name=~\".+\"}",
-          "hide": false,
-          "legendFormat": "{{name}}",
-          "refId": "B"
         }
       ],
       "title": "Memory Usage by Container",
@@ -513,7 +462,7 @@
         "h": 12,
         "w": 3,
         "x": 6,
-        "y": 6
+        "y": 9
       },
       "id": 4,
       "options": {
@@ -561,7 +510,7 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "description": "API Latency from all connectors",
+      "description": "API Latency from all connectors - NOTE: No API calls have been recorded yet. Panel will populate once API calls are made.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -620,7 +569,7 @@
         "h": 12,
         "w": 3,
         "x": 9,
-        "y": 6
+        "y": 9
       },
       "id": 8,
       "options": {
@@ -644,8 +593,8 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(spark_stacker_api_latency_seconds_bucket[5m])) by (endpoint, le))",
-          "legendFormat": "{{endpoint}} (p95)",
+          "expr": "spark_stacker_api_latency_seconds_sum",
+          "legendFormat": "Sum: {{exchange}}/{{endpoint}}",
           "refId": "A"
         },
         {
@@ -653,14 +602,393 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(spark_stacker_api_latency_seconds_bucket[5m])) by (endpoint, le))",
-          "hide": true,
-          "legendFormat": "{{endpoint}} (p50)",
+          "expr": "spark_stacker_api_latency_seconds_count",
+          "hide": false,
+          "legendFormat": "Count: {{exchange}}/{{endpoint}}",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "container_cpu_usage_seconds_total{id=~\"/docker/.*\"} * 0",
+          "hide": true,
+          "legendFormat": "Placeholder data - API not called yet",
+          "refId": "C"
         }
       ],
       "title": "API Latency",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Account balances by exchange",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 14,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "spark_stacker_account_balance",
+          "format": "table",
+          "legendFormat": "{{exchange}} - {{currency}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Account Balances",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true
+            },
+            "indexByName": {
+              "Value": 2,
+              "currency": 1,
+              "exchange": 0
+            },
+            "renameByName": {
+              "Value": "Balance",
+              "currency": "Currency",
+              "exchange": "Exchange"
+            }
+          }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Balance": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Currency": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "Exchange": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Status of services",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "Down"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "Up"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 0,
+        "y": 15
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "spark_stacker_service_status",
+          "instant": true,
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "This panel will show data when your application implements the spark_stacker_trades_total metric",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 32,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "sum(rate(spark_stacker_trades_total[5m])) by (exchange)",
+          "legendFormat": "{{exchange}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Trade Activity",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Status of exchange connections",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "Down"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "Up"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 0,
+        "y": 18
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "spark_stacker_exchange_connection_status",
+          "instant": true,
+          "legendFormat": "{{exchange}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Exchange Connection Status",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -725,8 +1053,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 11
+        "x": 0,
+        "y": 21
       },
       "id": 13,
       "options": {
@@ -757,168 +1085,6 @@
       ],
       "title": "Connection Errors (5m)",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Status of services",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "Down"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "Up"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 0,
-        "y": 12
-      },
-      "id": 11,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "spark_stacker_service_status",
-          "instant": true,
-          "legendFormat": "{{service}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Service Status",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Status of exchange connections",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "Down"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "Up"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 0,
-        "y": 15
-      },
-      "id": 10,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "spark_stacker_exchange_connection_status",
-          "instant": true,
-          "legendFormat": "{{exchange}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Exchange Connection Status",
-      "type": "stat"
     },
     {
       "datasource": {
@@ -984,7 +1150,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 29
       },
       "id": 12,
       "options": {
@@ -1014,102 +1180,6 @@
         }
       ],
       "title": "Websocket Ping Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "This panel will show data when your application implements the spark_stacker_trades_total metric",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 16,
-        "w": 12,
-        "x": 12,
-        "y": 19
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [
-            "sum",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "sum(rate(spark_stacker_trades_total[5m])) by (exchange)",
-          "legendFormat": "{{exchange}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Trade Activity",
       "type": "timeseries"
     },
     {
@@ -1180,7 +1250,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 27
+        "y": 38
       },
       "id": 16,
       "options": {
@@ -1226,44 +1296,6 @@
         }
       ],
       "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "description": "App logs will appear here when your application is tagged with app=\"spark-stacker\"",
-      "gridPos": {
-        "h": 19,
-        "w": 12,
-        "x": 0,
-        "y": 35
-      },
-      "id": 9,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "builder",
-          "expr": "{app=\"spark-stacker\"}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Recent Logs",
-      "type": "logs"
     }
   ],
   "refresh": "10s",
@@ -1280,7 +1312,7 @@
   "timepicker": {},
   "timezone": "",
   "title": "Spark Stacker Dashboard",
-  "uid": "a7e09ec1-53b3-4ce0-8e72-522086c9b9e6",
-  "version": 12,
+  "uid": "dc06efe1-1666-4dc3-b135-d7a7ad166b64",
+  "version": 23,
   "weekStart": ""
 }

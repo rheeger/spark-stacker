@@ -7,6 +7,7 @@ from .prometheus_exporter import exporter
 
 logger = logging.getLogger(__name__)
 
+
 def track_api_latency(exchange: str, endpoint: str):
     """
     Decorator to track API request latency and increment request counters.
@@ -18,6 +19,7 @@ def track_api_latency(exchange: str, endpoint: str):
     Returns:
         Decorator function that tracks API metrics
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -40,8 +42,11 @@ def track_api_latency(exchange: str, endpoint: str):
                     logger.debug(
                         f"API request to {exchange}/{endpoint} took {latency:.3f}s (status: {status})"
                     )
+
         return wrapper
+
     return decorator
+
 
 def track_order_execution(exchange: str, market: str, order_type: str):
     """
@@ -55,6 +60,7 @@ def track_order_execution(exchange: str, market: str, order_type: str):
     Returns:
         Decorator function that tracks order execution time
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -68,13 +74,18 @@ def track_order_execution(exchange: str, market: str, order_type: str):
 
                 # Record the order execution if the exporter is available
                 if exporter:
-                    exporter.record_order_execution(exchange, market, order_type, execution_time)
+                    exporter.record_order_execution(
+                        exchange, market, order_type, execution_time
+                    )
                 else:
                     logger.debug(
                         f"Order execution on {exchange}/{market} ({order_type}) took {execution_time:.3f}s"
                     )
+
         return wrapper
+
     return decorator
+
 
 def update_rate_limit(exchange: str, endpoint: str, remaining: Optional[int] = None):
     """
@@ -87,6 +98,7 @@ def update_rate_limit(exchange: str, endpoint: str, remaining: Optional[int] = N
     """
     if exporter and remaining is not None:
         exporter.update_rate_limit(exchange, endpoint, remaining)
+
 
 def update_margin_ratio(exchange: str, market: str, ratio: float):
     """

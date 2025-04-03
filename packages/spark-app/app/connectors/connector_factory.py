@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List, Type, Set, Union
 from app.connectors.base_connector import BaseConnector, MarketType
 from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.connectors.coinbase_connector import CoinbaseConnector
+from app.connectors.kraken_connector import KrakenConnector
 
 # Import additional connectors as they are implemented
 # from app.connectors.synthetix_connector import SynthetixConnector
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MARKET_TYPES = {
     "hyperliquid": [MarketType.PERPETUAL],
     "coinbase": [MarketType.SPOT],
+    "kraken": [MarketType.SPOT, MarketType.PERPETUAL],
     # Add other exchanges and their default market types as needed
 }
 
@@ -30,6 +32,7 @@ class ConnectorFactory:
     _connector_registry: Dict[str, Type[BaseConnector]] = {
         "hyperliquid": HyperliquidConnector,
         "coinbase": CoinbaseConnector,
+        "kraken": KrakenConnector,
         # Add more connectors as they are implemented
         # 'synthetix': SynthetixConnector,
     }
@@ -127,6 +130,31 @@ class ConnectorFactory:
                     api_key=api_key,
                     api_secret=api_secret,
                     passphrase=api_passphrase,
+                    testnet=use_sandbox,
+                    market_types=processed_market_types,
+                )
+
+            elif exchange_type == "kraken":
+                if not api_key or not api_secret:
+                    logger.error(
+                        "API key and secret are required for Kraken connector"
+                    )
+                    return None
+
+                # For Kraken, strip quotes if they're present in the keys
+                if api_key and api_key.startswith('"') and api_key.endswith('"'):
+                    api_key = api_key[1:-1]
+                if (
+                    api_secret
+                    and api_secret.startswith('"')
+                    and api_secret.endswith('"')
+                ):
+                    api_secret = api_secret[1:-1]
+
+                connector = cls._connector_registry[exchange_type](
+                    name=connector_name,
+                    api_key=api_key,
+                    api_secret=api_secret,
                     testnet=use_sandbox,
                     market_types=processed_market_types,
                 )

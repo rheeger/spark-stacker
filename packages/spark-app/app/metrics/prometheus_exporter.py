@@ -2,81 +2,108 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from prometheus_client import (Counter, Gauge, Histogram, Summary,
-                               start_http_server)
+from prometheus_client import (REGISTRY, CollectorRegistry, Counter, Gauge,
+                               Histogram, Summary, start_http_server)
 
 logger = logging.getLogger(__name__)
+
 
 class PrometheusExporter:
     """Prometheus metrics exporter for Spark Stacker"""
 
-    def __init__(self, port: int = 9000):
+    def __init__(self, port: int = 9000, registry: Optional[CollectorRegistry] = None):
         """Initialize the metrics exporter
 
         Args:
             port: Port to expose metrics on
+            registry: Optional custom registry to use
         """
         self.port = port
+        self.registry = registry or CollectorRegistry()
 
         # API metrics
         self.api_requests = Counter(
-            'spark_stacker_api_requests_total',
-            'Number of API requests',
-            ['exchange', 'endpoint', 'status']
+            "spark_stacker_api_requests_total",
+            "Number of API requests",
+            ["exchange", "endpoint", "status"],
+            registry=self.registry
         )
 
         self.api_latency = Histogram(
-            'spark_stacker_api_latency_seconds',
-            'API request latency in seconds',
-            ['exchange', 'endpoint'],
-            buckets=(0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0)
+            "spark_stacker_api_latency_seconds",
+            "API request latency in seconds",
+            ["exchange", "endpoint"],
+            buckets=(
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.075,
+                0.1,
+                0.25,
+                0.5,
+                0.75,
+                1.0,
+                2.5,
+                5.0,
+                7.5,
+                10.0,
+            ),
+            registry=self.registry
         )
 
         # Order execution metrics
         self.order_execution_time = Histogram(
-            'spark_stacker_order_execution_seconds',
-            'Order execution time in seconds',
-            ['exchange', 'market', 'order_type'],
-            buckets=(0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 30.0, 60.0)
+            "spark_stacker_order_execution_seconds",
+            "Order execution time in seconds",
+            ["exchange", "market", "order_type"],
+            buckets=(0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 30.0, 60.0),
+            registry=self.registry
         )
 
         # Exchange rate limits
         self.rate_limit_remaining = Gauge(
-            'spark_stacker_rate_limit_remaining',
-            'Number of API requests remaining before rate limit',
-            ['exchange', 'endpoint']
+            "spark_stacker_rate_limit_remaining",
+            "Number of API requests remaining before rate limit",
+            ["exchange", "endpoint"],
+            registry=self.registry
         )
 
         # Risk metrics
         self.margin_ratio = Gauge(
-            'spark_stacker_margin_ratio',
-            'Current margin ratio for positions',
-            ['exchange', 'market']
+            "spark_stacker_margin_ratio",
+            "Current margin ratio for positions",
+            ["exchange", "market"],
+            registry=self.registry
         )
 
         self.liquidation_price = Gauge(
-            'spark_stacker_liquidation_price',
-            'Liquidation price for positions',
-            ['exchange', 'market', 'position_side']
+            "spark_stacker_liquidation_price",
+            "Liquidation price for positions",
+            ["exchange", "market", "position_side"],
+            registry=self.registry
         )
 
         # Portfolio metrics
         self.capital_utilization = Gauge(
-            'spark_stacker_capital_utilization_percent',
-            'Percentage of capital currently in use',
-            ['exchange']
+            "spark_stacker_capital_utilization_percent",
+            "Percentage of capital currently in use",
+            ["exchange"],
+            registry=self.registry
         )
 
         self.max_drawdown = Gauge(
-            'spark_stacker_max_drawdown_percent',
-            'Maximum drawdown percentage',
-            ['exchange']
+            "spark_stacker_max_drawdown_percent",
+            "Maximum drawdown percentage",
+            ["exchange"],
+            registry=self.registry
         )
 
         self.pnl_percent = Gauge(
-            'spark_stacker_pnl_percent',
-            'Profit and loss percentage',
-            ['exchange', 'market', 'timeframe']
+            "spark_stacker_pnl_percent",
+            "Profit and loss percentage",
+            ["exchange", "market", "timeframe"],
+            registry=self.registry
         )
 
         # Start time for uptime tracking
@@ -84,10 +111,12 @@ class PrometheusExporter:
 
     def start(self):
         """Start the metrics server"""
-        start_http_server(self.port)
+        start_http_server(self.port, registry=self.registry)
         logger.info(f"Started Prometheus metrics server on port {self.port}")
 
-    def record_api_request(self, exchange: str, endpoint: str, latency: float, status: str = "success"):
+    def record_api_request(
+        self, exchange: str, endpoint: str, latency: float, status: str = "success"
+    ):
         """Record an API request with its latency
 
         Args:
@@ -96,10 +125,14 @@ class PrometheusExporter:
             latency: Request latency in seconds
             status: Request status (success/error)
         """
-        self.api_requests.labels(exchange=exchange, endpoint=endpoint, status=status).inc()
+        self.api_requests.labels(
+            exchange=exchange, endpoint=endpoint, status=status
+        ).inc()
         self.api_latency.labels(exchange=exchange, endpoint=endpoint).observe(latency)
 
-    def record_order_execution(self, exchange: str, market: str, order_type: str, execution_time: float):
+    def record_order_execution(
+        self, exchange: str, market: str, order_type: str, execution_time: float
+    ):
         """Record order execution time
 
         Args:
@@ -109,9 +142,7 @@ class PrometheusExporter:
             execution_time: Time to execute the order in seconds
         """
         self.order_execution_time.labels(
-            exchange=exchange,
-            market=market,
-            order_type=order_type
+            exchange=exchange, market=market, order_type=order_type
         ).observe(execution_time)
 
     def update_rate_limit(self, exchange: str, endpoint: str, remaining: int):
@@ -122,7 +153,9 @@ class PrometheusExporter:
             endpoint: API endpoint
             remaining: Number of requests remaining
         """
-        self.rate_limit_remaining.labels(exchange=exchange, endpoint=endpoint).set(remaining)
+        self.rate_limit_remaining.labels(exchange=exchange, endpoint=endpoint).set(
+            remaining
+        )
 
     def update_margin_ratio(self, exchange: str, market: str, ratio: float):
         """Update margin ratio for a market
@@ -134,7 +167,9 @@ class PrometheusExporter:
         """
         self.margin_ratio.labels(exchange=exchange, market=market).set(ratio)
 
-    def update_liquidation_price(self, exchange: str, market: str, position_side: str, price: float):
+    def update_liquidation_price(
+        self, exchange: str, market: str, position_side: str, price: float
+    ):
         """Update liquidation price for a position
 
         Args:
@@ -144,9 +179,7 @@ class PrometheusExporter:
             price: Liquidation price
         """
         self.liquidation_price.labels(
-            exchange=exchange,
-            market=market,
-            position_side=position_side
+            exchange=exchange, market=market, position_side=position_side
         ).set(price)
 
     def update_capital_utilization(self, exchange: str, utilization: float):
@@ -176,10 +209,14 @@ class PrometheusExporter:
             timeframe: Time period (e.g., daily, weekly)
             pnl: Profit and loss percentage
         """
-        self.pnl_percent.labels(exchange=exchange, market=market, timeframe=timeframe).set(pnl)
+        self.pnl_percent.labels(
+            exchange=exchange, market=market, timeframe=timeframe
+        ).set(pnl)
+
 
 # Global instance to be used throughout the application
 exporter = None
+
 
 def initialize_metrics(port: int = 9000):
     """Initialize and start the metrics exporter
@@ -188,6 +225,12 @@ def initialize_metrics(port: int = 9000):
         port: Port to expose metrics on
     """
     global exporter
-    exporter = PrometheusExporter(port=port)
+    # Check if exporter already exists and clean up if needed
+    if exporter is not None:
+        logger.warning("Metrics exporter already initialized, recreating with new instance")
+
+    # Create a new registry for this instance
+    registry = CollectorRegistry()
+    exporter = PrometheusExporter(port=port, registry=registry)
     exporter.start()
     return exporter

@@ -1,24 +1,28 @@
 # Core dependencies
-pandas
-numpy
+pandas>=1.5.0
+numpy>=1.22.0
 flask
 waitress
 
 # Exchange interaction
-requests
+requests>=2.28.0
 websocket-client
-eth-account
+eth-account>=0.8.0
 web3
 
 # For hyperliquid connector
-hyperliquid-python-sdk
+hyperliquid-python-sdk>=0.0.8
 
 # For coinbase connector
 coinbase-advanced-py
 
+# For kraken connector
+krakenex>=2.1.0
+pykrakenapi>=0.3.1
+
 # Utilities
-python-dotenv
-pydantic
+python-dotenv>=1.0.0
+pydantic>=2.0.0
 PyYAML
 
 # Technical analysis
@@ -27,17 +31,17 @@ PyYAML
 pandas-ta
 
 # Visualization and monitoring (optional)
-matplotlib
+matplotlib>=3.5.0
 seaborn
-prometheus-client  # For metrics collection and exposure
+prometheus-client>=0.16.0  # For metrics collection and exposure
 
 # For progress bars in CLI
 tqdm
 yaspin
 
 # Testing dependencies
-pytest
-pytest-mock
+pytest>=7.3.0
+pytest-mock>=3.10.0
 pytest-cov
 coverage
 
@@ -46,3 +50,9 @@ watchdog  # For file watching
 black     # Code formatting
 pylint    # Linting
 mypy      # Type checking
+
+# Additional dependencies
+urllib3>=1.26.0
+fastapi>=0.95.0
+uvicorn>=0.21.0
+backoff>=2.2.1

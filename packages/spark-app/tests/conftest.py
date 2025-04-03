@@ -11,8 +11,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# Add the app directory to the path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add the package root to the Python path so imports work correctly
+# when running pytest from the command line
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 from app.connectors.base_connector import (
     BaseConnector,

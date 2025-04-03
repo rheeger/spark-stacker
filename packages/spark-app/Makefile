@@ -1,4 +1,4 @@
-.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  make clean          : Clean up temporary files and build artifacts"
 	@echo "  make test           : Run tests for spark-app"
 	@echo "  make spark-app-clean: Clean up spark-app services and volumes"
+	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
 
 # Linting
 lint: lint-python lint-markdown
@@ -67,10 +68,16 @@ spark-app-clean:
 	cd docker && docker-compose down -v
 	@echo "Services cleaned up"
 
+# Run tests
 test:
 	@echo "Running tests for spark-app..."
-	cd scripts && ./run_tests_with_venv.sh
+	@cd $(CURDIR) && .venv/bin/python -m pytest -v
 	@echo "Tests complete"
+
+# Hyperliquid connector tests
+test-hyperliquid:
+	@echo "Running Hyperliquid connector tests..."
+	@cd $(CURDIR) && .venv/bin/python -m pytest tests/unit/test_hyperliquid_connector.py -v
 
 clean:
 	@echo "Cleaning up spark-app package..."

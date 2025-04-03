@@ -16,7 +16,9 @@ _server_thread: Optional[threading.Thread] = None
 _is_running = False
 
 
-def start_metrics_server(port: int = DEFAULT_METRICS_PORT, host: str = DEFAULT_METRICS_HOST) -> None:
+def start_metrics_server(
+    port: int = DEFAULT_METRICS_PORT, host: str = DEFAULT_METRICS_HOST
+) -> None:
     """
     Start the Prometheus metrics server on the specified port.
 

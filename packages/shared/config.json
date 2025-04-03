@@ -35,6 +35,16 @@
       "enabled": true,
       "use_as_main": false,
       "use_as_hedge": false
+    },
+    {
+      "name": "kraken",
+      "exchange_type": "kraken",
+      "api_key": "${KRAKEN_API_KEY}",
+      "api_secret": "${KRAKEN_API_SECRET}",
+      "testnet": "${KRAKEN_USE_SANDBOX}",
+      "enabled": true,
+      "use_as_main": false,
+      "use_as_hedge": false
     }
   ],
   "strategies": [

@@ -39,6 +39,7 @@ class MarketType(str, Enum):
     SPOT = "SPOT"
     PERPETUAL = "PERPETUAL"
     FUTURES = "FUTURES"
+    VAULT = "VAULT"  # Added for Hyperliquid vaults
 
 
 class BaseConnector(abc.ABC):
@@ -74,9 +75,11 @@ class BaseConnector(abc.ABC):
 
     def setup_loggers(self):
         """Set up dedicated loggers for this connector."""
-        from app.utils.logging_setup import (setup_connector_balance_logger,
-                                             setup_connector_markets_logger,
-                                             setup_connector_orders_logger)
+        from app.utils.logging_setup import (
+            setup_connector_balance_logger,
+            setup_connector_markets_logger,
+            setup_connector_orders_logger,
+        )
 
         # Create dedicated loggers
         self.balance_logger = setup_connector_balance_logger(self.name)

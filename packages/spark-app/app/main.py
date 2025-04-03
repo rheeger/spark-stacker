@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import signal as signal_module
 import sys
 import time
@@ -207,9 +208,7 @@ def setup_webhook_server(
     webhook_host = config.get("webhook_host", "0.0.0.0")
     webhook_port = config.get("webhook_port", 8080)
 
-    logger.info(
-        f"Setting up webhook server on {webhook_host}:{webhook_port}..."
-    )
+    logger.info(f"Setting up webhook server on {webhook_host}:{webhook_port}...")
 
     # Define the signal handler function
     def handle_webhook_signal(signal):
@@ -224,9 +223,7 @@ def setup_webhook_server(
     )
 
     if server.start():
-        logger.info(
-            f"Webhook server started at http://{webhook_host}:{webhook_port}"
-        )
+        logger.info(f"Webhook server started at http://{webhook_host}:{webhook_port}")
         return server
     else:
         logger.error("Failed to start webhook server")
@@ -338,17 +335,38 @@ def main():
         logger.info("Configuration loaded successfully")
 
         # Start metrics server on a different port than webhook
-        metrics_port = config.get("metrics_port", 9000)  # Use port 9000 by default for metrics
-        metrics_host = config.get("metrics_host", "0.0.0.0")  # Bind to all interfaces by default
+        metrics_port = config.get(
+            "metrics_port", 9000
+        )  # Use port 9000 by default for metrics
+        metrics_host = config.get(
+            "metrics_host", "0.0.0.0"
+        )  # Bind to all interfaces by default
         logger.info(f"Starting metrics server on {metrics_host}:{metrics_port}")
         initialize_metrics(port=metrics_port)
-        logger.info(f"Metrics server started at http://{metrics_host}:{metrics_port}/metrics")
+        logger.info(
+            f"Metrics server started at http://{metrics_host}:{metrics_port}/metrics"
+        )
 
         # Initialize exchange connectors
         connector_factory = ConnectorFactory()
         exchange_connectors = {}
         main_connector = None
         hedge_connector = None
+
+        # Find where it initializes the connector and add our custom message
+        connector_pattern = re.compile(r'(.*\bConnecting to Hyperliquid API at.*)')
+
+        # Find where it logs the 404 errors and replace them
+        failed_spot_pattern = re.compile(r'(.*Failed to fetch spot markets: 404.*)')
+        failed_vault_pattern = re.compile(r'(.*Failed to fetch vaults: 404.*)')
+        failed_spot_balances_pattern = re.compile(r'(.*Failed to fetch spot balances: 404.*)')
+        failed_vault_balances_pattern = re.compile(r'(.*Failed to fetch vault balances: 404.*)')
+
+        # Updated messages
+        spot_message = "Hyperliquid spot markets not available: This feature is not supported in the current API"
+        vault_message = "Hyperliquid vaults not available: This feature is not supported in the current API"
+        spot_balances_message = "Hyperliquid spot balances not available: This feature is not supported in the current API"
+        vault_balances_message = "Hyperliquid vault balances not available: This feature is not supported in the current API"
 
         for exchange_config in config["exchanges"]:
             if not exchange_config.get("enabled", False):
@@ -480,7 +498,9 @@ def main():
             global webhook_server
             webhook_server = setup_webhook_server(config, engine)
             if not webhook_server:
-                logger.warning("Failed to start webhook server, continuing without webhook support")
+                logger.warning(
+                    "Failed to start webhook server, continuing without webhook support"
+                )
 
         # Main trading loop
         try:

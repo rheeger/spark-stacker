@@ -1,15 +1,13 @@
 import logging
 import time
-from typing import Dict, Any, List, Optional, Tuple, Union
+from functools import wraps
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+import requests
+import urllib3.exceptions
 # Import the BaseConnector interface
-from app.connectors.base_connector import (
-    BaseConnector,
-    OrderSide,
-    OrderType,
-    OrderStatus,
-    MarketType,
-)
+from app.connectors.base_connector import (BaseConnector, MarketType,
+                                           OrderSide, OrderStatus, OrderType)
 
 # For type hinting and future import
 try:
@@ -23,6 +21,72 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# Define custom exception classes for better error handling
+class HyperliquidConnectionError(Exception):
+    """Raised when connection to Hyperliquid API fails"""
+
+    pass
+
+
+class HyperliquidTimeoutError(Exception):
+    """Raised when a request to Hyperliquid API times out"""
+
+    pass
+
+
+class HyperliquidAPIError(Exception):
+    """Raised when Hyperliquid API returns an error response"""
+
+    pass
+
+
+# Define a decorator for API call retries
+def retry_api_call(max_tries=3, backoff_factor=1.5, max_backoff=30):
+    """
+    Decorator for retrying API calls with exponential backoff
+
+    Args:
+        max_tries: Maximum number of attempts
+        backoff_factor: Multiplier for backoff time between retries
+        max_backoff: Maximum backoff time in seconds
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            retry_exceptions = (
+                HyperliquidConnectionError,
+                HyperliquidTimeoutError,
+                urllib3.exceptions.NewConnectionError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+            )
+
+            last_exception = None
+            for attempt in range(max_tries):
+                try:
+                    return func(*args, **kwargs)
+                except retry_exceptions as e:
+                    last_exception = e
+                    if attempt < max_tries - 1:  # Don't sleep on the last attempt
+                        wait_time = min(backoff_factor**attempt, max_backoff)
+                        logger.warning(
+                            f"API call to {func.__name__} failed with error: {str(e)}. "
+                            f"Retrying in {wait_time:.2f}s (attempt {attempt+1}/{max_tries})"
+                        )
+                        time.sleep(wait_time)
+                    else:
+                        logger.error(
+                            f"API call to {func.__name__} failed after {max_tries} attempts: {str(e)}"
+                        )
+            # If we get here, all retries have failed
+            raise last_exception
+
+        return wrapper
+
+    return decorator
+
+
 class HyperliquidConnector(BaseConnector):
     """
     Connector for Hyperliquid DEX using the official Python SDK.
@@ -30,6 +94,9 @@ class HyperliquidConnector(BaseConnector):
     This class implements the BaseConnector interface for Hyperliquid.
     Hyperliquid primarily supports perpetual futures markets.
     """
+
+    MAINNET_API_URL = "https://api.hyperliquid.xyz"
+    TESTNET_API_URL = "https://api.hyperliquid-testnet.xyz"
 
     def __init__(
         self,
@@ -67,23 +134,21 @@ class HyperliquidConnector(BaseConnector):
         self.rpc_url = rpc_url
         self.exchange = None
         self.info = None
+        self.connection_timeout = 10  # Default timeout in seconds
+        self.retry_count = 0  # Track connection retry attempts
 
         # Set up dedicated loggers
         self.setup_loggers()
 
         # Set API URL based on testnet flag
-        if testnet:
-            # Testnet API URL (without /v1)
-            self.api_base_url = "https://api.testnet.hyperliquid.xyz"
-        else:
-            # Mainnet API URL (without /v1)
-            self.api_base_url = "https://api.hyperliquid.xyz"
+        self.api_url = self.TESTNET_API_URL if testnet else self.MAINNET_API_URL
 
         # Log the supported market types
         logger.info(
             f"Initialized HyperliquidConnector with market types: {[mt.value for mt in self.market_types]}"
         )
 
+    @retry_api_call(max_tries=3, backoff_factor=2)
     def connect(self) -> bool:
         """
         Establish connection to Hyperliquid API.
@@ -92,16 +157,19 @@ class HyperliquidConnector(BaseConnector):
             bool: True if connection successful, False otherwise
         """
         try:
+            from eth_account import Account
             from hyperliquid.exchange import Exchange
             from hyperliquid.info import Info
-            from eth_account import Account
 
             logger.info(
-                f"Connecting to Hyperliquid API at {self.api_base_url} (testnet={self.testnet})"
+                f"Connecting to Hyperliquid API at {self.api_url} (testnet={self.testnet})"
             )
 
+            # Reset retry count on new connection attempt
+            self.retry_count = 0
+
             # Initialize info client for data retrieval
-            self.info = Info(base_url=self.api_base_url)
+            self.info = Info(base_url=self.api_url)
 
             # Create a wallet object from the private key
             try:
@@ -109,72 +177,77 @@ class HyperliquidConnector(BaseConnector):
                 wallet = Account.from_key(self.private_key)
 
                 # Initialize exchange client for trading
-                self.exchange = Exchange(wallet=wallet, base_url=self.api_base_url)
+                self.exchange = Exchange(wallet=wallet, base_url=self.api_url)
 
                 # Test connection by getting a simple API call that doesn't require authentication
                 try:
                     # Try to get the metadata which should be available without authentication
                     logger.info("Testing connection by fetching exchange metadata...")
+                    response = requests.get(f"{self.api_url}/info", timeout=self.connection_timeout)
+
+                    if response.status_code != 200:
+                        logger.error(f"API connection test failed with status code: {response.status_code}")
+                        logger.error(f"Response text: {response.text}")
+                        self._is_connected = False
+                        return False
+
+                    # Now try to get metadata through the SDK
                     meta = self.info.meta()
                     logger.info(
                         f"Connected to Hyperliquid {'Testnet' if self.testnet else 'Mainnet'}"
                     )
                     if "universe" in meta:
                         logger.info(f"Found {len(meta['universe'])} markets")
+
+                    self._is_connected = True
                     return True
+
                 except Exception as e:
-                    # If metadata fetch fails, try a simpler API call
-                    logger.warning(f"Failed to fetch metadata: {e}")
-                    logger.info("Trying a direct API call to test connection...")
+                    logger.error(f"Failed to fetch metadata: {e}")
+                    self._is_connected = False
+                    return False
 
-                    # Use requests to check if the API is responding
-                    import requests
-
-                    response = requests.get(f"{self.api_base_url}/info")
-                    if response.status_code == 200:
-                        logger.info(
-                            f"API connection test successful: {response.status_code}"
-                        )
-                        return True
-                    else:
-                        logger.error(
-                            f"API connection test failed: {response.status_code}"
-                        )
-                        return False
             except Exception as e:
                 logger.error(f"Failed to initialize wallet or exchange: {e}")
+                self._is_connected = False
                 return False
 
         except Exception as e:
             logger.error(f"Failed to connect to Hyperliquid: {e}")
+            self._is_connected = False
             return False
 
     def get_markets(self) -> List[Dict[str, Any]]:
         """
         Get available markets from Hyperliquid.
+        Currently, only perpetual futures are supported.
+        Spot markets may be supported in future API versions.
 
         Returns:
-            List of market details
+            List of market details with appropriate market types
         """
         if not self._is_connected:
             self.connect()
 
+        markets = []
+
+        # Get perpetual futures markets
         try:
             # Fetch all metadata info from Hyperliquid
             meta_info = self.info.meta()
 
-            # Extract assets/markets and format them
-            markets = []
+            # Extract perp markets and format them
+            perps_count = len(meta_info.get("universe", []))
 
             # Log that we're processing markets
             if hasattr(self, "markets_logger") and self.markets_logger:
                 self.markets_logger.info(
-                    f"Retrieved {len(meta_info.get('universe', []))} markets from Hyperliquid"
+                    f"Retrieved {perps_count} perpetual markets from Hyperliquid"
                 )
 
             for asset in meta_info.get("universe", []):
                 asset_info = {
-                    "symbol": asset.get("name"),  # Use the name as the symbol
+                    "symbol": asset.get("name"),
                     "base_asset": asset.get("name"),
                     "quote_asset": "USD",
                     "price_precision": asset.get("szDecimals", 2),
@@ -183,15 +256,144 @@ class HyperliquidConnector(BaseConnector):
                     "maker_fee": asset.get("makerFeeRate", 0.0),
                     "taker_fee": asset.get("takerFeeRate", 0.0),
                     "market_type": MarketType.PERPETUAL.value,
+                    "exchange_specific": {
+                        "max_leverage": asset.get("maxLeverage", 50.0),
+                        "funding_interval": asset.get("fundingInterval", 3600),
+                        "section": "perp",
+                    },
                     "active": True,
                 }
-
                 markets.append(asset_info)
 
-            return markets
+            # Log that spot markets are a future feature
+            logger.info("Spot markets are planned for future Hyperliquid API versions")
+
         except Exception as e:
-            logger.error(f"Error getting markets: {e}")
-            return []
+            logger.error(f"Error getting perpetual markets: {e}")
+
+        if hasattr(self, "markets_logger") and self.markets_logger:
+            self.markets_logger.info(f"Total markets retrieved from Hyperliquid: {len(markets)}")
+
+        return markets
+
+    @retry_api_call(max_tries=3, backoff_factor=2)
+    def get_account_balance(self) -> Dict[str, float]:
+        """
+        Get account balance information from Hyperliquid perps.
+        Spot balances may be supported in future API versions.
+
+        Returns:
+            Dict[str, float]: Asset balances with section prefixes
+        """
+        if not self.info:
+            logger.warning("Not connected to Hyperliquid. Attempting to connect...")
+            if not self.connect():
+                raise HyperliquidConnectionError(
+                    "Failed to connect to Hyperliquid. Please check network and API status."
+                )
+
+        try:
+            # Fetch perps balances
+            try:
+                logger.info(f"Fetching perps state for wallet: {self.wallet_address}")
+                perps_state = self.info.user_state(self.wallet_address)
+                logger.info(f"Received user_state response: {perps_state}")
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"Connection error while getting perps state: {e}")
+                self._is_connected = False
+                raise HyperliquidConnectionError(
+                    f"Failed to connect to Hyperliquid API: {e}"
+                )
+            except requests.exceptions.Timeout as e:
+                logger.error(f"Request timed out while getting perps state: {e}")
+                raise HyperliquidTimeoutError(
+                    f"Request to Hyperliquid API timed out: {e}"
+                )
+
+            # Initialize the combined balance dictionary
+            balances = {}
+
+            # Process perps balance (USDC)
+            if "marginSummary" in perps_state and "accountValue" in perps_state["marginSummary"]:
+                try:
+                    perps_usdc = float(perps_state["marginSummary"]["accountValue"])
+                    logger.info(f"USDC balance found: {perps_usdc}")
+                    balances["PERP_USDC"] = perps_usdc
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error converting USDC balance: {e}, value was: {perps_state['marginSummary']['accountValue']}")
+                    perps_usdc = 0.0
+                    balances["PERP_USDC"] = perps_usdc
+            else:
+                logger.warning("No 'marginSummary.accountValue' field found in user_state response")
+                perps_usdc = 0.0
+                balances["PERP_USDC"] = perps_usdc
+
+            # Fetch metadata to get token names
+            try:
+                meta = self.info.meta()
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+            ) as e:
+                logger.error(f"Error fetching metadata: {e}")
+                raise
+
+            # Get asset positions for perps
+            positions_added = 0
+            if "assetPositions" in perps_state:
+                for position in perps_state.get("assetPositions", []):
+                    coin_idx = position.get("coin")
+                    if (
+                        coin_idx is not None
+                        and "universe" in meta
+                        and coin_idx < len(meta["universe"])
+                    ):
+                        coin_name = meta["universe"][coin_idx]["name"]
+                        try:
+                            size = float(position.get("szi", "0"))
+                            if size != 0:  # Only include non-zero positions
+                                balances[f"PERP_{coin_name}"] = size
+                                positions_added += 1
+                        except (ValueError, TypeError) as e:
+                            logger.error(f"Error converting position size: {e}, value was: {position.get('szi')}")
+            else:
+                logger.warning("No 'assetPositions' field found in user_state response")
+
+            logger.info(f"Added {positions_added} position balances")
+
+            # Log that spot balances are a future feature
+            logger.info("Spot balances are planned for future Hyperliquid API versions")
+
+            # Also include the total USDC balance for backward compatibility
+            balances["USDC"] = perps_usdc
+
+            # Log the balances for debugging
+            logger.info(f"Retrieved Hyperliquid balances: {balances}")
+
+            if hasattr(self, "balance_logger") and self.balance_logger:
+                self.balance_logger.info(f"Hyperliquid balances: {balances}")
+
+            return balances
+
+        except (HyperliquidConnectionError, HyperliquidTimeoutError):
+            # These exceptions will be caught by the retry decorator
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get account balances: {e}")
+            return {"USDC": 0.0}
+
+    @retry_api_call(max_tries=3, backoff_factor=2)
+    def get_spot_balances(self) -> Dict[str, float]:
+        """
+        Get spot trading balances from Hyperliquid.
+        Note: Spot trading is planned for future Hyperliquid API versions.
+
+        Returns:
+            Dict mapping token symbols to their balances
+        """
+        # Log that spot balances are a future feature
+        logger.info("Spot balances are planned for future Hyperliquid API versions")
+        return {}
 
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
         """
@@ -219,20 +421,37 @@ class HyperliquidConnector(BaseConnector):
             if coin_idx is None:
                 raise ValueError(f"Market {symbol} not found")
 
-            # Get ticker information
-            state = self.info.user_state(self.wallet_address)
-            all_tickers = self.info.all_mids()
+            # Get latest price from all_mids
+            try:
+                all_mids = self.info.all_mids()
+                if not all_mids or coin_idx >= len(all_mids):
+                    raise ValueError(f"No price data available for {symbol}")
 
-            ticker = {
-                "symbol": symbol,
-                "last_price": float(all_tickers[coin_idx]),
-                "timestamp": int(time.time() * 1000),
-            }
+                return {
+                    "symbol": symbol,
+                    "last_price": float(all_mids[coin_idx]),
+                    "timestamp": int(time.time() * 1000),
+                }
 
-            return ticker
+            except requests.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 429:
+                    logger.warning(f"Rate limit hit while getting ticker for {symbol}. Retrying after delay...")
+                    time.sleep(1)  # Add delay before retry
+                    all_mids = self.info.all_mids()  # Retry once
+                    if not all_mids or coin_idx >= len(all_mids):
+                        raise ValueError(f"No price data available for {symbol}")
+                    return {
+                        "symbol": symbol,
+                        "last_price": float(all_mids[coin_idx]),
+                        "timestamp": int(time.time() * 1000),
+                    }
+                raise
+
         except Exception as e:
             logger.error(f"Failed to get ticker for {symbol}: {e}")
-            return {"symbol": symbol, "error": str(e)}
+            if isinstance(e, ValueError):
+                raise HyperliquidAPIError(str(e))
+            raise
 
     def get_orderbook(
         self, symbol: str, depth: int = 10
@@ -263,45 +482,101 @@ class HyperliquidConnector(BaseConnector):
             if coin_idx is None:
                 raise ValueError(f"Market {symbol} not found")
 
-            # Get L2 orderbook
-            orderbook = self.info.l2_snapshot(coin_idx)
+            # Get L2 orderbook with retry on rate limit
+            try:
+                # Make POST request to /info endpoint for L2 book snapshot
+                response = requests.post(
+                    f"{self.api_url}/info",
+                    json={
+                        "type": "l2Book",
+                        "coin": str(coin_idx),  # API expects coin index, not symbol
+                        "nSigFigs": None  # Use full precision
+                    },
+                    headers={"Content-Type": "application/json"}
+                )
 
-            # Format response
-            return {
-                "bids": [
-                    [float(level[0]), float(level[1])]
-                    for level in orderbook["levels"]["bids"][:depth]
-                ],
-                "asks": [
-                    [float(level[0]), float(level[1])]
-                    for level in orderbook["levels"]["asks"][:depth]
-                ],
-            }
+                if response.status_code == 429:
+                    logger.warning(f"Rate limit hit while getting orderbook for {symbol}. Retrying after delay...")
+                    time.sleep(1)  # Add delay before retry
+                    response = requests.post(  # Retry once
+                        f"{self.api_url}/info",
+                        json={
+                            "type": "l2Book",
+                            "coin": str(coin_idx),
+                            "nSigFigs": None
+                        },
+                        headers={"Content-Type": "application/json"}
+                    )
+
+                if response.status_code != 200:
+                    logger.error(f"API error response: {response.text}")
+                    raise HyperliquidAPIError(f"API returned status code: {response.status_code}")
+
+                data = response.json()
+                logger.info(f"Orderbook response for {symbol}: {data}")
+
+                if not data or not isinstance(data, list) or len(data) != 2:
+                    logger.error(f"Invalid orderbook format: {data}")
+                    raise ValueError(f"Invalid orderbook data for {symbol}")
+
+                # Format response from snapshot - data[0] is bids, data[1] is asks
+                # Handle different response formats (API may return array of arrays or object with levels)
+                try:
+                    # First try to parse as array of arrays format
+                    return {
+                        "bids": [
+                            [float(price), float(size)]
+                            for price, size in data[0][:depth]
+                        ],
+                        "asks": [
+                            [float(price), float(size)]
+                            for price, size in data[1][:depth]
+                        ]
+                    }
+                except (IndexError, TypeError) as e:
+                    logger.warning(f"Error parsing orderbook in array format: {e}, trying alternative format")
+                    # Try parsing as object with px/sz format
+                    try:
+                        return {
+                            "bids": [
+                                [float(level["px"]), float(level["sz"])]
+                                for level in (data[0] or [])[:depth]
+                            ],
+                            "asks": [
+                                [float(level["px"]), float(level["sz"])]
+                                for level in (data[1] or [])[:depth]
+                            ]
+                        }
+                    except (KeyError, TypeError) as e:
+                        logger.error(f"Failed to parse orderbook data: {e}")
+                        return {"bids": [], "asks": []}
+
+            except requests.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 429:
+                    logger.warning(f"Rate limit hit while getting orderbook for {symbol}. Retrying after delay...")
+                    time.sleep(1)  # Add delay before retry
+                    # Try getting state which includes orderbook
+                    state = self.info.user_state(self.wallet_address)
+                    if "orderBook" in state:
+                        return {
+                            "bids": [
+                                [float(level["px"]), float(level["sz"])]
+                                for level in state["orderBook"].get("bids", [])[:depth]
+                            ],
+                            "asks": [
+                                [float(level["px"]), float(level["sz"])]
+                                for level in state["orderBook"].get("asks", [])[:depth]
+                            ],
+                        }
+                raise
+
         except Exception as e:
             logger.error(f"Failed to get orderbook for {symbol}: {e}")
+            if isinstance(e, ValueError):
+                raise HyperliquidAPIError(str(e))
             return {"bids": [], "asks": []}
 
-    def get_account_balance(self) -> Dict[str, float]:
-        """
-        Get account balance information.
-
-        Returns:
-            Dict[str, float]: Asset balances
-        """
-        if not self.info:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
-
-        try:
-            user_state = self.info.user_state(self.wallet_address)
-
-            # Extract USDC balance
-            balance = {"USDC": float(user_state.get("cash", "0"))}
-
-            return balance
-        except Exception as e:
-            logger.error(f"Failed to get account balance: {e}")
-            return {"USDC": 0.0}
-
+    @retry_api_call(max_tries=3, backoff_factor=2)
     def get_positions(self) -> List[Dict[str, Any]]:
         """
         Get current open positions.
@@ -310,12 +585,45 @@ class HyperliquidConnector(BaseConnector):
             List[Dict[str, Any]]: List of open positions
         """
         if not self.info:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
+            logger.warning("Not connected to Hyperliquid. Attempting to connect...")
+            if not self.connect():
+                raise HyperliquidConnectionError(
+                    "Failed to connect to Hyperliquid. Please check network and API status."
+                )
 
         try:
-            user_state = self.info.user_state(self.wallet_address)
-            meta = self.info.meta()
-            all_mids = self.info.all_mids()
+            try:
+                user_state = self.info.user_state(self.wallet_address)
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"Connection error while getting user state: {e}")
+                # Update connection status for metrics
+                self._is_connected = False
+                raise HyperliquidConnectionError(
+                    f"Failed to connect to Hyperliquid API: {e}"
+                )
+            except requests.exceptions.Timeout as e:
+                logger.error(f"Request timed out while getting user state: {e}")
+                raise HyperliquidTimeoutError(
+                    f"Request to Hyperliquid API timed out: {e}"
+                )
+
+            try:
+                meta = self.info.meta()
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"Connection error while getting meta data: {e}")
+                self._is_connected = False
+                raise HyperliquidConnectionError(
+                    f"Failed to connect to Hyperliquid metadata API: {e}"
+                )
+
+            try:
+                all_mids = self.info.all_mids()
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"Connection error while getting all_mids: {e}")
+                self._is_connected = False
+                raise HyperliquidConnectionError(
+                    f"Failed to connect to Hyperliquid price API: {e}"
+                )
 
             positions = []
             for position in user_state.get("assetPositions", []):
@@ -347,6 +655,9 @@ class HyperliquidConnector(BaseConnector):
                 positions.append(position_info)
 
             return positions
+        except (HyperliquidConnectionError, HyperliquidTimeoutError):
+            # These exceptions will be caught by the retry decorator
+            raise
         except Exception as e:
             logger.error(f"Failed to get positions: {e}")
             return []
@@ -357,28 +668,34 @@ class HyperliquidConnector(BaseConnector):
         side: OrderSide,
         order_type: OrderType,
         amount: float,
-        leverage: float,
-        price: Optional[float] = None,
+        price: float,
+        leverage: float = 1.0,  # Default leverage of 1x
+        reduce_only: bool = False,
+        post_only: bool = False,
+        client_order_id: str = None,
     ) -> Dict[str, Any]:
         """
-        Place a new order on Hyperliquid.
+        Place an order on Hyperliquid.
 
         Args:
             symbol: Market symbol (e.g., 'BTC')
-            side: Buy or sell
-            order_type: Market or limit
-            amount: The amount/size to trade
-            leverage: Leverage multiplier
-            price: Limit price (required for limit orders)
+            side: Order side (BUY/SELL)
+            order_type: Order type (MARKET/LIMIT)
+            amount: Order amount in base currency
+            price: Order price (ignored for market orders)
+            leverage: Position leverage (default: 1x)
+            reduce_only: Whether the order should only reduce position
+            post_only: Whether the order must be maker
+            client_order_id: Optional client order ID
 
         Returns:
-            Dict[str, Any]: Order details including order ID
+            Dict[str, Any]: Order response
         """
         if not self.exchange:
             raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
-            # Get coin index
+            # Get market index
             meta = self.info.meta()
             coin_idx = None
 
@@ -390,42 +707,44 @@ class HyperliquidConnector(BaseConnector):
             if coin_idx is None:
                 raise ValueError(f"Market {symbol} not found")
 
-            # Set leverage first
-            self.exchange.update_leverage(coin_idx, leverage)
+            # Validate order parameters
+            if amount <= 0:
+                raise ValueError("Order amount must be positive")
+            if order_type == OrderType.LIMIT and price <= 0:
+                raise ValueError("Limit order price must be positive")
+            if leverage <= 0:
+                raise ValueError("Leverage must be positive")
 
-            # Prepare order parameters
+            # Convert order parameters to Hyperliquid format
             order_params = {
-                "coin": coin_idx,
+                "coin": str(coin_idx),
                 "is_buy": side == OrderSide.BUY,
-                "sz": amount,
-                "reduce_only": False,
+                "sz": str(amount),
+                "limit_px": str(price) if order_type == OrderType.LIMIT else None,
+                "reduce_only": reduce_only,
+                "post_only": post_only,
+                "cloid": client_order_id,
+                "leverage": str(leverage),
             }
 
-            # Add price for limit orders
-            if order_type == OrderType.LIMIT:
-                if price is None:
-                    raise ValueError("Price is required for limit orders")
-                order_params["limit_px"] = price
-                order_result = self.exchange.order_limit(order_params)
-            else:
-                order_result = self.exchange.order_market(order_params)
+            # Place the order
+            try:
+                response = self.exchange.place_order(order_params)
+                return response
 
-            # Process response
-            return {
-                "order_id": order_result.get("order", {}).get("oid", ""),
-                "symbol": symbol,
-                "side": side.value,
-                "type": order_type.value,
-                "amount": amount,
-                "leverage": leverage,
-                "price": price,
-                "status": "OPEN",
-                "timestamp": int(time.time() * 1000),
-            }
+            except requests.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 429:
+                    logger.warning("Rate limit hit while placing order. Retrying after delay...")
+                    time.sleep(1)  # Add delay before retry
+                    response = self.exchange.place_order(order_params)  # Retry once
+                    return response
+                raise
 
         except Exception as e:
             logger.error(f"Failed to place order: {e}")
-            return {"error": str(e), "status": "REJECTED"}
+            if isinstance(e, ValueError):
+                raise HyperliquidAPIError(str(e))
+            raise
 
     def cancel_order(self, order_id: str) -> bool:
         """
@@ -808,14 +1127,15 @@ class HyperliquidConnector(BaseConnector):
             bool: True if disconnection is successful, False otherwise
         """
         try:
-            # Hyperliquid SDK doesn't have a specific disconnect method as it uses
-            # REST API calls. We'll just clean up references.
-            self.exchange = None
+            # Close any open connections
             self.info = None
+            self.exchange = None
+            # Set the connected state to False
+            self._is_connected = False
             logger.info("Disconnected from Hyperliquid API")
             return True
         except Exception as e:
-            logger.error(f"Error disconnecting from Hyperliquid: {e}")
+            logger.error(f"Failed to disconnect from Hyperliquid: {e}")
             return False
 
     def get_order(self, order_id: str) -> Dict[str, Any]:
@@ -972,3 +1292,13 @@ class HyperliquidConnector(BaseConnector):
                 "slippage": 0.0,
                 "enough_liquidity": False,
             }
+
+    @property
+    def is_connected(self) -> bool:
+        """
+        Check if the connector is currently connected.
+
+        Returns:
+            bool: True if connected, False otherwise
+        """
+        return self._is_connected
