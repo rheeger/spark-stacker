@@ -16,23 +16,35 @@
   - ✅ Added error handling and retry logic
   - ✅ Implemented authentication template methods
   - ✅ Created logging infrastructure for connectors
+  - ✅ Added support for VAULT market type
 - ✅ Completed Hyperliquid connector (app/connectors/hyperliquid_connector.py)
   - ✅ Implemented order placement methods (market/limit)
   - ✅ Added position management functionality
   - ✅ Created market data retrieval methods
   - ✅ Added account balance and position tracking
   - ✅ Implemented error handling and custom exceptions
+  - ✅ Added retry mechanism with exponential backoff
+  - ✅ Implemented robust connection management
+  - ✅ Added support for vault operations (future feature)
 - 🟡 Partially implemented Coinbase connector (app/connectors/coinbase_connector.py)
   - ✅ Completed authentication flow
   - ✅ Implemented market data retrieval
   - ✅ Added account information endpoints
   - 🔲 Trading functionality needs completion (order execution, position management)
   - 🔲 Hedging capabilities need refinement
+- ✅ Implemented Kraken connector (app/connectors/kraken_connector.py)
+  - ✅ Implemented authentication flow for both spot and futures
+  - ✅ Added market data retrieval for all markets
+  - ✅ Created order placement functionality
+  - ✅ Implemented position management
+  - ✅ Added special handling for Kraken symbol naming conventions
+  - ✅ Created unified interface for both spot and futures markets
 - ✅ Created ConnectorFactory for dynamic connector instantiation
   (app/connectors/connector_factory.py)
   - ✅ Implemented registration mechanism for new connectors
   - ✅ Added configuration-based connector creation
   - ✅ Built environment variable substitution for secure credentials
+  - ✅ Added support for Kraken connector instantiation
 
 ## Technical Indicators
 

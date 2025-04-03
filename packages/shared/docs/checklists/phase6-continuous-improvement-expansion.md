@@ -77,7 +77,11 @@
 - 🔲 Create centralized exchange connectors
   - 🔲 Implement Binance connector
   - 🔲 Add Bybit integration
-  - 🔲 Create FTX connector
+  - ✅ Create Kraken connector
+    - ✅ Implement authentication for both spot and futures
+    - ✅ Add market data retrieval
+    - ✅ Create order placement and management
+    - ✅ Implement position tracking
   - 🔲 Implement OKX support
 - 🔲 Implement cross-exchange arbitrage
   - 🔲 Create price disparity detection
@@ -159,11 +163,16 @@
 ### Test Coverage Expansion (Target: 85%+ overall coverage)
 
 - 🔲 Improve critical component test coverage
-  - 🔲 HyperliquidConnector (Target: 90%)
-    - 🔲 Create mock responses for API calls
-    - 🔲 Test core trading functionality
-    - 🔲 Test error handling and edge cases
-    - 🔲 Test connection and reconnection logic
+  - 🟡 HyperliquidConnector (Target: 90%)
+    - ✅ Create mock responses for API calls
+    - ✅ Test error handling and custom exceptions
+    - ✅ Test retry mechanisms and connection recovery
+    - 🔲 Complete testing of trading functionality
+  - 🔲 KrakenConnector (Target: 90%)
+    - ✅ Test authentication for both spot and futures APIs
+    - ✅ Test market data retrieval methods
+    - 🔲 Complete testing of order placement and management
+    - 🔲 Test symbol mapping and normalization
   - 🔲 TradingEngine (Target: 90%)
     - 🔲 Test signal processing logic
     - 🔲 Test trade execution logic
