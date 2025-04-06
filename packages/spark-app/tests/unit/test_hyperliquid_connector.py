@@ -478,10 +478,6 @@ def test_get_account_balance(hyperliquid_connector):
     # In a test environment with mocks, a value of 0.0 is acceptable
     assert balances["PERP_USDC"] >= 0
 
-    # Check backward compatibility
-    assert "USDC" in balances
-    assert balances["USDC"] == balances["PERP_USDC"]
-
     # Log the balances for debugging
     logging.info(f"Account balances: {balances}")
 

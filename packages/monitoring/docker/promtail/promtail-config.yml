@@ -24,7 +24,13 @@ scrape_configs:
         labels:
           job: spark-stacker
           app: spark-stacker
-          __path__: /logs/**/spark_stacker.log
+          __path__: /logs/*/spark_stacker.log
+      - targets:
+          - localhost
+        labels:
+          job: spark-stacker
+          app: spark-stacker
+          __path__: /logs/*.log
     pipeline_stages:
       - regex:
           expression: '(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (?P<logger>[\w\.]+) - (?P<level>\w+) - (?P<message>.*)'
@@ -40,21 +46,21 @@ scrape_configs:
           job: spark-stacker
           app: spark-stacker
           log_type: connector
-          __path__: /logs/**/*/markets.log
+          __path__: /logs/*/*/markets.log
       - targets:
           - localhost
         labels:
           job: spark-stacker
           app: spark-stacker
           log_type: connector
-          __path__: /logs/**/*/balance.log
+          __path__: /logs/*/*/balance.log
       - targets:
           - localhost
         labels:
           job: spark-stacker
           app: spark-stacker
           log_type: connector
-          __path__: /logs/**/*/orders.log
+          __path__: /logs/*/*/orders.log
     pipeline_stages:
       - regex:
           expression: '(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (?P<connector>[\w\.]+) - (?P<level>\w+) - (?P<message>.*)'

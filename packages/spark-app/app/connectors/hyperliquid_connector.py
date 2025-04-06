@@ -364,9 +364,6 @@ class HyperliquidConnector(BaseConnector):
             # Log that spot balances are a future feature
             logger.info("Spot balances are planned for future Hyperliquid API versions")
 
-            # Also include the total USDC balance for backward compatibility
-            balances["USDC"] = perps_usdc
-
             # Log the balances for debugging
             logger.info(f"Retrieved Hyperliquid balances: {balances}")
 
@@ -380,7 +377,7 @@ class HyperliquidConnector(BaseConnector):
             raise
         except Exception as e:
             logger.error(f"Failed to get account balances: {e}")
-            return {"USDC": 0.0}
+            return {"PERP_USDC": 0.0}
 
     @retry_api_call(max_tries=3, backoff_factor=2)
     def get_spot_balances(self) -> Dict[str, float]:

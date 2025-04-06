@@ -135,7 +135,8 @@ class SparkStackerLogMetrics:
         self._initialize_from_logs()
 
         # Set a default build info from log
-        self.build_info.labels(build_id="5bf9c734", timestamp="2025-04-02-01-59-45").set(1)
+        self.build_info.labels(build_id="placeholder", timestamp="placeholder").set(1)
+        logger.info("Set placeholder build info. Will update when real build info is found in logs.")
 
         # Find latest log directory if any
         self.current_log_dir = self._find_latest_log_dir()
@@ -315,7 +316,7 @@ class SparkStackerLogMetrics:
 
         # Pattern matching for logs
         build_id_pattern = r"Container build ID: (\w+)"
-        build_timestamp_pattern = r"Build timestamp: ([\d-]+-[\d-]+)"
+        build_timestamp_pattern = r"Build timestamp: ([\d-]+)"
         trading_config_pattern = r"Trading engine started \(dry_run=(\w+), hedging_enabled=(\w+)\)"
         webhook_server_pattern = r"Webhook server started at"
         metrics_server_pattern = r"Metrics server started on"
@@ -338,12 +339,30 @@ class SparkStackerLogMetrics:
                 if build_id_match:
                     build_id = build_id_match.group(1)
                     logger.info(f"Found build ID: {build_id}")
+                    # Store build ID for later use with timestamp
+                    self._last_build_id = build_id
 
-                    # Look for timestamp in the same line or nearby
+                    # Look for timestamp in the same line
                     timestamp_match = re.search(build_timestamp_pattern, line)
                     if timestamp_match:
                         timestamp = timestamp_match.group(1)
+                        logger.info(f"Found build timestamp: {timestamp}")
+                        # Remove any existing build info metrics
+                        self.build_info._metrics.clear()
+                        logger.info(f"Updating build info metric: build_id={build_id}, timestamp={timestamp}")
                         self.build_info.labels(build_id=build_id, timestamp=timestamp).set(1)
+                    else:
+                        logger.warning(f"Build ID found but no timestamp in line: {line}")
+
+                # Also check for timestamp in other lines if we have a build ID already
+                timestamp_match = re.search(build_timestamp_pattern, line)
+                if timestamp_match and hasattr(self, '_last_build_id'):
+                    timestamp = timestamp_match.group(1)
+                    logger.info(f"Found build timestamp separately: {timestamp}")
+                    # Remove any existing build info metrics
+                    self.build_info._metrics.clear()
+                    logger.info(f"Updating build info metric: build_id={self._last_build_id}, timestamp={timestamp}")
+                    self.build_info.labels(build_id=self._last_build_id, timestamp=timestamp).set(1)
 
                 # Trading configuration
                 trading_config_match = re.search(trading_config_pattern, line)
@@ -446,6 +465,24 @@ class SparkStackerLogMetrics:
             # Process balances if found in the logs
             if new_lines:
                 self.exchange_status.labels(exchange=connector).set(1)
+
+                # Parse balance data directly from the log file
+                balance_pattern = r"Hyperliquid balances: ({.*})"
+                currency_value_pattern = r"'([^']+)': ([\d.e-]+)"
+
+                for line in new_lines:
+                    # Look for the line with all balances as a dictionary
+                    balance_match = re.search(balance_pattern, line)
+                    if balance_match:
+                        # Extract the dictionary content
+                        balance_dict_str = balance_match.group(1)
+
+                        # Find all currency-value pairs in the dictionary
+                        for currency_match in re.finditer(currency_value_pattern, balance_dict_str):
+                            currency = currency_match.group(1)
+                            amount = float(currency_match.group(2))
+                            logger.info(f"Setting balance metric for {connector}/{currency}: {amount}")
+                            self.account_balance.labels(exchange=connector, currency=currency).set(amount)
 
         # Process orders logs
         orders_log = os.path.join(connector_dir, "orders.log")
