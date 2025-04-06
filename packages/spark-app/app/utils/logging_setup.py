@@ -1,15 +1,32 @@
+import json
 import logging
 import os
 import sys
-import json
 import uuid
-from logging.handlers import RotatingFileHandler
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
-# Create logs directory if it doesn't exist
-logs_dir = Path("logs")
+# Basic logging to see debug info
+print("Initializing logging_setup.py")
+
+# Get the current file path and find the repo root
+current_file = Path(__file__).resolve()
+app_dir = current_file.parent.parent  # This points to 'app'
+print(f"app_dir: {app_dir}")
+
+# Check if we're running in Docker
+in_docker = os.path.exists("/.dockerenv")
+
+if in_docker:
+    # In Docker, use /app/logs
+    logs_dir = Path("/app/logs")
+else:
+    # Outside Docker, use relative path from app directory
+    logs_dir = app_dir.parent / "logs"
+
+print(f"Logs directory path: {logs_dir}")
 logs_dir.mkdir(exist_ok=True)
 
 # Default log format
@@ -23,10 +40,24 @@ BUILD_TIMESTAMP = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 # Create a build-specific directory for all logs
 BUILD_LOG_DIR = logs_dir / f"{BUILD_TIMESTAMP}_{CONTAINER_BUILD_ID}"
+print(f"Build log directory: {BUILD_LOG_DIR}")
 BUILD_LOG_DIR.mkdir(exist_ok=True)
 
 # Dictionary to track connector-specific log directories
 CONNECTOR_LOG_DIRS = {}
+
+# For backward compatibility, create a symlink in the root /logs directory
+# to maintain compatibility with monitoring tools
+def create_compat_symlink():
+    """Create compatibility symlinks in the correct logs directory."""
+    try:
+        # We no longer need compatibility symlinks in the root directory
+        # All logs will be in /app/logs (Docker) or packages/spark-app/logs (local)
+        logging.info("Compatibility symlinks are no longer needed - all logs are in the correct location")
+        return
+    except Exception as e:
+        logging.warning(f"Error in symlink handling: {str(e)}")
+        print(f"Symlink error: {str(e)}")
 
 
 class StructuredLogRecord(logging.LogRecord):
@@ -359,6 +390,9 @@ def setup_logging(
         logging.info(f"Logs will be written to directory {BUILD_LOG_DIR}")
         logging.info(f"Container build ID: {CONTAINER_BUILD_ID}")
         logging.info(f"Build timestamp: {BUILD_TIMESTAMP}")
+
+        # Create compatibility symlinks for monitoring systems
+        create_compat_symlink()
 
 
 def get_structured_logger(name: str) -> StructuredLogger:

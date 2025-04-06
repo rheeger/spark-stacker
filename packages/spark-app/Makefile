@@ -1,4 +1,4 @@
-.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs
 
 # Default target
 help:
@@ -11,6 +11,7 @@ help:
 	@echo "  make start          : Start the spark-app services"
 	@echo "  make stop           : Stop the spark-app services"
 	@echo "  make clean          : Clean up temporary files and build artifacts"
+	@echo "  make clean-logs     : Clean up all log files"
 	@echo "  make test           : Run tests for spark-app"
 	@echo "  make spark-app-clean: Clean up spark-app services and volumes"
 	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
@@ -87,3 +88,8 @@ clean:
 	find . -type f -name "*.pyc" -delete
 	rm -rf .venv
 	@echo "Clean complete"
+
+clean-logs:
+	@echo "Cleaning up all logs..."
+	@cd $(CURDIR) && .venv/bin/python scripts/cleanup_logs.py
+	@echo "Logs cleaned up. New logs will be stored in app/logs directory."

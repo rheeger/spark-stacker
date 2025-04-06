@@ -11,7 +11,7 @@ services:
       - "${WEBHOOK_PORT:-8080}:8080"
       - "9000:9000"
     volumes:
-      - ../logs:/app/logs
+      - ../logs:/app/logs:rw
       - ../../shared/config.json:/app/config.json
       - ../data:/app/data
     env_file:
