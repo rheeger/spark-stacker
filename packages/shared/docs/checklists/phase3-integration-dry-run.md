@@ -117,30 +117,31 @@
   - 🔲 Verify exchange API connectivity under various conditions
   - 🔲 Test system behavior during API outages
 
-## Dry Run Testing (CRITICAL PATH)
+## De-Minimus Production Testing (CRITICAL PATH)
 
-- 🟡 Testnet execution partially implemented
-  - ✅ Hyperliquid testnet support configured
-  - 🔲 Synthetix testnet integration incomplete
-  - 🔲 Full trading cycle validation incomplete
-- 🟡 Paper trading mode implemented but not fully tested
-  - ✅ Created mode for simulated order execution
-  - ✅ Added P&L tracking without real capital
-  - 🔲 Comparison with expected outcomes incomplete
-  - 🔲 Extended duration testing not performed
+- 🟡 Production execution with minimal capital partially implemented
+  - 🔲 Hyperliquid production integration with $1.00 position sizes
+  - 🔲 1-minute timeframe testing and monitoring
+  - 🔲 Full trading cycle validation with real funds
+- 🔲 Short-timeframe observation and validation
+  - 🔲 Test with 1-minute candles for accelerated feedback
+  - 🔲 Monitor position tracking during active observation periods
+  - 🔲 Real-time validation of entry/exit signals
+- 🟡 Paper trading mode considered but deprioritized in favor of small real trades
+  - 🔲 Transition plan from paper trading to de-minimus real trading
 
-## Dry Run Testing Requirements
+## De-Minimus Testing Requirements
 
-- 🔲 Testnet functionality tests
-  - 🔲 Test successful order placement on testnet
-  - 🔲 Verify position management functionality
-  - 🔲 Validate stop-loss and take-profit execution
-- 🔲 Paper trading validation tests
-  - 🔲 Test order simulation accuracy
-  - 🔲 Verify P&L calculation correctness
-  - 🔲 Validate position tracking over time
+- 🔲 Production functionality tests
+  - 🔲 Test successful order placement with $1.00 positions
+  - 🔲 Verify position management functionality with real funds
+  - 🔲 Validate stop-loss and take-profit execution on production systems
+- 🔲 Short-timeframe validation tests
+  - 🔲 Test signal generation on 1-minute candles
+  - 🔲 Verify order execution timing in production
+  - 🔲 Validate position tracking across short intervals
 
-## Containerization & Deployment
+## Containerization & Cloud Deployment
 
 - ✅ Created Dockerfile for application packaging
   - ✅ Multi-stage build for efficiency
@@ -154,6 +155,11 @@
   - ✅ Environment variable processing
   - ✅ Configuration file generation
   - ✅ Credential validation
+- 🔲 Google Cloud Platform deployment preparation
+  - 🔲 Configure GKE (Google Kubernetes Engine) deployment files
+  - 🔲 Setup Container Registry integration
+  - 🔲 Create persistent storage configuration for GCP
+  - 🔲 Configure network policies and security for cloud deployment
 
 ## Deployment Testing Requirements
 
@@ -165,11 +171,16 @@
   - 🔲 Test communication between containerized components
   - 🔲 Verify database persistence across restarts
   - 🔲 Validate logging configuration in containerized environment
+- 🔲 Cloud deployment testing
+  - 🔲 Verify GKE pod initialization and health
+  - 🔲 Test persistent storage functionality in cloud environment
+  - 🔲 Validate networking between application components in GKE
 
 ## Current Implementation Status
 
 Phase 3 is approximately 80% complete. The system has reached a functional state with core
-components successfully integrated, and the basic dry run capability is operational.
+components successfully integrated, and the basic testnet capability is being replaced with a more
+practical de-minimus real trading approach.
 
 The TradingEngine properly coordinates interactions between exchange connectors, indicators, and the
 risk management system. The StrategyManager effectively handles multiple trading strategies, though
@@ -180,8 +191,9 @@ and forwards them to the trading engine. The system has been containerized with 
 deployment and ensuring consistent operation across environments.
 
 Testing coverage is good for individual components but lacking in end-to-end system testing and
-performance assessment. The dry run mode works well on the Hyperliquid testnet, but needs more
-thorough validation and stress testing.
+performance assessment. The dry run approach is being shifted from testnet to small real trades with
+minimal capital on production exchanges, starting with Hyperliquid, to ensure consistent and
+reliable testing results.
 
 ## MACD Strategy Implementation for Hyperliquid ETH-USD (MVP)
 
@@ -245,22 +257,22 @@ product focused on a single strategy with minimal risk exposure.
 - 🔲 Create Hyperliquid-specific tests
   - 🔲 Test order placement with minimum size ($1.00)
   - 🔲 Verify leverage configuration
-  - 🔲 Test order execution timing
+  - 🔲 Test order execution timing with 1-minute data
 
-### Dry Run Implementation
+### De-Minimus Production Implementation
 
-- 🔲 Configure MACD strategy for Hyperliquid testnet
-  - 🔲 Set up testnet credentials
-  - 🔲 Configure minimal test capital
-  - 🔲 Implement logging for strategy executions
+- 🔲 Configure MACD strategy for Hyperliquid production
+  - 🔲 Set up production credentials with proper security
+  - 🔲 Configure minimal test capital ($1.00 positions)
+  - 🔲 Implement enhanced logging for real-money executions
 - 🔲 Test execution with 1-minute timeframe
-  - 🔲 Validate data freshness
-  - 🔲 Test signal generation frequency
-  - 🔲 Monitor execution latency
+  - 🔲 Validate data freshness on short timeframes
+  - 🔲 Test signal generation frequency with 1-minute candles
+  - 🔲 Monitor execution latency in production environment
 - 🔲 Monitor and validate positions
-  - 🔲 Track position entry and exit
-  - 🔲 Validate hedge position creation
-  - 🔲 Monitor P&L calculation accuracy
+  - 🔲 Track position entry and exit in real-time
+  - 🔲 Validate hedge position creation with real funds
+  - 🔲 Monitor P&L calculation accuracy on real positions
 
 ### Documentation
 
@@ -270,5 +282,5 @@ product focused on a single strategy with minimal risk exposure.
   - 🔲 Create usage examples
 - 🔲 Create operational guide
   - 🔲 Document strategy activation process
-  - 🔲 Add monitoring instructions
-  - 🔲 Include troubleshooting guide
+  - 🔲 Add monitoring instructions for 1-minute timeframes
+  - 🔲 Include troubleshooting guide for production trading

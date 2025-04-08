@@ -138,6 +138,8 @@ maintainability:
   - **Flask / FastAPI:** For webhook reception from TradingView
   - **NumPy / Pandas:** For data manipulation and analysis
   - **SQLite / PostgreSQL:** For trade logging and performance tracking
+  - **Prometheus Client:** For metrics collection and monitoring
+  - **Kubernetes Python Client:** For GKE integration and management
 
 ### Exchange-Specific Integration Details
 
@@ -400,131 +402,668 @@ For 1-minute timeframe data from Hyperliquid, we'll implement an optimized colle
 support for real-time updates:
 
 ```python
-class HyperliquidMinuteDataCollector:
-    """Specialized collector for 1-minute data from Hyperliquid."""
+import asyncio
+import websockets
+import json
+from datetime import datetime, timedelta
+import pandas as pd
+from app.core.types import Timeframe
 
-    def __init__(self, symbol="ETH-USD", websocket_manager=None):
-        self.symbol = symbol
-        self.websocket_manager = websocket_manager
-        self.candle_cache = {}
-        self.current_candle = None
+class HyperliquidMarketDataCollector:
+    """
+    Specialized collector for 1-minute candle data from Hyperliquid.
+    Uses WebSocket for real-time data and REST API for historical data.
+    """
+    def __init__(self, client, market):
+        self.client = client
+        self.market = market
+        self.ws_endpoint = "wss://api.hyperliquid.xyz/ws"
+        self.ws_connection = None
+        self.candle_buffer = {}  # Buffer for current candles
+        self.candle_history = pd.DataFrame()  # Historical candle data
+        self.timeframe = Timeframe.ONE_MINUTE
 
-    async def setup(self):
-        """Initialize WebSocket connection and historical data."""
-        # Subscribe to trades for building 1-minute candles
-        await self.websocket_manager.subscribe_trades(self.symbol, self._process_trade)
+    async def connect(self):
+        """Establish WebSocket connection and subscribe to market data."""
+        self.ws_connection = await websockets.connect(self.ws_endpoint)
+        subscribe_msg = {
+            "method": "subscribe",
+            "subscription": {
+                "type": "trades",
+                "market": self.market
+            }
+        }
+        await self.ws_connection.send(json.dumps(subscribe_msg))
 
-        # Get initial historical data
-        await self.fetch_historical_data()
+        # Start background task to process incoming messages
+        asyncio.create_task(self._process_messages())
 
-    async def fetch_historical_data(self, lookback_periods=100):
-        """Fetch initial historical 1-minute candles."""
-        # Get historical 1-minute candles from REST API
-        # Implementation depends on Hyperliquid API
-        pass
+        # Initialize with recent historical data
+        await self._load_initial_history()
 
-    def _process_trade(self, trade_data):
-        """Process incoming trade to build 1-minute candles in real-time."""
-        # Update current candle with trade data
-        # When minute changes, finalize candle and begin new one
-        pass
+    async def _load_initial_history(self):
+        """Load initial historical data to prime the collector."""
+        # Get candles for the past hour (60 1-minute candles)
+        end_time = datetime.now()
+        start_time = end_time - timedelta(hours=1)
 
-    async def get_current_data(self, periods=30):
-        """Get the most recent n periods of 1-minute data."""
-        # Return DataFrame with OHLCV data for the requested periods
-        pass
+        # Convert to UNIX timestamps in milliseconds
+        start_ts = int(start_time.timestamp() * 1000)
+        end_ts = int(end_time.timestamp() * 1000)
+
+        # Fetch historical candles from REST API
+        candles = await self.client.get_candles(
+            self.market,
+            Timeframe.ONE_MINUTE,
+            start_time=start_ts,
+            end_time=end_ts
+        )
+
+        # Convert to DataFrame with datetime index
+        self.candle_history = pd.DataFrame(candles)
+        self.candle_history['timestamp'] = pd.to_datetime(self.candle_history['timestamp'], unit='ms')
+        self.candle_history.set_index('timestamp', inplace=True)
+
+        self.logger.info(
+            f"Loaded {len(self.candle_history)} initial candles for {self.market}"
+        )
+
+    async def _process_messages(self):
+        """Process incoming WebSocket messages and update candle data."""
+        try:
+            while True:
+                message = await self.ws_connection.recv()
+                data = json.loads(message)
+
+                if "trades" in data:
+                    # Process trade data to build 1-minute candles
+                    for trade in data["trades"]:
+                        await self._process_trade(trade)
+
+                elif "error" in data:
+                    self.logger.error(f"WebSocket error: {data['error']}")
+        except Exception as e:
+            self.logger.error(f"WebSocket processing error: {str(e)}")
+            # Attempt to reconnect
+            await self.connect()
+
+    async def _process_trade(self, trade):
+        """Process a single trade and update the current candle."""
+        # Extract trade details
+        timestamp = trade["timestamp"]
+        price = float(trade["price"])
+        size = float(trade["size"])
+
+        # Determine which 1-minute candle this belongs to
+        candle_time = datetime.fromtimestamp(timestamp / 1000)
+        # Truncate to the start of the minute
+        candle_time = candle_time.replace(second=0, microsecond=0)
+        candle_key = candle_time.isoformat()
+
+        # Update or create candle
+        if candle_key not in self.candle_buffer:
+            self.candle_buffer[candle_key] = {
+                'open': price,
+                'high': price,
+                'low': price,
+                'close': price,
+                'volume': size
+            }
+        else:
+            candle = self.candle_buffer[candle_key]
+            candle['high'] = max(candle['high'], price)
+            candle['low'] = min(candle['low'], price)
+            candle['close'] = price
+            candle['volume'] += size
+
+        # Check if we need to finalize any candles (older than 1 minute)
+        current_time = datetime.now()
+        for time_key in list(self.candle_buffer.keys()):
+            candle_time = datetime.fromisoformat(time_key)
+            if current_time - candle_time > timedelta(minutes=1, seconds=10):
+                # This candle is complete, add to history
+                self._finalize_candle(time_key, self.candle_buffer[time_key])
+                del self.candle_buffer[time_key]
+
+    def _finalize_candle(self, time_key, candle_data):
+        """Add a completed candle to the candle history."""
+        # Convert to DataFrame row and add to history
+        candle_time = datetime.fromisoformat(time_key)
+        df_row = pd.DataFrame([candle_data], index=[candle_time])
+        self.candle_history = pd.concat([self.candle_history, df_row])
+
+        # Notify any listeners that new candle data is available
+        self._notify_candle_update(candle_time, candle_data)
+
+    def _notify_candle_update(self, candle_time, candle_data):
+        """Notify listeners that a new candle is available."""
+        # Implement observer pattern to notify strategy of new data
+        if hasattr(self, "on_candle_update") and callable(self.on_candle_update):
+            self.on_candle_update(candle_time, candle_data)
+
+        # Also publish metrics
+        if hasattr(self, "metrics_client"):
+            self.metrics_client.gauge(
+                "spark_stacker_candle_price",
+                candle_data['close'],
+                {"market": self.market, "timeframe": "1m", "type": "close"}
+            )
+            self.metrics_client.gauge(
+                "spark_stacker_candle_volume",
+                candle_data['volume'],
+                {"market": self.market, "timeframe": "1m"}
+            )
+
+    async def get_latest_candles(self, count=100):
+        """Get the most recent candles from history."""
+        return self.candle_history.tail(count)
+
+    async def close(self):
+        """Close WebSocket connection."""
+        if self.ws_connection:
+            await self.ws_connection.close()
 ```
 
-### Configuration
+### De-Minimus Production Testing Implementation
 
-Strategy configuration in the system's `config.yml`:
-
-```yaml
-strategies:
-  macd_eth_usd:
-    name: 'MACD ETH-USD 1m'
-    type: 'MACD'
-    class_name: 'MACDStrategy'
-    enabled: true
-    exchange: 'hyperliquid'
-    market: 'ETH-USD'
-    timeframe: '1m'
-    parameters:
-      fast_period: 8
-      slow_period: 21
-      signal_period: 5
-    risk_parameters:
-      max_position_size: 1.00
-      leverage: 10
-      stop_loss_percent: -5.0
-      take_profit_percent: 10.0
-      hedge_ratio: 0.2
-      max_position_duration_minutes: 1440 # 24 hours
-```
-
-### Monitoring Integration
-
-To enable real-time monitoring of the strategy, we'll add metrics export:
+Instead of using testnet environments, we'll implement de-minimus trading on production exchanges
+with minimal capital:
 
 ```python
-# In strategy initialization
-self.metrics_client.gauge(
-    "spark_stacker_strategy_active",
-    1,
-    {"strategy": "macd_eth_usd", "exchange": "hyperliquid", "market": "ETH-USD"}
-)
+from decimal import Decimal
 
-# On signal generation
-self.metrics_client.counter(
-    "spark_stacker_strategy_signal_generated_total",
-    1,
-    {"strategy": "macd_eth_usd", "signal": signal.direction.name.lower()}
-)
+class DeMinimusTradeExecutor:
+    """
+    Specialized executor for de-minimus trading on production exchanges.
+    Enforces strict position size limits and implements enhanced monitoring.
+    """
+    def __init__(self, connector, max_position_size=1.0, metrics_client=None):
+        self.connector = connector
+        self.max_position_size = Decimal(str(max_position_size))
+        self.metrics_client = metrics_client
+        self.logger = logging.getLogger(__name__)
+        self.active_positions = {}
 
-# On trade execution
-self.metrics_client.counter(
-    "spark_stacker_strategy_trade_executed_total",
-    1,
-    {"strategy": "macd_eth_usd", "result": "success" if success else "failure"}
-)
+    async def execute_order(self, market, side, size, leverage, order_type="MARKET"):
+        """Execute an order with strict size enforcement."""
+        # Convert size to Decimal for precise comparison
+        size_decimal = Decimal(str(size))
 
-# On position update
-self.metrics_client.gauge(
-    "spark_stacker_strategy_position",
-    position_size,
-    {
-        "strategy": "macd_eth_usd",
-        "exchange": "hyperliquid",
-        "market": "ETH-USD",
-        "type": "main",
-        "side": position_direction.name.lower()
-    }
-)
+        # Enforce maximum position size
+        if size_decimal > self.max_position_size:
+            self.logger.warning(
+                f"Order size {size} exceeds maximum allowed size {self.max_position_size}. "
+                f"Size will be capped."
+            )
+            size = float(self.max_position_size)
+
+        # Log the de-minimus trade attempt
+        self.logger.info(
+            f"Executing de-minimus {side} order for {size} {market} with {leverage}x leverage"
+        )
+
+        # Record metrics before execution
+        if self.metrics_client:
+            self.metrics_client.counter(
+                "spark_stacker_deminimus_trade_attempt",
+                1,
+                {"market": market, "side": side, "order_type": order_type}
+            )
+
+        # Execute the order on the production exchange
+        try:
+            order_result = await self.connector.place_order(
+                market=market,
+                side=side,
+                size=size,
+                leverage=leverage,
+                order_type=order_type
+            )
+
+            # Record successful execution
+            if self.metrics_client:
+                self.metrics_client.counter(
+                    "spark_stacker_deminimus_trade_success",
+                    1,
+                    {"market": market, "side": side}
+                )
+
+            # Track the position
+            if "position_id" in order_result:
+                self.active_positions[order_result["position_id"]] = {
+                    "market": market,
+                    "side": side,
+                    "size": size,
+                    "leverage": leverage,
+                    "entry_price": order_result.get("price", 0),
+                    "entry_time": datetime.now().isoformat()
+                }
+
+            return order_result
+
+        except Exception as e:
+            # Record failure
+            if self.metrics_client:
+                self.metrics_client.counter(
+                    "spark_stacker_deminimus_trade_failure",
+                    1,
+                    {"market": market, "side": side, "error": str(e)[:50]}
+                )
+            self.logger.error(f"De-minimus trade execution failed: {str(e)}")
+            raise
+
+    async def close_position(self, position_id):
+        """Close a position and record results."""
+        if position_id not in self.active_positions:
+            self.logger.warning(f"Position {position_id} not found in active positions")
+            return False
+
+        position = self.active_positions[position_id]
+
+        try:
+            # Close the position
+            result = await self.connector.close_position(
+                market=position["market"],
+                position_id=position_id
+            )
+
+            # Calculate metrics if price information is available
+            if "exit_price" in result and position.get("entry_price"):
+                entry_price = Decimal(str(position["entry_price"]))
+                exit_price = Decimal(str(result["exit_price"]))
+                side = position["side"]
+
+                # Calculate PnL percentage
+                if side.upper() == "BUY" or side.upper() == "LONG":
+                    pnl_pct = ((exit_price / entry_price) - 1) * 100 * Decimal(str(position["leverage"]))
+                else:
+                    pnl_pct = ((entry_price / exit_price) - 1) * 100 * Decimal(str(position["leverage"]))
+
+                # Record metrics
+                if self.metrics_client:
+                    self.metrics_client.gauge(
+                        "spark_stacker_deminimus_trade_pnl",
+                        float(pnl_pct),
+                        {"market": position["market"], "side": position["side"]}
+                    )
+
+                self.logger.info(
+                    f"Closed de-minimus position with PnL: {float(pnl_pct)}%"
+                )
+
+            # Remove from active positions
+            del self.active_positions[position_id]
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Error closing position {position_id}: {str(e)}")
+            if self.metrics_client:
+                self.metrics_client.counter(
+                    "spark_stacker_deminimus_position_close_failure",
+                    1,
+                    {"market": position["market"], "error": str(e)[:50]}
+                )
+            raise
 ```
 
-### Performance Optimizations for 1-Minute Data
+### Google Cloud Platform Deployment
 
-For high-frequency trading with 1-minute candles, several optimizations are necessary:
+To ensure persistent operation, the system will be deployed to Google Kubernetes Engine (GKE):
 
-1. **Cache Management**:
+```python
+from kubernetes import client, config
+from google.cloud import secretmanager
 
-   - Implement rolling cache for historical data
-   - Store preprocessed indicator values to avoid recalculation
-   - Use TTL-based caching for API responses
+class GCPDeploymentManager:
+    """
+    Manages deployment of the trading application to Google Kubernetes Engine.
+    Handles Kubernetes configuration, secret management, and deployment monitoring.
+    """
+    def __init__(self, project_id, cluster_name, namespace="spark-stacker"):
+        self.project_id = project_id
+        self.cluster_name = cluster_name
+        self.namespace = namespace
+        self.logger = logging.getLogger(__name__)
+        self.secret_client = secretmanager.SecretManagerServiceClient()
 
-2. **Connection Resilience**:
+        # Load GKE credentials
+        try:
+            config.load_kube_config()
+            self.k8s_client = client.CoreV1Api()
+            self.k8s_apps = client.AppsV1Api()
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Kubernetes client: {str(e)}")
+            raise
 
-   - Implement heartbeat for WebSocket connections
-   - Automatic reconnection with exponential backoff
-   - Duplicate connection paths for critical data
+    def create_secret_from_sm(self, secret_name, k8s_secret_name):
+        """Create Kubernetes secret from Google Secret Manager."""
+        try:
+            # Get secret from Secret Manager
+            secret_path = f"projects/{self.project_id}/secrets/{secret_name}/versions/latest"
+            response = self.secret_client.access_secret_version(request={"name": secret_path})
+            secret_value = response.payload.data.decode("UTF-8")
 
-3. **Trade Execution**:
-   - Optimize order placement for minimal latency
-   - Implement retry logic with timeout controls
-   - Add circuit breakers for error conditions
+            # Create K8s secret
+            secret = client.V1Secret(
+                metadata=client.V1ObjectMeta(
+                    name=k8s_secret_name,
+                    namespace=self.namespace
+                ),
+                string_data={"value": secret_value}
+            )
 
-This MVP implementation provides a comprehensive test of all critical system components while
-minimizing financial risk through small position sizes.
+            # Check if secret already exists
+            try:
+                self.k8s_client.read_namespaced_secret(
+                    name=k8s_secret_name,
+                    namespace=self.namespace
+                )
+                # Update existing secret
+                self.k8s_client.replace_namespaced_secret(
+                    name=k8s_secret_name,
+                    namespace=self.namespace,
+                    body=secret
+                )
+                self.logger.info(f"Updated Kubernetes secret {k8s_secret_name}")
+            except client.exceptions.ApiException as e:
+                if e.status == 404:
+                    # Create new secret
+                    self.k8s_client.create_namespaced_secret(
+                        namespace=self.namespace,
+                        body=secret
+                    )
+                    self.logger.info(f"Created Kubernetes secret {k8s_secret_name}")
+                else:
+                    raise
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to create secret {k8s_secret_name}: {str(e)}")
+            return False
+
+    def deploy_trading_app(self, image, replicas=1):
+        """Deploy the trading application to GKE."""
+        try:
+            # Create deployment configuration
+            container = client.V1Container(
+                name="trading-app",
+                image=image,
+                resources=client.V1ResourceRequirements(
+                    requests={"cpu": "100m", "memory": "512Mi"},
+                    limits={"cpu": "500m", "memory": "1Gi"}
+                ),
+                env=[
+                    client.V1EnvVar(
+                        name="ENVIRONMENT",
+                        value="production"
+                    ),
+                    client.V1EnvVar(
+                        name="HYPERLIQUID_API_KEY",
+                        value_from=client.V1EnvVarSource(
+                            secret_key_ref=client.V1SecretKeySelector(
+                                name="hyperliquid-credentials",
+                                key="value"
+                            )
+                        )
+                    )
+                ],
+                liveness_probe=client.V1Probe(
+                    http_get=client.V1HTTPGetAction(
+                        path="/health",
+                        port=8080
+                    ),
+                    initial_delay_seconds=30,
+                    period_seconds=30
+                )
+            )
+
+            # Create pod template
+            template = client.V1PodTemplateSpec(
+                metadata=client.V1ObjectMeta(labels={"app": "trading-app"}),
+                spec=client.V1PodSpec(containers=[container])
+            )
+
+            # Create deployment spec
+            spec = client.V1DeploymentSpec(
+                replicas=replicas,
+                selector=client.V1LabelSelector(
+                    match_labels={"app": "trading-app"}
+                ),
+                template=template
+            )
+
+            # Create deployment
+            deployment = client.V1Deployment(
+                api_version="apps/v1",
+                kind="Deployment",
+                metadata=client.V1ObjectMeta(name="trading-app"),
+                spec=spec
+            )
+
+            # Apply deployment
+            try:
+                self.k8s_apps.read_namespaced_deployment(
+                    name="trading-app",
+                    namespace=self.namespace
+                )
+                # Update existing deployment
+                self.k8s_apps.replace_namespaced_deployment(
+                    name="trading-app",
+                    namespace=self.namespace,
+                    body=deployment
+                )
+                self.logger.info("Updated trading application deployment")
+            except client.exceptions.ApiException as e:
+                if e.status == 404:
+                    # Create new deployment
+                    self.k8s_apps.create_namespaced_deployment(
+                        namespace=self.namespace,
+                        body=deployment
+                    )
+                    self.logger.info("Created trading application deployment")
+                else:
+                    raise
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to deploy trading application: {str(e)}")
+            return False
+
+    def deploy_monitoring_stack(self):
+        """Deploy Prometheus, Grafana, and other monitoring components."""
+        # Implementation for deploying monitoring stack to GKE
+        # This would create deployments for Prometheus, Grafana, etc.
+        pass
+
+    def check_deployment_status(self, deployment_name="trading-app"):
+        """Check the status of a deployment."""
+        try:
+            status = self.k8s_apps.read_namespaced_deployment_status(
+                name=deployment_name,
+                namespace=self.namespace
+            )
+
+            ready_replicas = status.status.ready_replicas or 0
+            total_replicas = status.status.replicas or 0
+
+            self.logger.info(
+                f"Deployment status: {ready_replicas}/{total_replicas} replicas ready"
+            )
+
+            return {
+                "name": deployment_name,
+                "ready_replicas": ready_replicas,
+                "total_replicas": total_replicas,
+                "is_ready": ready_replicas == total_replicas and total_replicas > 0
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to check deployment status: {str(e)}")
+            return {
+                "name": deployment_name,
+                "error": str(e),
+                "is_ready": False
+            }
+```
+
+### 1-Minute Trading Implementation
+
+The system is optimized for 1-minute trading to allow observation during development sessions:
+
+```python
+class OneMinuteMACD:
+    """
+    Optimized MACD strategy for 1-minute timeframes.
+    Implements specialized logic for high-frequency signal detection.
+    """
+    def __init__(self, connector, metrics_client=None):
+        self.connector = connector
+        self.metrics_client = metrics_client
+        self.logger = logging.getLogger(__name__)
+        self.signal_buffer = []  # Buffer to filter out noise
+
+    def initialize(self):
+        """Set up data collection and signal processing."""
+        # Set up market data collector for 1-minute candles
+        self.collector = HyperliquidMarketDataCollector(
+            self.connector,
+            "ETH-USD"
+        )
+
+        # Set up MACD indicator with fast parameters
+        self.macd = MACDIndicator(
+            name="MACD_1m",
+            params={
+                "fast_period": 8,
+                "slow_period": 21,
+                "signal_period": 5
+            }
+        )
+
+        # Set up de-minimus trade executor
+        self.executor = DeMinimusTradeExecutor(
+            self.connector,
+            max_position_size=1.0,
+            metrics_client=self.metrics_client
+        )
+
+        # Register for candle updates
+        self.collector.on_candle_update = self.on_candle_update
+
+    async def start(self):
+        """Start the strategy execution."""
+        await self.collector.connect()
+        # Initialize with historical data
+        initial_candles = await self.collector.get_latest_candles(30)
+        if not initial_candles.empty:
+            # Calculate initial MACD values
+            self.macd.process(initial_candles)
+            self.logger.info("Initialized 1-minute MACD with historical data")
+
+    async def on_candle_update(self, candle_time, candle_data):
+        """Process new candle data and generate signals."""
+        # Get latest candles including the new one
+        latest_candles = await self.collector.get_latest_candles(30)
+
+        # Calculate MACD values and check for signals
+        processed_data, signal = self.macd.process(latest_candles)
+
+        # Log for monitoring
+        self._log_indicator_values(processed_data.iloc[-1])
+
+        # If we got a signal, validate and act
+        if signal:
+            # Add to signal buffer for noise filtering
+            self.signal_buffer.append({
+                "time": candle_time,
+                "direction": signal.direction,
+                "strength": signal.strength
+            })
+
+            # Only keep the most recent 5 signals
+            if len(self.signal_buffer) > 5:
+                self.signal_buffer.pop(0)
+
+            # Check if this is a valid signal (not noise)
+            if self._validate_signal(signal):
+                await self._execute_signal(signal, latest_candles.iloc[-1])
+
+    def _validate_signal(self, signal):
+        """Additional validation to filter out noise in 1-minute data."""
+        # If we have at least 3 signals, check consistency
+        if len(self.signal_buffer) >= 3:
+            # Check the most recent 3 signals
+            recent_signals = self.signal_buffer[-3:]
+
+            # If direction changes frequently, it's likely noise
+            directions = [s["direction"] for s in recent_signals]
+            if len(set(directions)) > 1:
+                self.logger.info("Signal rejected: inconsistent direction in recent signals")
+                return False
+
+        # Check signal strength - weak signals might be noise
+        if signal.strength < 0.3:
+            self.logger.info(f"Signal rejected: strength {signal.strength} below threshold")
+            return False
+
+        return True
+
+    async def _execute_signal(self, signal, current_candle):
+        """Execute a validated signal."""
+        # Get current price
+        current_price = current_candle["close"]
+
+        # Calculate position size
+        strategy = MACDStrategy(market="ETH-USD")
+        position_sizing = strategy.calculate_position_size(signal, current_price)
+
+        # Execute main position
+        main_pos = position_sizing["main_position"]
+        try:
+            main_order = await self.executor.execute_order(
+                market="ETH-USD",
+                side=main_pos["direction"],
+                size=main_pos["notional"],
+                leverage=main_pos["leverage"]
+            )
+
+            # Execute hedge position
+            hedge_pos = position_sizing["hedge_position"]
+            hedge_order = await self.executor.execute_order(
+                market="ETH-USD",
+                side=hedge_pos["direction"],
+                size=hedge_pos["notional"],
+                leverage=hedge_pos["leverage"]
+            )
+
+            self.logger.info(
+                f"Executed 1-minute MACD signal: {signal.direction} with "
+                f"${main_pos['notional']} main position and "
+                f"${hedge_pos['notional']} hedge position"
+            )
+
+            # Track position for management
+            self._track_combined_position(main_order, hedge_order)
+
+        except Exception as e:
+            self.logger.error(f"Failed to execute 1-minute MACD signal: {str(e)}")
+
+    def _track_combined_position(self, main_order, hedge_order):
+        """Track the combined position for management."""
+        # Implementation for position tracking and management
+        pass
+
+    def _log_indicator_values(self, last_row):
+        """Log current indicator values for monitoring."""
+        # Similar to the implementation in MACDStrategy class
+        pass
+```
+
+This technical implementation provides the foundation for the de-minimus real-money testing approach
+using 1-minute timeframes, with plans for deployment to Google Cloud Platform for persistent
+operation.
 
 ## Performance & Latency Considerations
 

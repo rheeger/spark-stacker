@@ -161,12 +161,14 @@ To validate the system's core functionality, we will implement a specific Minimu
   - **Rationale:** These non-standard parameters provide more responsiveness on shorter timeframes
     compared to traditional settings (12, 26, 9)
 - **Market:** ETH-USD Perpetual Futures
-  - **Exchange:** Hyperliquid
+  - **Exchange:** Hyperliquid (production environment)
   - **Contract Type:** Perpetual Futures (no expiry)
 - **Timeframe:** 1-minute candles
   - **Rationale:** Provides higher frequency trading opportunities for rapid system validation
+  - **Benefit:** Allows for active monitoring during development sessions
 - **Position Sizing:** $1.00 maximum per position
   - **Rationale:** Minimal risk exposure while proving system functionality
+  - **Approach:** Using real funds on production exchange for true validation
 - **Hedging:** 20% counter-position
   - **Example:** $0.80 main position with $0.20 hedge position
 - **Leverage:** 10×
@@ -195,14 +197,35 @@ To validate the system's core functionality, we will implement a specific Minimu
    - Calculate net P&L with commission costs
    - Evaluate hedge effectiveness (reduction in drawdowns)
 
+### Production Testing Approach
+
+- **De-Minimus Real Trading:**
+
+  - Use real funds ($1.00 per position) on production exchanges
+  - Provides more reliable validation than testnets
+  - Tests full order execution flows in actual market conditions
+  - Validates exchange API behavior in production environments
+
+- **Short Timeframe Monitoring:**
+
+  - 1-minute candles for accelerated feedback cycles
+  - Allows developers to observe complete trade lifecycles during work sessions
+  - Provides faster validation of signal detection and position management
+
+- **Google Cloud Platform Deployment:**
+  - Deploy final validated system to GKE (Google Kubernetes Engine)
+  - Ensure persistent 24/7 operation and monitoring
+  - Implement proper security for exchange API credentials
+  - Set up continuous monitoring and alerting infrastructure
+
 ### Success Criteria
 
 This MVP implementation will be considered successful if it achieves:
 
 1. **Technical Validation**
 
-   - System correctly identifies MACD crossovers
-   - Orders are properly executed on Hyperliquid
+   - System correctly identifies MACD crossovers on 1-minute timeframes
+   - Orders are properly executed on production Hyperliquid exchange
    - Positions are tracked and managed accurately
    - Stop-loss and take-profit orders function correctly
 
@@ -214,14 +237,21 @@ This MVP implementation will be considered successful if it achieves:
    - Visualization of MACD signals in dashboards
 
 3. **Risk Management Verification**
+
    - Hedge positions are created correctly
    - Position sizes remain within defined limits
    - Leverage is applied correctly
    - System operates within loss tolerance
 
+4. **Deployment Validation**
+   - Successful deployment to Google Cloud Platform
+   - Persistent operation without interruption
+   - Secure management of exchange credentials
+   - Effective monitoring and alerting system
+
 This MVP approach provides a controlled environment to verify all critical system components with
 minimal financial risk, while still exercising the full trade lifecycle from signal generation to
-position closing.
+position closing in production environments.
 
 ## System Constraints
 
@@ -229,13 +259,13 @@ position closing.
 - Execution time must be optimized to avoid slippage
 - System should handle network interruptions gracefully
 - Security measures must be in place for API keys and private keys
-- Backtesting and paper trading environments must accurately simulate real conditions
+- Production testing must use minimal capital to limit risk
 
 ## Testing Infrastructure
 
 ### Real Market Data Integration
 
-- System must support real market data in test environments
+- System must support real market data from production exchanges
 - Automatic caching system for exchange data to prevent redundant API calls
 - Synthetic data generation as fallback when real data is unavailable
 - Visual analysis tools for signal and position inspection
@@ -273,3 +303,12 @@ position closing.
 - Visual analysis tools for strategy performance review
 - Chart generation for signal visualization and inspection
 - MACD and other indicator visualization for verification
+
+### Cloud Deployment and Monitoring
+
+- GKE cluster configuration for persistent operation
+- Prometheus and Grafana monitoring stack
+- Secure credential management using Google Secret Manager
+- High-availability configuration for continuous operation
+- Backup and recovery procedures for system state
+- Real-time alerting for critical system events

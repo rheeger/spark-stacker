@@ -38,7 +38,7 @@ Core activities:
 
 [Detailed Phase 2 Checklist](./checklists/phase2-core-development-backtesting.md)
 
-## Phase 3: Integration & Dry Run
+## Phase 3: Integration & De-Minimus Testing
 
 **Status: PARTIALLY COMPLETED (80%)** **Dependencies: Phase 2** **Parallel Work: Basic Monitoring
 Setup**
@@ -49,7 +49,9 @@ Core activities:
 - Implement comprehensive testing
 - Add security features and error handling
 - Create containerization and deployment infrastructure
-- Run dry tests on testnets
+- Run de-minimus tests with small real capital on production exchanges
+- Implement 1-minute timeframe support for accelerated testing cycles
+- Validate with $1.00 positions on Hyperliquid
 
 [Detailed Phase 3 Checklist](./checklists/phase3-integration-dry-run.md)
 
@@ -65,20 +67,22 @@ Core activities:
 - Create performance and health dashboards
 - Develop control interface for strategy management
 - Add real-time alerts and notifications
+- Prepare Google Cloud Platform deployment architecture
+- Implement 1-minute monitoring for short-term strategy validation
 
 [Detailed Phase 4 Checklist](./checklists/phase4-monitoring-control-interface.md)
 
 ## Phase 5: Deployment & Live Trading
 
-**Status: PLANNED** **Dependencies: Phase 3, Phase 4** **Cannot Start Until: Dry Run Complete &
-Basic Monitoring Ready**
+**Status: PLANNED** **Dependencies: Phase 3, Phase 4** **Cannot Start Until: De-Minimus Testing
+Complete & Basic Monitoring Ready**
 
 Core activities:
 
-- Configure production environment
-- Implement CI/CD pipeline
-- Deploy with minimal initial capital
-- Monitor system under real conditions
+- Configure production environment on Google Cloud Platform
+- Implement CI/CD pipeline for GCP
+- Deploy with increased capital based on de-minimus testing results
+- Monitor system under real conditions with GCP monitoring stack
 - Analyze performance and optimize execution
 
 [Detailed Phase 5 Checklist](./checklists/phase5-deployment-live-trading.md)
@@ -101,14 +105,14 @@ Core activities:
 
 ## Progress Summary
 
-| Phase                             | Status         | Completion % | Dependencies      | Critical Path Items                          |
-| :-------------------------------- | :------------- | :----------: | :---------------- | :------------------------------------------- |
-| 1: System Design & Planning       | ✅ Complete    |     100%     | None              | -                                            |
-| 2: Core Development & Backtesting | 🟡 In Progress |     85%      | Phase 1           | Backtesting framework, additional indicators |
-| 3: Integration & Dry Run          | 🟡 In Progress |     80%      | Phase 2           | End-to-end testing, performance evaluation   |
-| 4: Monitoring & Control Interface | 🔲 Planned     |      0%      | Phase 3 (Partial) | Basic monitoring, core control interface     |
-| 5: Deployment & Live Trading      | 🔲 Planned     |      0%      | Phase 3, Phase 4  | Dry run completion, monitoring readiness     |
-| 6: Continuous Improvement         | 🔲 Planned     |      0%      | None              | Independent features                         |
+| Phase                               | Status         | Completion % | Dependencies      | Critical Path Items                                       |
+| :---------------------------------- | :------------- | :----------: | :---------------- | :-------------------------------------------------------- |
+| 1: System Design & Planning         | ✅ Complete    |     100%     | None              | -                                                         |
+| 2: Core Development & Backtesting   | 🟡 In Progress |     85%      | Phase 1           | Backtesting framework, additional indicators              |
+| 3: Integration & De-Minimus Testing | 🟡 In Progress |     80%      | Phase 2           | End-to-end testing, real-money validation                 |
+| 4: Monitoring & Control Interface   | 🔲 Planned     |      0%      | Phase 3 (Partial) | Basic monitoring, core control interface, GCP integration |
+| 5: Deployment & Live Trading        | 🔲 Planned     |      0%      | Phase 3, Phase 4  | De-minimus testing completion, cloud deployment readiness |
+| 6: Continuous Improvement           | 🔲 Planned     |      0%      | None              | Independent features                                      |
 
 ## Critical MVP MACD Strategy Implementation
 
@@ -139,33 +143,43 @@ all system components before full-scale deployment.
 2. **Phase 3 Integration:**
 
    - Configure strategy parameters in production-ready code
-   - Implement end-to-end testing with Hyperliquid testnet
+   - Implement de-minimus testing with $1.00 positions on production Hyperliquid exchange
    - Verify strategy execution and trade lifecycle management
+   - Use 1-minute timeframes for accelerated feedback cycles
 
 3. **Phase 4 Monitoring:**
 
-   - Create dedicated MACD strategy dashboard
+   - Create dedicated MACD strategy dashboard with 1-minute resolution
    - Implement strategy-specific metrics and alerts
    - Ensure real-time monitoring of indicator values and trading signals
+   - Prepare Google Cloud Platform monitoring setup
 
-4. **Validation Criteria:**
-   - Successfully identify and act on MACD crossovers
-   - Execute trades with proper position sizing and hedging
-   - Monitor and visualize strategy performance in real-time
-   - Implement all risk management features (stop-loss, take-profit, etc.)
+4. **Phase 5 Deployment:**
+   - Deploy to Google Cloud Platform for persistent operation
+   - Implement cloud-based monitoring and alerting
+   - Ensure secure credential management in cloud environment
+
+### Validation Criteria:\*\*
+
+- Successfully identify and act on MACD crossovers in 1-minute timeframes
+- Execute trades with proper position sizing and hedging on production exchange
+- Monitor and visualize strategy performance in real-time
+- Implement all risk management features (stop-loss, take-profit, etc.)
+- Validate persistent operation in cloud environment
 
 This MVP implementation is a critical step in proving the system's functionality. Successful
-execution of this strategy with minimal capital ($1.00 positions) will validate all core components
-while minimizing financial risk during the evaluation phase.
+execution of this strategy with minimal capital ($1.00 positions) on the production Hyperliquid
+exchange will validate all core components while minimizing financial risk during the evaluation
+phase.
 
 ## Development Timeline
 
 ```mermaid
 graph TD
     A[Phase 1: System Design] --> B[Phase 2: Core Development]
-    B --> C[Phase 3: Integration & Dry Run]
+    B --> C[Phase 3: Integration & De-Minimus Testing]
     C --> D[Phase 4: Monitoring & Control]
-    C --> E[Phase 5: Live Trading]
+    C --> E[Phase 5: GCP Deployment & Live Trading]
     D --> E
     E --> F[Phase 6: Continuous Improvement]
 
@@ -179,19 +193,23 @@ graph TD
 1. **Immediate Focus**
 
    - Complete backtesting framework in Phase 2
+   - Implement de-minimus real-money testing with $1.00 positions
    - Start basic monitoring setup during Phase 3
-   - Begin essential control interface development
+   - Begin GCP deployment preparation
 
 2. **Risk Mitigation**
 
-   - Implement basic monitoring earlier in the process
-   - Start with minimal viable control interface
-   - Focus on core functionality before advanced features
+   - Use 1-minute timeframes for faster validation cycles
+   - Test with real funds but minimal position sizes
+   - Implement basic monitoring for active observation periods
+   - Prepare cloud deployment for persistent operation
 
 3. **Resource Allocation**
-   - Prioritize backtesting framework completion
-   - Allocate resources to parallel development where possible
-   - Focus on critical path items before nice-to-have features
+   - Prioritize Hyperliquid exchange integration for MACD MVP
+   - Focus on 1-minute candle support for rapid feedback
+   - Allocate resources to GCP deployment preparation
+   - Ensure monitoring tools support high-frequency data
 
 This roadmap ensures structured development with clear milestones, allowing for incremental
-validation and capital protection during the deployment process.
+validation and capital protection during the deployment process, with a focus on real production
+testing and cloud deployment for persistent operation.

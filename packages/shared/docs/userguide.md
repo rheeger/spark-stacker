@@ -233,26 +233,27 @@ The backtesting engine will:
 
 Review these metrics carefully to assess strategy viability before live trading.
 
-### 5.2 Paper Trading Mode
+### 5.2 De-Minimus Live Trading
 
-Once your strategy passes backtesting, test it with real-time data but no actual trades:
+Once your strategy passes backtesting, test it with minimal real capital on production exchanges:
 
 ```bash
-python run_bot.py --mode paper --strategy my_strategy
+python run_bot.py --mode live --strategy my_strategy --capital 5.00 --position-size 1.00
 ```
 
-This will:
+This approach:
 
-- Connect to live exchange APIs and receive current market data
-- Generate signals and simulate order execution
-- Track hypothetical positions and P&L
-- Log all actions just like in live mode
+- Uses actual production exchanges with real capital
+- Limits risk to very small amounts (e.g., $1.00 per position)
+- Validates the full trade lifecycle in real market conditions
+- Provides more reliable results than testnet or paper trading
+- Allows for monitoring with shorter timeframes (1-minute candles)
 
-Monitor paper trading for at least several days to ensure the strategy behaves as expected.
+Monitor closely for at least several hours with 1-minute timeframes to ensure proper operation.
 
-### 5.3 Live Trading Mode
+### 5.3 Full Live Trading Mode
 
-When ready for live deployment, start with minimal capital:
+When de-minimus testing proves successful, increase capital allocation:
 
 ```bash
 python run_bot.py --mode live --strategy my_strategy --capital 100
@@ -265,12 +266,27 @@ The system will:
 3. Actively manage risk through stop-losses and hedge adjustments
 4. Log all activities and send alerts for critical events
 
-Monitor system performance closely during initial deployment.
+### 5.4 Cloud Deployment
+
+For continuous operation, the system can be deployed to Google Cloud Platform:
+
+```bash
+# Deploy to GCP (requires gcloud CLI and kubectl)
+./deploy_to_gcp.sh --project your-project-id --cluster spark-stacker
+```
+
+The cloud deployment:
+
+- Runs continuously with high availability
+- Scales resources as needed
+- Maintains persistent database connections
+- Provides remote monitoring through Grafana dashboards
+- Secures API keys and credentials with Secret Manager
 
 ## MACD Strategy Implementation Guide
 
 This section provides a step-by-step guide for implementing and running our MVP MACD strategy on
-Hyperliquid's ETH-USD market with minimal risk ($1.00 positions).
+Hyperliquid's ETH-USD market with minimal risk ($1.00 positions) using 1-minute timeframes.
 
 ### Strategy Overview
 
@@ -316,47 +332,21 @@ Ensure your Hyperliquid API credentials are properly set in your `.env` file:
 # Hyperliquid Configuration
 HYPERLIQUID_API_KEY=your_api_key
 HYPERLIQUID_PRIVATE_KEY=your_signed_key
-HYPERLIQUID_TESTNET=true  # Set to false for mainnet
+HYPERLIQUID_TESTNET=false  # Using production exchange
 ```
 
-#### 3. Test the Strategy in Paper Trading Mode
+#### 3. Launch in De-Minimus Live Trading Mode
 
-Run the strategy in paper trading mode first to validate its functionality:
-
-```bash
-python run_bot.py --mode paper --strategy macd_eth_usd --duration 24
-```
-
-This will run the strategy for 24 hours in paper trading mode, simulating trades without using real
-capital.
-
-#### 4. Analyze Paper Trading Results
-
-Review the generated logs and performance reports:
-
-```bash
-python analyze_performance.py --strategy macd_eth_usd --start-date 2023-04-01 --end-date 2023-04-02
-```
-
-Verify key performance metrics:
-
-- Signal accuracy
-- Trade frequency
-- Average profit/loss
-- Maximum drawdown
-- Hedge effectiveness
-
-#### 5. Launch in Live Trading Mode
-
-Once satisfied with paper trading results, launch the strategy with minimal capital:
+Start the strategy with minimal capital for real-world validation:
 
 ```bash
 python run_bot.py --mode live --strategy macd_eth_usd --capital 5.00
 ```
 
-This will allocate $5.00 to the strategy, with each position limited to $1.00 maximum.
+This will allocate $5.00 to the strategy, with each position limited to $1.00 maximum, trading on
+the production Hyperliquid exchange.
 
-#### 6. Monitor Live Performance
+#### 4. Monitor Live Performance
 
 Access the strategy monitoring dashboard:
 
@@ -366,11 +356,23 @@ http://localhost:3000/d/macd-strategy-dashboard
 
 The MACD Strategy Dashboard provides:
 
-- Real-time strategy status
+- Real-time strategy status with 1-minute updates
 - Current MACD values and signals
 - Position information (size, entry price, P&L)
 - Execution metrics and performance statistics
 - Alerts for significant events (signals, trades, errors)
+
+#### 5. Deploy to Google Cloud Platform
+
+Once the strategy is validated through de-minimus testing, deploy for continuous operation:
+
+```bash
+# Deploy to GKE
+./deploy_to_gcp.sh --strategy macd_eth_usd --cluster spark-stacker
+
+# Monitor remotely
+echo "Grafana dashboard available at: https://monitoring.your-domain.com/d/macd-strategy-dashboard"
+```
 
 ### Strategy Customization
 
@@ -398,13 +400,23 @@ The MACD strategy generates signals based on these conditions:
 
 Performance should be evaluated based on:
 
-1. **Win Rate:** Percentage of profitable trades
-2. **Average P&L:** Mean profitability per trade
-3. **Max Drawdown:** Largest peak-to-trough decline
-4. **Risk-Adjusted Return:** Returns relative to risk taken
+- **Win Rate:** Percentage of profitable trades
+- **Profit Factor:** Gross profit divided by gross loss
+- **Maximum Drawdown:** Largest peak-to-trough decline
+- **Sharpe Ratio:** Risk-adjusted return metric
 
-This MVP implementation serves as a validation of the entire system with minimal financial risk
-while providing a foundation for future strategy development.
+### Monitoring the 1-Minute Strategy
+
+When using 1-minute timeframes:
+
+- **Active Monitoring:** Plan to actively watch the strategy during initial testing
+- **Signal Frequency:** Expect more frequent signals than with longer timeframes
+- **Performance Dashboard:** Use the specialized 1-minute dashboard for real-time analytics
+- **Alert Configuration:** Set up immediate notifications for critical events
+- **Position Tracking:** Monitor position lifecycle closely during the observation period
+
+This short-timeframe approach allows you to validate the full trade lifecycle while sitting at your
+computer, providing faster feedback on strategy performance.
 
 ## 6. **Monitoring Your Trades**
 
