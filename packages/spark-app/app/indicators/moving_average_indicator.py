@@ -3,8 +3,7 @@ from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 import pandas as pd
-
-from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 

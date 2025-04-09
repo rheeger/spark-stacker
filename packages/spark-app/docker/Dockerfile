@@ -23,9 +23,7 @@ COPY scripts/bootstrap.sh /usr/local/bin/bootstrap.sh
 RUN chmod +x /usr/local/bin/bootstrap.sh
 
 # Copy application code
-COPY app /app/app
-COPY scripts /app/scripts
-COPY tests /app/tests
+COPY app/ .
 
 # Create log directory
 RUN mkdir -p /app/logs && \
@@ -58,4 +56,4 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/bootstrap.sh"]
 
 # Run the application
-CMD ["python", "app/main.py", "--config", "/app/config.json"]
+CMD ["python", "main.py", "--config", "/app/config.json"]

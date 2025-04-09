@@ -8,15 +8,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import krakenex
 import requests
 # Import the BaseConnector interface
-from app.connectors.base_connector import (BaseConnector, MarketType,
-                                           OrderSide, OrderStatus, OrderType,
-                                           TimeInForce)
+from connectors.base_connector import (BaseConnector, MarketType, OrderSide,
+                                       OrderStatus, OrderType, TimeInForce)
 # Import decorators
-from app.metrics.decorators import track_api_latency, update_rate_limit
-from app.utils.logging_setup import (setup_connector_balance_logger,
-                                     setup_connector_markets_logger,
-                                     setup_connector_orders_logger)
+from metrics.decorators import track_api_latency, update_rate_limit
 from pykrakenapi import KrakenAPI
+from utils.logging_setup import (setup_connector_balance_logger,
+                                 setup_connector_markets_logger,
+                                 setup_connector_orders_logger)
 
 # Get the main logger
 logger = logging.getLogger(__name__)

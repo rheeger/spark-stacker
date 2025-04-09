@@ -1,13 +1,13 @@
 import logging
-from typing import Dict, Any, Optional, List, Type, Set, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union
 
-from app.connectors.base_connector import BaseConnector, MarketType
-from app.connectors.hyperliquid_connector import HyperliquidConnector
-from app.connectors.coinbase_connector import CoinbaseConnector
-from app.connectors.kraken_connector import KrakenConnector
+from connectors.base_connector import BaseConnector, MarketType
+from connectors.coinbase_connector import CoinbaseConnector
+from connectors.hyperliquid_connector import HyperliquidConnector
+from connectors.kraken_connector import KrakenConnector
 
 # Import additional connectors as they are implemented
-# from app.connectors.synthetix_connector import SynthetixConnector
+# from .synthetix_connector import SynthetixConnector
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,7 @@ It monitors the connection status, errors, and other information found in the lo
 
 import argparse
 import glob
+import json
 import logging
 import os
 import re
@@ -29,7 +30,7 @@ DEFAULT_LOG_DIR = "/logs"
 DEFAULT_PORT = 9001
 LOG_CHECK_INTERVAL = 5  # seconds - check more frequently
 MAIN_LOG_PATTERN = "spark_stacker.log"
-CONNECTOR_LOG_DIRS = ["coinbase", "hyperliquid"]
+CONFIG_FILE_PATH = "/config/config.json"
 
 # Error patterns
 CONNECTION_ERROR_PATTERNS = {
@@ -53,6 +54,8 @@ class SparkStackerLogMetrics:
         """
         self.log_dir = log_dir
         self.port = port
+        self.config = self._load_config(CONFIG_FILE_PATH)
+        self.enabled_exchanges = self._get_enabled_exchanges()
 
         # Print log directory contents at startup
         self._print_log_directory_contents()
@@ -122,17 +125,14 @@ class SparkStackerLogMetrics:
             ["dry_run", "hedging_enabled"]
         )
 
-        # Initialize exchange status as unknown (0.5)
-        for exchange in CONNECTOR_LOG_DIRS:
+        # Initialize exchange status as unknown (0.5) for enabled exchanges
+        for exchange in self.enabled_exchanges:
             self.exchange_status.labels(exchange=exchange).set(0.5)
             self.last_connection_status.labels(exchange=exchange).set(0.5)
 
         # Initialize service status
         self.service_status.labels(service="metrics_server").set(0.5)
         self.service_status.labels(service="webhook_server").set(0.5)
-
-        # Initialize with sample data from available logs
-        self._initialize_from_logs()
 
         # Set a default build info from log
         self.build_info.labels(build_id="placeholder", timestamp="placeholder").set(1)
@@ -147,6 +147,33 @@ class SparkStackerLogMetrics:
         else:
             logger.warning(f"No log directories found in {self.log_dir}")
             logger.info("Will continue checking for new log directories")
+
+    def _load_config(self, config_path: str) -> Optional[Dict]:
+        """Load configuration from JSON file."""
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config_data = json.load(f)
+                    logger.info(f"Successfully loaded configuration from {config_path}")
+                    return config_data
+            else:
+                logger.error(f"Configuration file not found at {config_path}")
+                return None
+        except Exception as e:
+            logger.error(f"Error loading configuration from {config_path}: {e}")
+            return None
+
+    def _get_enabled_exchanges(self) -> List[str]:
+        """Get the list of enabled exchange names from the configuration."""
+        enabled = []
+        if self.config and 'exchanges' in self.config:
+            for exchange_config in self.config['exchanges']:
+                if exchange_config.get('enabled', False):
+                    enabled.append(exchange_config.get('name'))
+            logger.info(f"Enabled exchanges based on config: {enabled}")
+        else:
+            logger.warning("Could not determine enabled exchanges from config. Falling back to empty list.")
+        return enabled
 
     def _print_log_directory_contents(self):
         """Print the contents of the log directory at startup for debugging."""
@@ -164,52 +191,6 @@ class SparkStackerLogMetrics:
                 logger.error(f"Log directory {self.log_dir} does not exist!")
         except Exception as e:
             logger.error(f"Error printing log directory contents: {e}")
-
-    def _initialize_from_logs(self):
-        """Initialize metrics with data from logs if available."""
-        # Set initial market counts
-        for exchange, count in [("hyperliquid", 187), ("coinbase", 730)]:
-            self.market_count.labels(exchange=exchange).set(count)
-
-        # Set initial account balances from logs
-        balances = {
-            "coinbase": {
-                "OP": 1.636577e-10,
-                "SOL": 5.955089e-10,
-                "MATIC": 0.07588209,
-                "SNX": 0.000560011814967,
-                "GRT": 0.00133536,
-                "LINK": 0.00723412,
-                "DAI": 4.29e-06,
-                "USDC": 3.026698,
-                "ETH": 0.0009815847320333,
-                "USD": 130.2255716832103,
-                "BTC": 0.99999998
-            }
-        }
-
-        for exchange, currencies in balances.items():
-            for currency, amount in currencies.items():
-                self.account_balance.labels(exchange=exchange, currency=currency).set(amount)
-
-        # Set system config from logs
-        self.system_config.labels(dry_run="True", hedging_enabled="True").set(1)
-
-        # Set service status based on logs
-        self.service_status.labels(service="webhook_server").set(1)
-        self.service_status.labels(service="metrics_server").set(1)
-
-        # Set exchange status based on logs - Coinbase is up, Hyperliquid is down
-        self.exchange_status.labels(exchange="coinbase").set(1)
-        self.exchange_status.labels(exchange="hyperliquid").set(0)
-        self.last_connection_status.labels(exchange="coinbase").set(1)
-        self.last_connection_status.labels(exchange="hyperliquid").set(0)
-
-        # Set some error count for Hyperliquid
-        self.connection_errors.labels(exchange="hyperliquid", error_type="NameResolutionError").inc(2)
-
-        # Set a ping latency for Coinbase
-        self.websocket_ping_latency.labels(exchange="coinbase").set(0.004)
 
     def _find_latest_log_dir(self) -> Optional[str]:
         """Find the latest log directory based on timestamp in name."""
@@ -229,7 +210,7 @@ class SparkStackerLogMetrics:
                     return self.log_dir
 
                 # Also check for connector log directories directly in the log_dir
-                for connector in CONNECTOR_LOG_DIRS:
+                for connector in self.enabled_exchanges:
                     connector_dir = os.path.join(self.log_dir, connector)
                     if os.path.exists(connector_dir) and os.path.isdir(connector_dir):
                         logger.info(f"Found connector directory: {connector_dir}")
@@ -294,14 +275,12 @@ class SparkStackerLogMetrics:
         except Exception as e:
             logger.error(f"Error processing main log: {e}")
 
-        # Process connector logs
+        # Process connector logs for enabled exchanges
         try:
-            for connector in CONNECTOR_LOG_DIRS:
+            for connector in self.enabled_exchanges:
                 connector_dir = os.path.join(self.current_log_dir, connector)
                 if os.path.exists(connector_dir):
                     self._process_connector_logs(connector, connector_dir)
-                else:
-                    logger.debug(f"Connector directory not found: {connector_dir}")
         except Exception as e:
             logger.error(f"Error processing connector logs: {e}")
 
@@ -382,7 +361,7 @@ class SparkStackerLogMetrics:
                     self.service_status.labels(service="metrics_server").set(1)
 
                 # Track which exchange is in context based on mentions
-                for exchange in CONNECTOR_LOG_DIRS:
+                for exchange in self.enabled_exchanges:
                     if f"for {exchange}" in line.lower() or f"exchange type: {exchange}" in line.lower():
                         exchange_in_context = exchange
                         logger.debug(f"Exchange context set to {exchange}")
@@ -413,7 +392,7 @@ class SparkStackerLogMetrics:
                     self.account_balance.labels(exchange=exchange_in_context, currency=currency).set(amount)
 
                 # Connection errors
-                for exchange in CONNECTOR_LOG_DIRS:
+                for exchange in self.enabled_exchanges:
                     if "Failed to get positions" in line and exchange in line.lower():
                         exchanges_with_errors.add(exchange)
                         self.exchange_status.labels(exchange=exchange).set(0)
@@ -447,7 +426,7 @@ class SparkStackerLogMetrics:
         logger.info(f"Processed {line_count} lines from main log")
 
         # Update exchange status if no errors were found in this batch of logs
-        for exchange in CONNECTOR_LOG_DIRS:
+        for exchange in self.enabled_exchanges:
             if exchange not in exchanges_with_errors and "on_open" in str(new_lines):
                 # If we see 'on_open' and no errors, set status to UP
                 if any(f"Connected to {exchange.capitalize()}" in line for line in new_lines):

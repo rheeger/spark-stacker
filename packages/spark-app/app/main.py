@@ -12,10 +12,8 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Setup basic logging first so we can see errors during startup
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -23,17 +21,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from app.connectors.connector_factory import ConnectorFactory
-from app.core.strategy_manager import StrategyManager
-from app.core.trading_engine import TradingEngine
-from app.indicators.indicator_factory import IndicatorFactory
-# Import metrics components
-from app.metrics import initialize_metrics
-from app.risk_management.risk_manager import RiskManager
-# Import core components
-from app.utils.config import AppConfig, ConfigManager
-from app.utils.logging_setup import setup_logging
-from app.webhook.webhook_server import WebhookServer
+from connectors.connector_factory import ConnectorFactory
+from core.strategy_manager import StrategyManager
+from core.trading_engine import TradingEngine
+from indicators.indicator_factory import IndicatorFactory
+from metrics import start_metrics_server, update_mvp_signal_state
+from risk_management.risk_manager import RiskManager
+from utils.config import AppConfig, ConfigManager
+from utils.logging_setup import setup_logging
+from webhook.webhook_server import WebhookServer
 
 # Global variables
 engine: Optional[TradingEngine] = None
@@ -342,7 +338,7 @@ def main():
             "metrics_host", "0.0.0.0"
         )  # Bind to all interfaces by default
         logger.info(f"Starting metrics server on {metrics_host}:{metrics_port}")
-        initialize_metrics(port=metrics_port)
+        start_metrics_server(port=metrics_port)
         logger.info(
             f"Metrics server started at http://{metrics_host}:{metrics_port}/metrics"
         )
@@ -485,6 +481,27 @@ def main():
             logger.info(
                 f"Loaded {len(indicators)} indicator(s): {', '.join(indicators.keys())}"
             )
+
+            # --- Add Symbol to Indicators ---
+            logger.info("Attempting to assign symbols to indicators based on their names...")
+            for name, indicator in indicators.items():
+                # Try to parse symbol from name like type_SYMBOL_timeframe or type_SYMBOL
+                # Example: macd_ETH_USD_1m -> ETH-USD, rsi_BTC_USD -> BTC-USD
+                # Updated regex to handle multiple parts and timeframe suffix
+                match = re.match(r"^([^_]+)_([^_]+)_([^_]+)(?:_([^_]+))?$", name)
+                if match:
+                    # Group 2 is the base currency, Group 3 is the quote currency
+                    base_currency = match.group(2)
+                    quote_currency = match.group(3)
+                    # Combine and format as BASE-QUOTE
+                    symbol_str = f"{base_currency}-{quote_currency}".upper()
+                    setattr(indicator, 'symbol', symbol_str)
+                    logger.info(f"  Assigned symbol '{symbol_str}' to indicator '{name}'")
+                else:
+                    logger.warning(
+                        f"Could not parse symbol from indicator name '{name}'. Indicator might not run unless price data is explicitly provided."
+                    )
+            # --- End Add Symbol ---
 
         strategy_manager = StrategyManager(trading_engine=engine, indicators=indicators)
 

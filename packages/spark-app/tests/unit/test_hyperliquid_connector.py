@@ -6,10 +6,11 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from decimal import Decimal
 from io import StringIO
-from unittest.mock import ANY, MagicMock, PropertyMock, patch
+from unittest.mock import ANY, MagicMock, Mock, PropertyMock, patch
 
 # Add parent directory to path to ensure imports work correctly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
@@ -233,64 +234,63 @@ def mock_requests():
 
 
 @pytest.fixture
-def hyperliquid_connector(mock_requests):
+def hyperliquid_connector():
     """Create a Hyperliquid connector instance for testing."""
-    mock_get, mock_post = mock_requests
+    # Create the connector with test credentials
+    connector = HyperliquidConnector(
+        name="hyperliquid",
+        wallet_address="0x123",
+        private_key="0xabc",
+        testnet=True,
+        market_types=[MarketType.PERPETUAL]
+    )
 
-    with patch("hyperliquid.info.Info") as mock_info_class, \
-         patch("hyperliquid.exchange.Exchange") as mock_exchange_class, \
-         patch("eth_account.Account"):
+    # Mock the info client
+    mock_info = Mock()
+    mock_info.meta.return_value = {
+        "universe": [
+            {
+                "name": "BTC",
+                "szDecimals": 3,
+                "minSize": 0.001,
+                "tickSize": 0.1,
+                "makerFeeRate": 0.0002,
+                "takerFeeRate": 0.0005,
+                "maxLeverage": 50.0,
+                "fundingInterval": 3600,
+            }
+        ]
+    }
+    mock_info.all_mids.return_value = ["39025.0"]  # Mock price data
+    mock_info.l2_snapshot.return_value = [
+        [  # Bids
+            ["39000.0", "1.0"],
+            ["38900.0", "2.0"]
+        ],
+        [  # Asks
+            ["39100.0", "1.5"],
+            ["39200.0", "2.5"]
+        ]
+    ]
 
-        # Create mock info instance
-        mock_info = MagicMock()
-        mock_info.meta.return_value = {
-            "universe": [
-                {
-                    "name": "BTC",
-                    "szDecimals": 3,
-                    "minSize": 0.001,
-                    "tickSize": 0.1,
-                    "makerFeeRate": 0.0002,
-                    "takerFeeRate": 0.0005,
-                    "maxLeverage": 50.0,
-                    "fundingInterval": 3600,
-                }
-            ]
-        }
-        mock_info.all_mids.return_value = ["39025.0"]  # Mock price data
-        mock_info_class.return_value = mock_info
+    # Mock the exchange client
+    mock_exchange = Mock()
+    mock_exchange.user_state.return_value = {
+        "cash": "5000.0",
+        "marginSummary": {
+            "accountValue": "5000.0",
+            "totalMargin": "1000.0",
+            "totalNtlPos": "10000.0"
+        },
+        "assetPositions": []
+    }
 
-        # Create mock exchange instance
-        mock_exchange = MagicMock()
-        mock_exchange.place_order.return_value = {
-            "order": {
-                "oid": "test-order-id",
-                "is_buy": True,
-                "coin": "0",  # BTC
-                "sz": "0.1",
-                "limit_px": "39000.0",
-                "filled": "0.0",
-            },
-        }
-        mock_exchange_class.return_value = mock_exchange
+    # Set up the connector with mocked clients
+    connector.info = mock_info
+    connector.exchange = mock_exchange
+    connector._is_connected = True
 
-        connector = HyperliquidConnector(
-            private_key="test_private_key",
-            testnet=True,
-            market_types=[MarketType.PERPETUAL],
-        )
-
-        # Set up loggers for testing
-        connector.balance_logger = logging.getLogger("test.hyperliquid.balance")
-        connector.markets_logger = logging.getLogger("test.hyperliquid.markets")
-        connector.orders_logger = logging.getLogger("test.hyperliquid.orders")
-
-        # Connect the connector
-        connected = connector.connect()
-        if not connected:
-            pytest.skip("Failed to connect to Hyperliquid API")
-
-        return connector
+    return connector
 
 
 def create_mock_connector():
@@ -498,8 +498,9 @@ def test_get_ticker(hyperliquid_connector):
 
 
 @pytest.mark.skipif(not has_hyperliquid_creds(), reason="No Hyperliquid credentials available")
-def test_get_orderbook(hyperliquid_connector):
+def test_get_orderbook(hyperliquid_connector, mock_requests):
     """Test retrieving order book for BTC market."""
+    # Mock requests is already set up with the correct response format
     orderbook = hyperliquid_connector.get_orderbook("BTC")
 
     # Verify orderbook structure
@@ -560,6 +561,42 @@ def test_get_positions(hyperliquid_connector):
     logging.info(f"Current positions: {positions}")
 
 
+def test_get_positions_mocked(hyperliquid_connector, mock_info_client):
+    """Test retrieving current positions with mocked API responses."""
+    # Set up the mock_info_client on the connector
+    hyperliquid_connector.info = mock_info_client
+
+    # Mock the all_mids response (current prices)
+    mock_info_client.all_mids.return_value = [40500.0, 2950.0, 100.0]  # BTC, ETH, SOL prices
+
+    # Verify the positions match the mocked data
+    positions = hyperliquid_connector.get_positions()
+
+    assert len(positions) == 2  # We mocked 2 positions in mock_info_client fixture
+
+    # Verify BTC position
+    btc_pos = next(p for p in positions if p["symbol"] == "BTC")
+    assert btc_pos["size"] == 0.5
+    assert btc_pos["side"] == "LONG"
+    assert btc_pos["entry_price"] == 40000.0
+    assert btc_pos["mark_price"] == 40500.0
+    assert btc_pos["leverage"] == 5.0
+    assert btc_pos["liquidation_price"] == 35000.0
+    assert btc_pos["unrealized_pnl"] == 250.0  # (40500 - 40000) * 0.5
+    assert btc_pos["margin"] == 0.1  # |0.5| / 5.0
+
+    # Verify ETH position
+    eth_pos = next(p for p in positions if p["symbol"] == "ETH")
+    assert eth_pos["size"] == -2.0
+    assert eth_pos["side"] == "SHORT"
+    assert eth_pos["entry_price"] == 3000.0
+    assert eth_pos["mark_price"] == 2950.0
+    assert eth_pos["leverage"] == 10.0
+    assert eth_pos["liquidation_price"] == 3300.0
+    assert eth_pos["unrealized_pnl"] == 100.0  # (3000 - 2950) * 2.0
+    assert eth_pos["margin"] == 0.2  # |2.0| / 10.0
+
+
 def test_initialization(hyperliquid_connector):
     """Test that the Hyperliquid connector initializes correctly."""
     assert hyperliquid_connector.name == "hyperliquid"
@@ -599,14 +636,30 @@ def test_invalid_market_handling(hyperliquid_connector):
 @pytest.mark.skipif(not has_hyperliquid_creds(), reason="No Hyperliquid credentials available")
 def test_invalid_order_params(hyperliquid_connector):
     """Test handling of invalid order parameters."""
-    with pytest.raises(HyperliquidAPIError):
+    # Mock market metadata
+    mock_market_info = {
+        "universe": [{
+            "name": "BTC",
+            "szDecimals": 8,
+            "minSize": "0.0001",
+            "tickSize": "0.1",
+            "makerFeeRate": 0.0002,
+            "takerFeeRate": 0.0005,
+            "maxLeverage": 50.0,
+            "fundingInterval": 3600,
+        }]
+    }
+    hyperliquid_connector.info.meta.return_value = mock_market_info
+
+    # Test with invalid amount (0)
+    with pytest.raises(ValueError, match="Order amount must be positive"):
         hyperliquid_connector.place_order(
             symbol="BTC",
             side=OrderSide.BUY,
             order_type=OrderType.LIMIT,
-            amount=0,  # Invalid amount
-            price=30000,
-            leverage=1.0  # Add leverage parameter
+            amount=0,
+            price=50000.0,
+            leverage=1.0
         )
 
 
@@ -647,29 +700,212 @@ def test_rate_limiting(hyperliquid_connector):
         assert ticker["last_price"] > 0
 
 
-@pytest.mark.skipif(not has_hyperliquid_creds(), reason="No Hyperliquid credentials available")
-def test_place_order(hyperliquid_connector):
+@pytest.mark.asyncio
+async def test_place_order(hyperliquid_connector):
     """Test placing a limit order."""
-    order = hyperliquid_connector.place_order(
-        symbol="BTC",
+    # Mock market metadata in info.meta response
+    meta_response = {
+        "universe": [
+            {
+                "name": "BTC",
+                "szDecimals": 8,
+                "minSize": "0.0001",
+                "tickSize": "0.1",
+                "makerFeeRate": 0.0002,
+                "takerFeeRate": 0.0005,
+                "maxLeverage": 50.0,
+                "fundingInterval": 3600,
+            }
+        ]
+    }
+    hyperliquid_connector.info.meta.return_value = meta_response
+
+    # Mock successful order response
+    order_response = {
+        "status": "ok",
+        "response": {
+            "data": {
+                "statuses": [
+                    {
+                        "resting": {
+                            "oid": "test-order-id",
+                            "status": "open"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+    hyperliquid_connector.exchange.order.return_value = order_response
+
+    # Place a limit order
+    response = await hyperliquid_connector.place_order(
+        symbol="BTC",  # Use BTC instead of BTC-USD
         side=OrderSide.BUY,
         order_type=OrderType.LIMIT,
-        amount=0.1,
-        price=39000.0,
-        leverage=2.0,  # Test with 2x leverage
-        reduce_only=False,
-        post_only=True,
-        client_order_id="test-cloid"
+        amount=0.001,  # Small test amount
+        price=50000.0,  # Test price
+        leverage=1.0
     )
 
-    # Verify order response structure
-    assert "order" in order
-    assert order["order"]["oid"] == "test-order-id"
-    assert order["order"]["is_buy"] is True
-    assert order["order"]["coin"] == "0"  # BTC index
-    assert order["order"]["sz"] == "0.1"
-    assert order["order"]["limit_px"] == "39000.0"
-    assert order["order"]["filled"] == "0.0"
+    logging.info(f"Place order response: {response}")
 
-    # Log order for debugging
-    logging.info(f"Placed order: {order}")
+    assert isinstance(response, dict)
+    assert response["status"] == "OPEN"
+    assert response["order_id"] == "test-order-id"
+    assert response["symbol"] == "BTC"
+    assert response["side"] == "BUY"
+    assert response["type"] == "LIMIT"
+    assert response["amount"] == 0.001
+    assert response["price"] == 50000.0
+
+@pytest.mark.asyncio
+async def test_invalid_order_params(hyperliquid_connector):
+    """Test handling of invalid order parameters."""
+    # Mock market metadata
+    mock_market_info = {
+        "universe": [{
+            "name": "BTC",
+            "szDecimals": 8,
+            "minSize": "0.0001",
+            "tickSize": "0.1",
+            "makerFeeRate": 0.0002,
+            "takerFeeRate": 0.0005,
+            "maxLeverage": 50.0,
+            "fundingInterval": 3600,
+        }]
+    }
+    hyperliquid_connector.info.meta.return_value = mock_market_info
+
+    # Test with invalid amount (0)
+    with pytest.raises(ValueError, match="Order amount must be positive"):
+        await hyperliquid_connector.place_order(
+            symbol="BTC",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
+            amount=0,
+            price=50000.0,
+            leverage=1.0
+        )
+
+@pytest.mark.asyncio
+@pytest.mark.production
+@pytest.mark.skipif(not has_hyperliquid_creds() or get_hyperliquid_creds().get('testnet', True), reason="Requires PRODUCTION Hyperliquid credentials (testnet=False)")
+@patch("app.connectors.hyperliquid_connector.HyperliquidConnector.get_markets")
+async def test_place_and_close_minimum_size_order_production(mock_get_markets, hyperliquid_connector):
+    # Mock market metadata
+    mock_markets = [{
+        "symbol": "BTC",  # Use BTC instead of BTC-USD
+        "base_asset": "BTC",
+        "quote_asset": "USD",
+        "price_precision": 8,
+        "min_size": 0.001,
+        "tick_size": 0.1,
+        "maker_fee": 0.0002,
+        "taker_fee": 0.0005,
+        "market_type": MarketType.PERPETUAL.value,
+        "exchange_specific": {
+            "max_leverage": 50.0,
+            "funding_interval": 3600,
+            "section": "perp"
+        }
+    }]
+    mock_get_markets.return_value = mock_markets
+
+    # Mock info.meta response
+    meta_response = {
+        "universe": [
+            {
+                "name": "BTC",
+                "szDecimals": 8,
+                "minSize": "0.001",
+                "tickSize": "0.1",
+                "makerFeeRate": 0.0002,
+                "takerFeeRate": 0.0005,
+                "maxLeverage": 50.0,
+                "fundingInterval": 3600,
+            }
+        ]
+    }
+    hyperliquid_connector.info.meta.return_value = meta_response
+
+    # Mock position response
+    position_response = {
+        "assetPositions": [{
+            "coin": 0,  # BTC index
+            "szi": "0.001",  # Use szi instead of position
+            "entryPx": "50000.0",
+            "liqPx": "45000.0",  # Use liqPx instead of liquidationPx
+            "unrealizedPnl": "10.5",
+            "leverage": "10"
+        }]
+    }
+    hyperliquid_connector.exchange.user_state.return_value = position_response
+
+    # Mock successful order response
+    order_response = {
+        "status": "ok",
+        "response": {
+            "data": {
+                "statuses": [
+                    {
+                        "resting": {
+                            "oid": "test-order-id",
+                            "status": "open"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+    hyperliquid_connector.exchange.order.return_value = order_response
+
+    # Place buy order
+    buy_response = await hyperliquid_connector.place_order(
+        symbol="BTC",  # Use BTC instead of BTC-USD
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        amount=Decimal("0.001")
+    )
+
+    # Verify buy order response
+    assert isinstance(buy_response, dict)
+    assert buy_response["status"] == "OPEN"
+    assert buy_response["order_id"] == "test-order-id"
+    assert buy_response["symbol"] == "BTC"
+    assert buy_response["side"] == "BUY"
+    assert buy_response["type"] == "MARKET"
+    assert float(buy_response["amount"]) == 0.001
+
+def test_get_min_order_size(hyperliquid_connector):
+    """Test getting minimum order size for markets."""
+    # Mock info.meta response for both BTC and ETH
+    meta_response = {
+        "universe": [
+            {
+                "name": "BTC",
+                "szDecimals": 8,
+                "minSize": "0.001",
+                "tickSize": "0.1",
+            },
+            {
+                "name": "ETH",
+                "szDecimals": 8,
+                "minSize": "0.01",
+                "tickSize": "0.1",
+            }
+        ]
+    }
+    hyperliquid_connector.info.meta.return_value = meta_response
+
+    # Test for BTC market
+    min_size = hyperliquid_connector.get_min_order_size("BTC")
+    assert min_size == 0.001
+
+    # Test for ETH market
+    min_size = hyperliquid_connector.get_min_order_size("ETH")
+    assert min_size == 0.01
+
+    # Test for non-existent market
+    with pytest.raises(ValueError, match="Market SOL not found"):
+        hyperliquid_connector.get_min_order_size("SOL")

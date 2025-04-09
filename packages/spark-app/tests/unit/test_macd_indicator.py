@@ -1,12 +1,14 @@
+import logging
 from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.indicators.base_indicator import SignalDirection
 from app.indicators.macd_indicator import MACDIndicator
 
+# Initialize logger for the test file
+logger = logging.getLogger(__name__)
 
 def test_macd_initialization():
     """Test MACD indicator initialization with default and custom parameters."""
@@ -184,7 +186,7 @@ def test_macd_error_handling():
         }
     )
 
-    with pytest.raises(ValueError, match="must contain a 'close' price column"):
+    with pytest.raises(ValueError, match="must contain a 'close' or 'c' price column"):
         macd.calculate(invalid_df)
 
     # Test with insufficient data points
@@ -214,3 +216,55 @@ def test_macd_error_handling():
 
     # Should return None if MACD column is missing
     assert macd.generate_signal(missing_macd_df) is None
+
+
+def test_macd_mvp_parameters_signal_on_sample_data(sample_price_data):
+    """Test MACD calculation and signal generation with MVP parameters (8, 21, 5) on sample data."""
+    # Initialize with MVP parameters
+    mvp_params = {
+        "fast_period": 8,
+        "slow_period": 21,
+        "signal_period": 5,
+    }
+    macd_mvp = MACDIndicator(name="macd_mvp", params=mvp_params)
+
+    # Use the fixture data
+    df = sample_price_data.copy()
+
+    # Generate signals for the entire dataframe
+    result_df = macd_mvp.generate_signals(df)
+
+    # 1. Verify MACD columns were added
+    required_columns = ["macd", "macd_signal", "macd_histogram", "signal", "confidence"]
+    for col in required_columns:
+        assert col in result_df.columns, f"Column '{col}' missing in result DataFrame"
+
+    # 2. Check that calculations ran (values are not all NaN after initial period)
+    min_periods = macd_mvp.slow_period + macd_mvp.signal_period
+    assert not result_df['macd'].iloc[min_periods:].isna().all(), "MACD column is all NaN after initial period"
+    assert not result_df['macd_signal'].iloc[min_periods:].isna().all(), "MACD Signal column is all NaN after initial period"
+    assert not result_df['macd_histogram'].iloc[min_periods:].isna().all(), "MACD Histogram column is all NaN after initial period"
+
+    # 3. Verify that both BUY and SELL signals were generated somewhere in the data
+    assert not result_df["signal"].isna().all(), "Signal column is all NaN"
+    signal_values = result_df["signal"].dropna().unique()
+
+    # Use explicit comparison instead of 'in' operator
+    assert any(
+        s == SignalDirection.BUY for s in signal_values
+    ), f"No BUY signals generated with MVP parameters on sample data. Signals found: {signal_values}"
+    assert any(
+        s == SignalDirection.SELL for s in signal_values
+    ), f"No SELL signals generated with MVP parameters on sample data. Signals found: {signal_values}"
+
+    # 4. Verify confidence is populated for signals
+    buy_signals_df = result_df[result_df["signal"] == SignalDirection.BUY]
+    sell_signals_df = result_df[result_df["signal"] == SignalDirection.SELL]
+
+    assert not buy_signals_df.empty, "No BUY signals found to check confidence"
+    assert (buy_signals_df["confidence"] > 0).all(), "Confidence for BUY signals should be positive"
+
+    assert not sell_signals_df.empty, "No SELL signals found to check confidence"
+    assert (sell_signals_df["confidence"] > 0).all(), "Confidence for SELL signals should be positive"
+
+    logger.info(f"MACD MVP test generated {len(buy_signals_df)} BUY and {len(sell_signals_df)} SELL signals.")

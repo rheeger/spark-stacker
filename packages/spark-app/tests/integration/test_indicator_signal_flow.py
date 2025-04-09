@@ -1,14 +1,15 @@
-import pytest
-import pandas as pd
-import numpy as np
 import logging
 import time
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from app.indicators.rsi_indicator import RSIIndicator
+import numpy as np
+import pandas as pd
+import pytest
 from app.core.trading_engine import TradingEngine
 from app.indicators.base_indicator import Signal, SignalDirection
+from app.indicators.macd_indicator import MACDIndicator
+from app.indicators.rsi_indicator import RSIIndicator
 from app.webhook.webhook_server import WebhookServer
 
 
@@ -148,6 +149,118 @@ def test_indicator_signal_to_engine(
 
     # Stop the trading engine
     trading_engine.stop()
+
+
+def test_macd_signal_to_engine(
+    sample_price_data,
+    mock_connector,
+    mock_risk_manager,
+    trading_engine
+):
+    """
+    Test the flow from MACD indicator signal generation (MVP params) to trading engine processing.
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Starting test_macd_signal_to_engine...")
+
+    # --- Setup Mocks ---
+    mock_connector.get_ticker.return_value = {"symbol": "ETH", "last_price": 100.0}
+    mock_connector.place_order.return_value = {
+        "status": "OPEN",
+        "order_id": "mock_order_123",
+        "client_order_id": None,
+        "symbol": "ETH",
+        "side": "BUY",
+        "type": "MARKET",
+        "amount": 1.0,
+        "price": None,
+        "raw_response": {}
+    }
+    mock_connector.get_account_balance.return_value = {"PERP_USDC": 1000.0}
+    mock_connector.get_markets.return_value = [{
+        "symbol": "ETH", "base_asset": "ETH", "quote_asset": "USD", "price_precision": 2,
+        "min_size": 0.01, "tick_size": "0.01", "market_type": "PERPETUAL", "active": True
+    }]
+
+    # Configure the mock risk manager to allow trades
+    mock_risk_manager.calculate_position_size.return_value = (1.0, 5.0)
+    mock_risk_manager.calculate_hedge_parameters.return_value = (0.2, 2.0)
+    mock_risk_manager.validate_trade.return_value = (True, "Trade validated")
+
+    # --- Initialize Indicator ---
+    mvp_params = {
+        "fast_period": 8,
+        "slow_period": 21,
+        "signal_period": 5,
+    }
+    macd_mvp = MACDIndicator(name="macd_mvp", params=mvp_params)
+    logger.info(f"Initialized MACD indicator with params: {mvp_params}")
+
+    # --- Process Data & Generate Signals ---
+    df = sample_price_data.copy()
+    logger.info(f"Processing sample price data with shape: {df.shape}")
+    result_df = macd_mvp.generate_signals(df)
+    signals = []
+    for index, row in result_df.iterrows():
+        if pd.notna(row["signal"]):
+            signal_obj = Signal(
+                direction=row["signal"],
+                symbol=row.get("symbol", "ETH"),
+                indicator=macd_mvp.name,
+                confidence=row["confidence"],
+                timestamp=int(index.timestamp() * 1000),
+                params={
+                    "macd": row["macd"],
+                    "signal_line": row["macd_signal"],
+                    "histogram": row["macd_histogram"],
+                    "trigger": "crosses_above_signal" if row["signal"] == SignalDirection.BUY else "crosses_below_signal"
+                }
+            )
+            signals.append(signal_obj)
+
+    logger.info(f"Generated {len(signals)} signals from MACD indicator.")
+
+    # --- Start Engine & Process Signals ---
+    if not signals:
+        pytest.skip("No MACD signals generated from sample data, skipping engine processing test.")
+
+    try:
+        # Make sure engine uses the mock connector
+        trading_engine.main_connector = mock_connector
+        trading_engine.hedge_connector = mock_connector
+        trading_engine.risk_manager = mock_risk_manager
+        trading_engine.dry_run = False
+
+        # Ensure the engine is reset/clean before processing
+        trading_engine.active_trades = {}
+        trading_engine.trade_history = []
+
+        # Start the trading engine (non-blocking if already designed that way)
+        logger.info("Starting trading engine...")
+        engine_started = trading_engine.start()
+        assert engine_started is True, "Trading engine failed to start"
+        logger.info("Trading engine started.")
+
+        logger.info(f"Processing {len(signals)} signals...")
+        for signal in signals:
+            logger.debug(f"Processing signal: {signal}")
+            success = trading_engine.process_signal(signal)
+            logger.debug(f"Signal processing result: {success}")
+
+        # --- Assertions ---
+        logger.info("Checking assertions...")
+        assert mock_connector.place_order.called, "TradingEngine did not call place_order on the mock connector."
+        call_count = mock_connector.place_order.call_count
+        logger.info(f"mock_connector.place_order was called {call_count} times.")
+
+        first_call_args, first_call_kwargs = mock_connector.place_order.call_args_list[0]
+        logger.info(f"First place_order call args: {first_call_args}")
+        logger.info(f"First place_order call kwargs: {first_call_kwargs}")
+
+    finally:
+        logger.info("Stopping trading engine...")
+        trading_engine.stop()
+        logger.info("Trading engine stopped.")
 
 
 def test_webhook_to_indicator_to_engine(

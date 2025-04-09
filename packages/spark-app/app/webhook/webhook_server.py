@@ -1,13 +1,13 @@
-import logging
 import json
+import logging
 import threading
 import time
-from typing import Dict, Any, Optional, Callable, List
-from flask import Flask, request, jsonify
+from typing import Any, Callable, Dict, List, Optional
+
+from flask import Flask, jsonify, request
+from indicators.base_indicator import Signal, SignalDirection
 from waitress import serve
 from waitress.server import create_server
-
-from app.indicators.base_indicator import Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 

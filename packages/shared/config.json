@@ -14,7 +14,7 @@
   "metrics_host": "0.0.0.0",
   "max_parallel_trades": 5,
   "polling_interval": 30,
-  "dry_run": true,
+  "dry_run": false,
   "exchanges": [
     {
       "name": "hyperliquid",
@@ -32,7 +32,7 @@
       "api_key": "${COINBASE_API_KEY}",
       "api_secret": "${COINBASE_API_SECRET}",
       "use_sandbox": "${COINBASE_USE_SANDBOX}",
-      "enabled": true,
+      "enabled": false,
       "use_as_main": false,
       "use_as_hedge": false
     },
@@ -42,7 +42,7 @@
       "api_key": "${KRAKEN_API_KEY}",
       "api_secret": "${KRAKEN_API_SECRET}",
       "testnet": "${KRAKEN_USE_SANDBOX}",
-      "enabled": true,
+      "enabled": false,
       "use_as_main": false,
       "use_as_hedge": false
     }
@@ -70,6 +70,16 @@
         "overbought": 70,
         "oversold": 30,
         "signal_period": 1
+      }
+    },
+    {
+      "name": "macd_eth_usd_1m",
+      "type": "macd",
+      "enabled": true,
+      "parameters": {
+        "fast_period": 8,
+        "slow_period": 21,
+        "signal_period": 5
       }
     }
   ]

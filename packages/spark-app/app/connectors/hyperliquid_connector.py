@@ -1,13 +1,16 @@
+import json
 import logging
 import time
+from datetime import timedelta
+from decimal import Decimal
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
 import urllib3.exceptions
 # Import the BaseConnector interface
-from app.connectors.base_connector import (BaseConnector, MarketType,
-                                           OrderSide, OrderStatus, OrderType)
+from connectors.base_connector import (BaseConnector, MarketType, OrderSide,
+                                       OrderStatus, OrderType)
 
 # For type hinting and future import
 try:
@@ -136,6 +139,8 @@ class HyperliquidConnector(BaseConnector):
         self.info = None
         self.connection_timeout = 10  # Default timeout in seconds
         self.retry_count = 0  # Track connection retry attempts
+        self.candle_cache = {} # Initialize cache
+        self.cache_ttl = 60 # Cache time-to-live in seconds
 
         # Set up dedicated loggers
         self.setup_loggers()
@@ -157,6 +162,8 @@ class HyperliquidConnector(BaseConnector):
             bool: True if connection successful, False otherwise
         """
         try:
+            # Defer imports until needed to avoid import errors if library not installed
+            import requests  # Keep requests for potential direct calls elsewhere
             from eth_account import Account
             from hyperliquid.exchange import Exchange
             from hyperliquid.info import Info
@@ -169,51 +176,50 @@ class HyperliquidConnector(BaseConnector):
             self.retry_count = 0
 
             # Initialize info client for data retrieval
-            self.info = Info(base_url=self.api_url)
-
-            # Create a wallet object from the private key
             try:
-                # Create a wallet from the private key
-                wallet = Account.from_key(self.private_key)
-
-                # Initialize exchange client for trading
-                self.exchange = Exchange(wallet=wallet, base_url=self.api_url)
-
-                # Test connection by getting a simple API call that doesn't require authentication
-                try:
-                    # Try to get the metadata which should be available without authentication
-                    logger.info("Testing connection by fetching exchange metadata...")
-                    response = requests.get(f"{self.api_url}/info", timeout=self.connection_timeout)
-
-                    if response.status_code != 200:
-                        logger.error(f"API connection test failed with status code: {response.status_code}")
-                        logger.error(f"Response text: {response.text}")
-                        self._is_connected = False
-                        return False
-
-                    # Now try to get metadata through the SDK
-                    meta = self.info.meta()
-                    logger.info(
-                        f"Connected to Hyperliquid {'Testnet' if self.testnet else 'Mainnet'}"
-                    )
-                    if "universe" in meta:
-                        logger.info(f"Found {len(meta['universe'])} markets")
-
-                    self._is_connected = True
-                    return True
-
-                except Exception as e:
-                    logger.error(f"Failed to fetch metadata: {e}")
+                self.info = Info(base_url=self.api_url)
+                # Make the self.info.meta() call the primary connection check
+                logger.info("Testing connection by fetching exchange metadata via SDK...")
+                meta = self.info.meta()
+                if not meta or "universe" not in meta:
+                    logger.error("Failed to fetch valid metadata from Hyperliquid API.")
                     self._is_connected = False
                     return False
+                logger.info(f"Successfully fetched metadata. Found {len(meta['universe'])} markets.")
 
             except Exception as e:
-                logger.error(f"Failed to initialize wallet or exchange: {e}")
+                logger.error(f"Failed to initialize Info client or fetch metadata: {e}", exc_info=True)
                 self._is_connected = False
                 return False
 
+            # Initialize exchange client for trading
+            try:
+                # Create a wallet object from the private key
+                wallet = Account.from_key(self.private_key)
+                self.exchange = Exchange(wallet=wallet, base_url=self.api_url)
+                logger.info("Exchange client initialized successfully.")
+
+            except Exception as e:
+                logger.error(f"Failed to initialize wallet or Exchange client: {e}", exc_info=True)
+                # Don't necessarily mark as disconnected if info client worked, but log error
+                # Or decide if exchange client is critical for 'connected' status
+                self._is_connected = False # Let's consider failure to init exchange as connection failure
+                return False
+
+            # If both info and exchange clients initialized successfully
+            self._is_connected = True
+            logger.info(
+                f"Connected to Hyperliquid {'Testnet' if self.testnet else 'Mainnet'} successfully."
+            )
+            return True
+
+        except ImportError as e:
+             logger.error(f"Missing required Hyperliquid libraries (hyperliquid, eth_account): {e}")
+             self._is_connected = False
+             return False
         except Exception as e:
-            logger.error(f"Failed to connect to Hyperliquid: {e}")
+            # Catch-all for any other unexpected errors during connection
+            logger.error(f"Unexpected error during connection to Hyperliquid: {e}", exc_info=True)
             self._is_connected = False
             return False
 
@@ -406,43 +412,86 @@ class HyperliquidConnector(BaseConnector):
             raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
-            # Get market index
-            meta = self.info.meta()
-            coin_idx = None
+            # --- Find Market Index Modification ---
+            base_symbol = symbol
+            if "-" in symbol:
+                base_symbol = symbol.split("-")[0]
+                logger.debug(f"Symbol '{symbol}' contains '-', using base '{base_symbol}' for lookup.")
+            # --- End Find Market Index Modification ---
 
-            for i, coin in enumerate(meta["universe"]):
-                if coin["name"] == symbol:
+            meta = self.info.meta() # Fetch metadata once
+
+            all_mids = self.info.all_mids()
+
+            coin_idx = None
+            market_found_in_meta = False
+            for i, coin in enumerate(meta.get("universe", [])):
+                # Compare using the potentially modified search_symbol (now base_symbol)
+                if coin.get("name") == base_symbol:
                     coin_idx = i
+                    market_found_in_meta = True
+                    logger.debug(f"Found coin '{base_symbol}' at index {coin_idx} in metadata.")
                     break
 
-            if coin_idx is None:
-                raise ValueError(f"Market {symbol} not found")
+            if not market_found_in_meta:
+                 # Report error using the original symbol for clarity
+                logger.error(f"Market symbol '{symbol}' (searched as '{base_symbol}') not found in Hyperliquid metadata universe.")
+                raise ValueError(f"Market {symbol} (base: {base_symbol}) not found in metadata")
 
-            # Get latest price from all_mids
-            try:
-                all_mids = self.info.all_mids()
+            # --- Get Price Logic ---
+            last_price = None
+            if isinstance(all_mids, dict):
+                # If all_mids is a dict, try accessing by base_symbol name first
+                if base_symbol in all_mids:
+                    last_price = float(all_mids[base_symbol])
+                    logger.debug(f"Found price for '{base_symbol}' directly in all_mids dict: {last_price}")
+                elif coin_idx is not None and str(coin_idx) in all_mids: # Fallback: Check if index as string key works
+                     last_price = float(all_mids[str(coin_idx)])
+                     logger.debug(f"Found price using string index '{coin_idx}' in all_mids dict: {last_price}")
+                elif coin_idx is not None and coin_idx in all_mids: # Fallback: Check if integer index as key works
+                     last_price = float(all_mids[coin_idx])
+                     logger.debug(f"Found price using integer index {coin_idx} in all_mids dict: {last_price}")
+                else:
+                     logger.warning(f"Could not find price for '{base_symbol}' or index {coin_idx} in all_mids dictionary: {list(all_mids.keys())[:20]}...") # Log some keys
+
+            elif isinstance(all_mids, list):
+                # If all_mids is a list, use coin_idx if valid
+                if coin_idx is not None and 0 <= coin_idx < len(all_mids):
+                    last_price = float(all_mids[coin_idx])
+                    logger.debug(f"Found price using index {coin_idx} in all_mids list: {last_price}")
+                else:
+                    logger.warning(f"Index {coin_idx} is out of bounds or invalid for all_mids list (length {len(all_mids)}).")
+            else:
+                 logger.error(f"Unexpected type for all_mids: {type(all_mids)}. Cannot extract price.")
+
+
+            if last_price is None:
+                logger.error(f"Price data for symbol '{symbol}' (base: '{base_symbol}', index: {coin_idx}) could not be extracted from all_mids.")
+                # Keep the original error structure but provide more context
+                raise ValueError(f"No price data available or extractable from all_mids for {symbol} (base: {base_symbol}, index: {coin_idx})")
+            # --- End Get Price Logic ---
+
+            logger.debug(f"Successfully retrieved last_price: {last_price} for {symbol} (base: {base_symbol})")
+
+            return {
+                "symbol": symbol, # Return original symbol
+                "last_price": last_price,
+                "timestamp": int(time.time() * 1000),
+            }
+
+        except requests.exceptions.HTTPError as e:
+            if e.response and e.response.status_code == 429:
+                logger.warning(f"Rate limit hit while getting ticker for {symbol}. Retrying after delay...")
+                time.sleep(1)  # Add delay before retry
+                all_mids = self.info.all_mids()  # Retry once
                 if not all_mids or coin_idx >= len(all_mids):
                     raise ValueError(f"No price data available for {symbol}")
-
                 return {
                     "symbol": symbol,
                     "last_price": float(all_mids[coin_idx]),
                     "timestamp": int(time.time() * 1000),
                 }
-
-            except requests.exceptions.HTTPError as e:
-                if e.response and e.response.status_code == 429:
-                    logger.warning(f"Rate limit hit while getting ticker for {symbol}. Retrying after delay...")
-                    time.sleep(1)  # Add delay before retry
-                    all_mids = self.info.all_mids()  # Retry once
-                    if not all_mids or coin_idx >= len(all_mids):
-                        raise ValueError(f"No price data available for {symbol}")
-                    return {
-                        "symbol": symbol,
-                        "last_price": float(all_mids[coin_idx]),
-                        "timestamp": int(time.time() * 1000),
-                    }
-                raise
+            raise
 
         except Exception as e:
             logger.error(f"Failed to get ticker for {symbol}: {e}")
@@ -659,17 +708,17 @@ class HyperliquidConnector(BaseConnector):
             logger.error(f"Failed to get positions: {e}")
             return []
 
-    def place_order(
+    async def place_order(
         self,
         symbol: str,
         side: OrderSide,
         order_type: OrderType,
-        amount: float,
-        price: float,
-        leverage: float = 1.0,  # Default leverage of 1x
+        amount: Union[float, Decimal],
+        price: Optional[float] = None,
+        leverage: Optional[float] = None,
         reduce_only: bool = False,
         post_only: bool = False,
-        client_order_id: str = None,
+        client_order_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Place an order on Hyperliquid.
@@ -679,104 +728,270 @@ class HyperliquidConnector(BaseConnector):
             side: Order side (BUY/SELL)
             order_type: Order type (MARKET/LIMIT)
             amount: Order amount in base currency
-            price: Order price (ignored for market orders)
+            price: Order price (required for LIMIT orders)
             leverage: Position leverage (default: 1x)
             reduce_only: Whether the order should only reduce position
-            post_only: Whether the order must be maker
+            post_only: Whether the order must be maker (LIMIT orders only)
             client_order_id: Optional client order ID
 
         Returns:
-            Dict[str, Any]: Order response
+            Dict[str, Any]: Order response containing status and potentially order ID
         """
-        if not self.exchange:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
+        if not self.exchange or not self.info:
+            logger.error("Not connected to Hyperliquid. Cannot place order.")
+            raise HyperliquidConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
-            # Get market index
-            meta = self.info.meta()
-            coin_idx = None
+            # Convert amount to Decimal for consistent comparison
+            amount_decimal = Decimal(str(amount))
+            if amount_decimal <= Decimal('0'):
+                logger.error(f"Order amount must be positive, got {amount}")
+                raise ValueError("Order amount must be positive")
 
-            for i, coin in enumerate(meta["universe"]):
-                if coin["name"] == symbol:
+            min_order_size = Decimal(str(self.get_min_order_size(symbol)))
+            if amount_decimal < min_order_size:
+                logger.error(f"Order amount {amount} is below minimum size {min_order_size} for {symbol}")
+                raise ValueError(f"Order amount {amount} is below minimum size {min_order_size} for {symbol}")
+
+            if order_type == OrderType.LIMIT:
+                if price is None or price <= 0:
+                    logger.error(f"Limit order requires a positive price, got {price}")
+                    raise ValueError("Limit order price must be positive and provided")
+            elif order_type == OrderType.MARKET and price is not None:
+                logger.warning("Price is ignored for MARKET orders.")
+                price = None # Ensure price is None for market orders
+
+            if leverage is not None and leverage <= 0:
+                 logger.error(f"Leverage must be positive, got {leverage}")
+                 raise ValueError("Leverage must be positive")
+
+            # --- Fetch Market Metadata for Precision and Limits ---
+            meta = self.info.meta()
+            market_info = None
+            coin_idx = None
+            for i, coin_data in enumerate(meta.get("universe", [])):
+                if coin_data.get("name") == symbol.upper(): # Match symbol case-insensitively
+                    market_info = coin_data
                     coin_idx = i
                     break
 
-            if coin_idx is None:
+            if market_info is None or coin_idx is None:
+                logger.error(f"Market {symbol} not found in Hyperliquid metadata.")
                 raise ValueError(f"Market {symbol} not found")
 
-            # Validate order parameters
-            if amount <= 0:
-                raise ValueError("Order amount must be positive")
-            if order_type == OrderType.LIMIT and price <= 0:
-                raise ValueError("Limit order price must be positive")
-            if leverage <= 0:
-                raise ValueError("Leverage must be positive")
-
-            # Convert order parameters to Hyperliquid format
-            order_params = {
-                "coin": str(coin_idx),
-                "is_buy": side == OrderSide.BUY,
-                "sz": str(amount),
-                "limit_px": str(price) if order_type == OrderType.LIMIT else None,
-                "reduce_only": reduce_only,
-                "post_only": post_only,
-                "cloid": client_order_id,
-                "leverage": str(leverage),
-            }
-
-            # Place the order
+            size_decimals = market_info.get("szDecimals", 8) # Default to 8 if not found
+            tick_size_str = market_info.get("tickSize", "0.1") # Price increment as string
             try:
-                response = self.exchange.place_order(order_params)
-                return response
+                # Convert tick size to float for validation
+                tick_size = float(tick_size_str)
+                # Calculate price decimals from tickSize (e.g., "0.01" -> 2 decimals)
+                if '.' in tick_size_str:
+                    price_decimals = len(tick_size_str.split('.')[1])
+                else:
+                    price_decimals = 0 # Handle whole numbers
+            except (ValueError, IndexError):
+                logger.warning(f"Could not parse tickSize '{tick_size_str}' for {symbol}, defaulting price precision.")
+                tick_size = 0.1  # Default tick size
+                price_decimals = 2 # Default price precision
 
-            except requests.exceptions.HTTPError as e:
-                if e.response and e.response.status_code == 429:
-                    logger.warning("Rate limit hit while placing order. Retrying after delay...")
-                    time.sleep(1)  # Add delay before retry
-                    response = self.exchange.place_order(order_params)  # Retry once
-                    return response
-                raise
+            logger.debug(f"Market {symbol}: szDecimals={size_decimals}, minSize={min_order_size}, priceDecimals={price_decimals}, tickSize={tick_size}")
+            # --- End Fetch Market Metadata ---
 
-        except Exception as e:
-            logger.error(f"Failed to place order: {e}")
-            if isinstance(e, ValueError):
-                raise HyperliquidAPIError(str(e))
-            raise
+            # --- Format Order Parameters for API ---
+            formatted_amount = f"{amount:.{size_decimals}f}"
+            formatted_price = None
+            if order_type == OrderType.LIMIT and price is not None:
+                formatted_price = f"{price:.{price_decimals}f}"
 
-    def cancel_order(self, order_id: str) -> bool:
+            order_params = {}
+            if order_type == OrderType.LIMIT:
+                order_params["order_type"] = {"limit": {"tif": "Gtc"}}
+                if post_only:
+                    order_params["order_type"] = {"limit": {"tif": "Alo"}}
+            elif order_type == OrderType.MARKET:
+                order_params["order_type"] = {"limit": {"tif": "Ioc"}}
+                if post_only:
+                    logger.warning("post_only is ignored for MARKET (Ioc) orders")
+            else:
+                raise ValueError(f"Unsupported order type: {order_type}")
+
+            if client_order_id:
+                order_params["cloid"] = client_order_id
+
+            sdk_limit_price = 0.0
+            if order_type == OrderType.LIMIT and formatted_price:
+                try:
+                    sdk_limit_price = float(formatted_price)
+                except (ValueError, TypeError):
+                    logger.error(f"Invalid formatted price for LIMIT order: {formatted_price}")
+                    raise ValueError(f"Invalid price for LIMIT order: {price}")
+
+            order_data_for_sdk = {
+                 "coin": symbol.upper(),
+                 "is_buy": side == OrderSide.BUY,
+                 "sz": float(formatted_amount),
+                 "limit_px": sdk_limit_price,
+                 "order_type": order_params["order_type"],
+                 "reduce_only": reduce_only,
+                 "cloid": client_order_id
+             }
+            if order_data_for_sdk["cloid"] is None: del order_data_for_sdk["cloid"]
+
+            logger.info(f"Prepared order data for SDK: {order_data_for_sdk}")
+            # --- End Format Order Parameters ---
+
+
+            # --- Place the Order via SDK/API ---
+            try:
+                logger.debug(f"Calling exchange.order with data: {order_data_for_sdk}")
+                response = self.exchange.order(
+                    order_data_for_sdk["coin"],
+                    order_data_for_sdk["is_buy"],
+                    order_data_for_sdk["sz"],
+                    order_data_for_sdk["limit_px"],
+                    order_data_for_sdk["order_type"],
+                    reduce_only=order_data_for_sdk["reduce_only"],
+                    cloid=order_data_for_sdk.get("cloid")
+                )
+                logger.info(f"Order placement response: {response}")
+
+                # --- Process Response ---
+                processed_response = {
+                    "status": "UNKNOWN",
+                    "order_id": None,
+                    "client_order_id": client_order_id,
+                    "symbol": symbol,
+                    "side": side.value,
+                    "type": order_type.value,
+                    "amount": amount,
+                    "price": price,
+                    "entry_price": price if price is not None else 0.0,  # Add entry_price
+                    "raw_response": response
+                }
+                if isinstance(response, dict) and response.get("status") == "ok":
+                    statuses = response.get("response", {}).get("data", {}).get("statuses", [])
+                    if statuses and isinstance(statuses[0], dict):
+                        order_info = statuses[0]
+                        if "resting" in order_info:
+                            processed_response["status"] = OrderStatus.OPEN.value
+                            processed_response["order_id"] = order_info["resting"].get("oid")
+                            # Set entry_price for resting orders (limit orders)
+                            if "px" in order_info["resting"]:
+                                processed_response["entry_price"] = float(order_info["resting"]["px"])
+                        elif "filled" in order_info:
+                            processed_response["status"] = OrderStatus.CLOSED.value
+                            processed_response["order_id"] = order_info["filled"].get("oid")
+                            processed_response["filled_amount"] = order_info["filled"].get("totalSz")
+                            # Use avgPx as entry_price for filled orders
+                            avg_price = order_info["filled"].get("avgPx")
+                            processed_response["average_price"] = avg_price
+                            processed_response["entry_price"] = float(avg_price) if avg_price is not None else price
+                        elif "error" in order_info:
+                            processed_response["status"] = OrderStatus.REJECTED.value
+                            processed_response["error_message"] = order_info.get("error")
+                            logger.error(f"Order placement failed (API Error): {order_info.get('error')}")
+                        else:
+                            logger.warning(f"Order placed but status unclear: {order_info}")
+                    else:
+                        logger.warning("Order status 'ok' but no order details found in response.")
+                        processed_response["status"] = "ACCEPTED_UNKNOWN_STATUS"
+                elif isinstance(response, dict) and response.get("status") == "error":
+                    processed_response["status"] = OrderStatus.REJECTED.value
+                    processed_response["error_message"] = response.get("error")
+                    logger.error(f"Order placement failed (API Error): {response.get('error')}")
+                else:
+                    logger.warning(f"Unrecognized order response format: {response}")
+                # --- End Process Response ---
+
+                return processed_response
+
+            # --- Exception Handling for SDK/Network Call ---
+            except requests.exceptions.RequestException as e:
+                 logger.error(f"HTTP request failed during order placement for {symbol}: {e}")
+                 if isinstance(e, requests.exceptions.Timeout):
+                     raise HyperliquidTimeoutError(f"Request timed out: {e}")
+                 elif isinstance(e, requests.exceptions.ConnectionError):
+                     self._is_connected = False
+                     raise HyperliquidConnectionError(f"Connection error: {e}")
+                 else:
+                     err_response = getattr(e, 'response', None)
+                     if err_response is not None:
+                         logger.error(f"API Error Response: Status={err_response.status_code}, Body={err_response.text}")
+                     raise HyperliquidAPIError(f"API error placing order: {e}")
+            except Exception as sdk_e: # Catch other SDK errors
+                 logger.error(f"Hyperliquid SDK error placing order for {symbol}: {sdk_e}", exc_info=True)
+                 return {
+                     "status": OrderStatus.REJECTED.value,
+                     "symbol": symbol,
+                     "error": f"SDK error: {str(sdk_e)}",
+                     "raw_response": str(sdk_e),
+                     "entry_price": price if price is not None else 0.0  # Add entry_price even for errors
+                 }
+            # --- End Place Order Call Logic ---
+
+        # Catch errors from validation or connection steps *before* the SDK call attempt
+        except (ValueError, HyperliquidConnectionError, HyperliquidTimeoutError, HyperliquidAPIError) as e:
+            logger.error(f"Order placement validation or connection error for {symbol}: {e}")
+            raise # Re-raise specific known errors
+        except Exception as e: # Catch any other unexpected errors during preparation
+            logger.error(f"Unexpected error during order preparation for {symbol}: {e}", exc_info=True)
+            return {
+                 "status": OrderStatus.REJECTED.value,
+                 "symbol": symbol,
+                 "error": f"Unexpected preparation error: {str(e)}",
+                 "entry_price": price if price is not None else 0.0  # Add entry_price for all error cases
+             }
+
+    def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]: # Added symbol
         """
-        Cancel an existing order.
+        Cancel an existing order by its ID.
 
         Args:
-            order_id: The ID of the order to cancel
+            order_id: The exchange-assigned order ID to cancel.
+            symbol: The market symbol the order belongs to (required by Hyperliquid).
 
         Returns:
-            bool: True if successfully canceled, False otherwise
+            Dict[str, Any] indicating success or failure.
         """
         if not self.exchange:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
+            logger.error("Not connected to Hyperliquid. Cannot cancel order.")
+            raise HyperliquidConnectionError("Not connected to Hyperliquid.")
 
+        if not symbol:
+             logger.error("Symbol is required to cancel orders on Hyperliquid.")
+             raise ValueError("Symbol is required for cancel_order on Hyperliquid")
+
+        logger.info(f"Attempting to cancel order {order_id} for symbol {symbol}")
         try:
-            # The cancel method might require additional parameters like coin_idx
-            # We would need to parse the order_id to extract the necessary information
-            # or keep track of orders in a local store
+            # Hyperliquid API requires symbol (coin) and order ID (oid)
+            response = self.exchange.cancel(symbol.upper(), int(order_id))
+            logger.info(f"Cancel order response for {order_id}: {response}")
 
-            # For simplicity, let's assume the order_id contains the coin index
-            # In a real implementation, you'd need to track orders or query open orders first
-            orders = self.exchange.open_orders()
+            # Process response
+            if isinstance(response, dict) and response.get("status") == "ok":
+                 logger.info(f"Successfully initiated cancellation for order {order_id}")
+                 # Check nested status if needed
+                 statuses = response.get("response", {}).get("data", {}).get("statuses", [])
+                 if statuses and statuses[0] == "cancelled":
+                      return {"status": "success", "order_id": order_id, "message": "Order cancelled successfully."}
+                 else:
+                      # Might be pending cancellation or another state
+                      return {"status": "pending", "order_id": order_id, "message": "Cancellation request accepted.", "raw_response": response}
+            elif isinstance(response, dict) and response.get("status") == "error":
+                 error_msg = response.get("error", "Unknown API error")
+                 logger.error(f"Failed to cancel order {order_id}: {error_msg}")
+                 return {"status": "error", "order_id": order_id, "error": error_msg}
+            else:
+                 logger.warning(f"Unrecognized cancel response format for order {order_id}: {response}")
+                 return {"status": "unknown", "order_id": order_id, "raw_response": response}
 
-            for order in orders:
-                if order.get("oid") == order_id:
-                    coin_idx = order.get("coin")
-                    self.exchange.cancel(coin_idx, order_id)
-                    return True
-
-            logger.warning(f"Order {order_id} not found for cancellation")
-            return False
-
+        except ValueError as e:
+            # Handle cases like invalid order_id format
+            logger.error(f"Invalid input for cancelling order {order_id}: {e}")
+            return {"status": "error", "order_id": order_id, "error": f"Invalid input: {e}"}
         except Exception as e:
-            logger.error(f"Failed to cancel order {order_id}: {e}")
-            return False
+            logger.error(f"Unexpected error cancelling order {order_id}: {e}", exc_info=True)
+            return {"status": "error", "order_id": order_id, "error": f"Unexpected error: {str(e)}"}
 
     def get_order_status(self, order_id: str) -> Dict[str, Any]:
         """
@@ -892,6 +1107,33 @@ class HyperliquidConnector(BaseConnector):
             logger.error(f"Failed to close position for {symbol}: {e}")
             return {"status": "ERROR", "symbol": symbol, "error": str(e)}
 
+    def _parse_interval(self, interval: str) -> Tuple[timedelta, int]:
+        """
+        Parse interval string to timedelta and milliseconds.
+
+        Args:
+            interval: Time interval (e.g., '1m', '5m', '1h', '1d')
+
+        Returns:
+            Tuple[timedelta, int]: (timedelta object, milliseconds)
+        """
+        # Map intervals to (timedelta, milliseconds, hyperliquid_format)
+        interval_map = {
+            "1m": (timedelta(minutes=1), 60000),
+            "5m": (timedelta(minutes=5), 300000),
+            "15m": (timedelta(minutes=15), 900000),
+            "30m": (timedelta(minutes=30), 1800000),
+            "1h": (timedelta(hours=1), 3600000),
+            "4h": (timedelta(hours=4), 14400000),
+            "1d": (timedelta(days=1), 86400000),
+        }
+
+        if interval not in interval_map:
+            raise ValueError(f"Unsupported interval: {interval}")
+
+        return interval_map[interval]
+
+    @retry_api_call(max_tries=3, backoff_factor=2)
     def get_historical_candles(
         self,
         symbol: str,
@@ -901,75 +1143,100 @@ class HyperliquidConnector(BaseConnector):
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """
-        Get historical candlestick data.
+        Get historical Klines (candlestick data) for a specific market.
 
         Args:
             symbol: Market symbol (e.g., 'BTC')
-            interval: Time interval (e.g., '1m', '5m', '1h')
-            start_time: Start time in milliseconds
-            end_time: End time in milliseconds
-            limit: Maximum number of candles to retrieve
+            interval: Kline interval (e.g., '1m', '5m', '1h')
+            start_time: Start time in milliseconds since epoch
+            end_time: End time in milliseconds since epoch
+            limit: Max number of candles to retrieve
 
         Returns:
-            List[Dict[str, Any]]: List of candlestick data
+            List[Dict[str, Any]]: List of candle data dictionaries
         """
         if not self.info:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
+            logger.warning("Not connected to Hyperliquid. Attempting to connect...")
+            if not self.connect():
+                raise HyperliquidConnectionError("Failed to connect.")
 
         try:
-            # Get coin index
-            meta = self.info.meta()
-            coin_idx = None
+            # Extract base symbol
+            base_symbol = symbol.split('-')[0].upper() if '-' in symbol else symbol.upper()
 
-            for i, coin in enumerate(meta["universe"]):
-                if coin["name"] == symbol:
-                    coin_idx = i
-                    break
+            # Get interval in milliseconds
+            _, interval_ms = self._parse_interval(interval)
 
-            if coin_idx is None:
-                raise ValueError(f"Market {symbol} not found")
+            # Calculate time range
+            current_time = int(time.time() * 1000)
+            end_time = end_time or current_time
+            start_time = start_time or (end_time - (limit * interval_ms))
 
-            # Map interval string to seconds
-            interval_map = {
-                "1m": 60,
-                "5m": 300,
-                "15m": 900,
-                "1h": 3600,
-                "4h": 14400,
-                "1d": 86400,
+            # Construct request body
+            request_body = {
+                "type": "candleSnapshot",
+                "req": {
+                    "coin": base_symbol,
+                    "interval": interval,  # Hyperliquid accepts standard formats like "1m", "5m"
+                    "startTime": start_time,
+                    "endTime": end_time
+                }
             }
 
-            if interval not in interval_map:
-                raise ValueError(
-                    f"Unsupported interval: {interval}. Supported intervals: {list(interval_map.keys())}"
+            # Make API request
+            try:
+                response = requests.post(
+                    f"{self.api_url}/info",
+                    json=request_body,
+                    headers={"Content-Type": "application/json"},
+                    timeout=self.connection_timeout
                 )
 
-            # Convert to Hyperliquid format
-            resolution = interval_map[interval]
+                # Handle rate limiting
+                if response.status_code == 429:
+                    logger.warning(f"Rate limit hit while fetching candles for {symbol}. Retrying after 1 second...")
+                    time.sleep(1)
+                    response = requests.post(
+                        f"{self.api_url}/info",
+                        json=request_body,
+                        headers={"Content-Type": "application/json"},
+                        timeout=self.connection_timeout
+                    )
 
-            # Calculate default time range if not provided
-            if end_time is None:
-                end_time = int(time.time() * 1000)
+                response.raise_for_status()
+                candles_data = response.json()
 
-            if start_time is None:
-                # Default to fetching data for the last 'limit' intervals
-                start_time = end_time - (resolution * 1000 * limit)
+                # Format candles
+                formatted_candles = []
+                for candle in candles_data:
+                    try:
+                        formatted_candles.append({
+                            "timestamp": int(candle['t']),
+                            "open": float(candle['o']),
+                            "high": float(candle['h']),
+                            "low": float(candle['l']),
+                            "close": float(candle['c']),
+                            "volume": float(candle['v'])
+                        })
+                    except (KeyError, ValueError, TypeError) as e:
+                        logger.warning(f"Could not parse candle data: {e}")
+                        continue
 
-            # Fetch candles
-            # Note: Hyperliquid API might have specific parameters for candle retrieval
-            # This is a placeholder implementation
-            candles = []
+                # Sort by timestamp and apply limit
+                formatted_candles.sort(key=lambda x: x["timestamp"])
+                return formatted_candles[-limit:] if limit else formatted_candles
 
-            # In a real implementation, you'd call the actual Hyperliquid API for historical data
-            # For now, we'll return an empty list with a warning
-            logger.warning(
-                "Historical candles fetching not fully implemented for Hyperliquid"
-            )
-
-            return candles
+            except requests.exceptions.RequestException as e:
+                if isinstance(e, requests.exceptions.Timeout):
+                    raise HyperliquidTimeoutError(f"Request timed out: {e}")
+                elif isinstance(e, requests.exceptions.ConnectionError):
+                    self._is_connected = False
+                    raise HyperliquidConnectionError(f"Connection error: {e}")
+                else:
+                    raise HyperliquidAPIError(f"API error fetching candles: {e}")
 
         except Exception as e:
-            logger.error(f"Failed to get historical candles for {symbol}: {e}")
+            logger.error(f"Unexpected error fetching candles for {symbol}: {e}", exc_info=True)
             return []
 
     def get_funding_rate(self, symbol: str) -> Dict[str, Any]:
@@ -1299,3 +1566,69 @@ class HyperliquidConnector(BaseConnector):
             bool: True if connected, False otherwise
         """
         return self._is_connected
+
+    def get_position(self, symbol: str) -> Optional[Dict]:
+        """Get position information for a specific symbol.
+
+        Args:
+            symbol (str): The trading symbol to get position for
+
+        Returns:
+            Optional[Dict]: Position information if exists, None otherwise
+        """
+        try:
+            response = self.exchange.user_state()
+            if not response or "assetPositions" not in response:
+                logger.warning(f"No position data found for {symbol}")
+                return None
+
+            # Find position for the specified symbol
+            for position in response["assetPositions"]:
+                if position.get("coin") == symbol:
+                    return {
+                        "symbol": symbol,
+                        "size": float(position.get("position", "0")),
+                        "entry_price": float(position.get("entryPx", "0")),
+                        "liquidation_price": float(position.get("liquidationPx", "0")),
+                        "unrealized_pnl": float(position.get("unrealizedPnl", "0")),
+                        "leverage": float(position.get("leverage", "1"))
+                    }
+
+            logger.debug(f"No active position found for {symbol}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Error getting position for {symbol}: {str(e)}")
+            return None
+
+    def get_min_order_size(self, symbol: str) -> float:
+        """
+        Get the minimum order size for a market.
+
+        Args:
+            symbol: Market symbol (e.g., 'BTC')
+
+        Returns:
+            float: Minimum order size
+        """
+        if not self.info:
+            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
+
+        try:
+            # Get market metadata
+            meta = self.info.meta()
+
+            # Find the market info for the symbol
+            for coin in meta.get("universe", []):
+                if coin.get("name") == symbol:
+                    # Get minSize from market info, default to 0.001 if not found
+                    min_size = coin.get("minSize", 0.001)
+                    # Convert to float if it's a string
+                    return float(min_size) if isinstance(min_size, str) else min_size
+
+            # If market not found, raise error
+            raise ValueError(f"Market {symbol} not found")
+
+        except Exception as e:
+            logger.error(f"Error getting minimum order size for {symbol}: {e}")
+            raise

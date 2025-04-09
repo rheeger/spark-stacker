@@ -1,9 +1,9 @@
 import logging
 import time
-from typing import Dict, Any, List, Optional, Tuple, Union
-import pandas as pd
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from app.connectors.base_connector import BaseConnector, OrderSide
+import pandas as pd
+from connectors.base_connector import BaseConnector, OrderSide
 
 logger = logging.getLogger(__name__)
 

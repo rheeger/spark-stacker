@@ -138,6 +138,7 @@ services:
     container_name: log-metrics
     volumes:
       - ../../../packages/spark-app/logs:/logs
+      - ../../../packages/shared:/config:ro
     environment:
       - LOG_DIR=/logs
       - PORT=9001

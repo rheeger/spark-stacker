@@ -49,4 +49,24 @@ scrape_configs:
           app: 'spark-stacker-logs'
           environment: 'production'
 
+  # Loki metrics
+  - job_name: 'loki'
+    metrics_path: /metrics
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['loki:3100']
+        labels:
+          app: 'loki'
+          environment: 'production'
+
+  # Promtail metrics
+  - job_name: 'promtail'
+    metrics_path: /metrics
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['promtail:9080']
+        labels:
+          app: 'promtail'
+          environment: 'production'
+
   # Removed mock metrics - using real metrics from spark-stacker container

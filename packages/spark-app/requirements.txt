@@ -1,6 +1,6 @@
 # Core dependencies
-pandas>=1.5.0
-numpy>=1.22.0
+pandas>=1.5.0,<2.0.0
+numpy>=1.22.0,<2.0.0
 flask
 waitress
 
@@ -26,9 +26,7 @@ pydantic>=2.0.0
 PyYAML
 
 # Technical analysis
-# ta-lib is not included here as it requires separate binary installation
-# Instead, we use pandas-ta which is a pure Python implementation
-pandas-ta
+pandas-ta==0.3.14b0  # Pinning to a specific version for numpy compatibility
 
 # Visualization and monitoring (optional)
 matplotlib>=3.5.0

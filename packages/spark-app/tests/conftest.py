@@ -1,7 +1,10 @@
+import importlib.util
 import json
 import logging
 import os
 import sys
+import time
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -11,28 +14,47 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# Filter out the specific pandas_ta pkg_resources deprecation warning
+warnings.filterwarnings(
+    "ignore",
+    message="pkg_resources is deprecated as an API",
+    category=DeprecationWarning,
+    module="pandas_ta"
+)
+
+# Also filter using an alternative pattern to catch all instances
+warnings.filterwarnings(
+    "ignore",
+    message=".*pkg_resources is deprecated as an API.*",
+    category=DeprecationWarning
+)
+
 # Add the package root to the Python path so imports work correctly
 # when running pytest from the command line
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
-from app.connectors.base_connector import (
-    BaseConnector,
-    MarketType,
-    OrderSide,
-    OrderType,
-)
+# For modules that need to be accessible without the app. prefix
+app_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../app"))
+sys.path.insert(0, app_path)
+
+# Patch pandas_ta module to work with newer numpy versions
+try:
+    import numpy
+    if not hasattr(numpy, 'NaN'):
+        numpy.NaN = numpy.nan
+except:
+    pass
+
+from app.connectors.base_connector import (BaseConnector, MarketType,
+                                           OrderSide, OrderType)
 from app.connectors.connector_factory import ConnectorFactory
 from app.core.trading_engine import TradingEngine
-from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from app.indicators.base_indicator import (BaseIndicator, Signal,
+                                           SignalDirection)
 from app.risk_management.risk_manager import RiskManager
-
 # Import project components
-from app.utils.config import (
-    AppConfig,
-    ExchangeConfig,
-    IndicatorConfig,
-    TradingStrategyConfig,
-)
+from app.utils.config import (AppConfig, ExchangeConfig, IndicatorConfig,
+                              TradingStrategyConfig)
 
 # Set up logging for conftest
 logging.basicConfig(
@@ -232,18 +254,28 @@ def mock_connector():
     connector.get_account_balance.return_value = {"USD": 10000.0}
     connector.get_positions.return_value = []
 
-    # Mock the place_order method to return a successful order
+    # Mock the place_order method to return a successful order with all required fields
     connector.place_order.return_value = {
         "order_id": "mock_order_123",
         "symbol": "ETH",
         "side": "BUY",
         "size": 1.0,
         "price": 1500.0,
+        "entry_price": 1500.0,
         "status": "FILLED",
+        "leverage": 5.0,
+        "position_id": "mock_position_1",
+        "unrealized_pnl": 0.0,
+        "liquidation_price": 0.0,
+        "margin": 300.0,
+        "timestamp": int(time.time() * 1000)
     }
 
+    # Add supports_derivatives property
+    connector.supports_derivatives = True
+
     # Add market_types property
-    connector.market_types = MarketType.SPOT
+    connector.market_types = [MarketType.PERPETUAL]
 
     return connector
 
@@ -322,3 +354,15 @@ def market_data_params(request):
     parameters through this intermediary fixture.
     """
     return request.param
+
+
+def pytest_configure(config):
+    """Register custom pytest markers."""
+    config.addinivalue_line(
+        "markers", "production: mark tests that should only run in production environment"
+    )
+
+    # Configure pytest_asyncio to use function scope for event loops
+    # This avoids the "asyncio_default_fixture_loop_scope" warning
+    if hasattr(config, "option"):
+        setattr(config.option, "asyncio_default_fixture_loop_scope", "function")

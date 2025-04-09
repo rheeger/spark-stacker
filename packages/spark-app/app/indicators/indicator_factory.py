@@ -1,14 +1,16 @@
 import logging
 from typing import Any, Dict, List, Optional, Type
 
-from app.indicators.adaptive_supertrend_indicator import AdaptiveSupertrendIndicator
-from app.indicators.adaptive_trend_finder_indicator import AdaptiveTrendFinderIndicator
-from app.indicators.base_indicator import BaseIndicator
-from app.indicators.bollinger_bands_indicator import BollingerBandsIndicator
-from app.indicators.macd_indicator import MACDIndicator
-from app.indicators.moving_average_indicator import MovingAverageIndicator
-from app.indicators.rsi_indicator import RSIIndicator
-from app.indicators.ultimate_ma_indicator import UltimateMAIndicator
+from indicators.adaptive_supertrend_indicator import \
+    AdaptiveSupertrendIndicator
+from indicators.adaptive_trend_finder_indicator import \
+    AdaptiveTrendFinderIndicator
+from indicators.base_indicator import BaseIndicator
+from indicators.bollinger_bands_indicator import BollingerBandsIndicator
+from indicators.macd_indicator import MACDIndicator
+from indicators.moving_average_indicator import MovingAverageIndicator
+from indicators.rsi_indicator import RSIIndicator
+from indicators.ultimate_ma_indicator import UltimateMAIndicator
 
 # Import additional indicators as they are implemented
 # from app.indicators.macd_indicator import MACDIndicator
@@ -137,7 +139,11 @@ class IndicatorFactory:
             indicator_type: String identifier for the indicator type
             indicator_class: Indicator class to register
         """
-        if not issubclass(indicator_class, BaseIndicator):
+        # Check if it's a BaseIndicator by name rather than direct class check
+        # This allows for different import paths
+        if not hasattr(indicator_class, '__mro__') or not any(
+            base.__name__ == 'BaseIndicator' for base in indicator_class.__mro__
+        ):
             raise TypeError(
                 f"Class {indicator_class.__name__} is not a subclass of BaseIndicator"
             )

@@ -1,18 +1,19 @@
 import logging
-import time
 import threading
-from typing import Dict, Any, List, Optional, Tuple
+import time
 from enum import Enum
-import pandas as pd
+from typing import Any, Dict, List, Optional, Tuple
 
-from app.connectors.base_connector import (
-    BaseConnector,
-    OrderSide,
-    OrderType,
-    MarketType,
-)
-from app.indicators.base_indicator import Signal, SignalDirection
-from app.risk_management.risk_manager import RiskManager
+import pandas as pd
+from connectors.base_connector import (BaseConnector, MarketType, OrderSide,
+                                       OrderStatus, OrderType)
+from indicators.base_indicator import Signal, SignalDirection
+from metrics import (EXCHANGE_HYPERLIQUID, MARKET_ETH_USD, STRATEGY_MVP,
+                     record_mvp_signal_latency, record_mvp_trade,
+                     update_mvp_pnl, update_mvp_position_size)
+from risk_management.risk_manager import RiskManager
+
+# --- End Metrics Import ---
 
 logger = logging.getLogger(__name__)
 
@@ -258,12 +259,47 @@ class TradingEngine:
         Returns:
             bool: True if signal was processed, False otherwise
         """
+        # --- Metrics: Record Signal Processing Start Time ---
+        signal_received_time = time.time()
+        is_target_signal = (signal.symbol == MARKET_ETH_USD)
+        # --- End Metrics ---
+
         if self.state not in [TradingState.RUNNING, TradingState.IDLE]:
             logger.warning(
-                f"Cannot process signal: engine not in correct state (state={self.state})"
+                f"Cannot process signal: engine not in correct state (state={self.state}). Queuing signal."
             )
             self.pending_signals.append(signal)
             return False
+
+        # --- Process pending signals first if any and engine is running now
+        if self.state == TradingState.RUNNING and self.pending_signals:
+            logger.info(f"Processing {len(self.pending_signals)} pending signals...")
+            processed_pending = 0
+            # Use a temporary list to avoid modifying while iterating
+            signals_to_process = list(self.pending_signals)
+            self.pending_signals.clear() # Clear original list
+            for pending_signal in signals_to_process:
+                if self.process_signal(pending_signal): # Recursive call for pending signals
+                    processed_pending += 1
+                else:
+                    # If a signal couldn't be processed, re-queue it
+                    self.pending_signals.append(pending_signal)
+            logger.info(f"Finished processing {processed_pending} pending signals.")
+
+        # Re-check state after potentially processing pending signals
+        if self.state != TradingState.RUNNING:
+            logger.warning(f"Engine state changed ({self.state}) after processing pending signals. Cannot process current signal.")
+            self.pending_signals.append(signal) # Re-queue current signal
+            return False
+
+        # --- Trade Execution Logic ---
+        trade_success = False # Assume failure initially
+        main_order_side = None
+        main_position_size = 0.0
+        hedge_position_size = 0.0
+        hedge_order_side = None
+        main_pos_type = "main" # Define position types
+        hedge_pos_type = "hedge"
 
         try:
             logger.info(f"Processing signal: {signal}")
@@ -293,18 +329,18 @@ class TradingEngine:
             # Convert signal direction to order side
             if signal.direction == SignalDirection.BUY:
                 logger.debug("Converting BUY signal to BUY main side, SELL hedge side")
-                main_side = OrderSide.BUY
-                hedge_side = OrderSide.SELL
+                main_order_side = OrderSide.BUY
+                hedge_order_side = OrderSide.SELL
             elif signal.direction == SignalDirection.SELL:
                 logger.debug("Converting SELL signal to SELL main side, BUY hedge side")
-                main_side = OrderSide.SELL
-                hedge_side = OrderSide.BUY
+                main_order_side = OrderSide.SELL
+                hedge_order_side = OrderSide.BUY
             else:
                 logger.warning(f"Neutral signal received, no action taken")
                 return False
 
-            logger.debug(f"Main side: {main_side}, type: {type(main_side)}")
-            logger.debug(f"Hedge side: {hedge_side}, type: {type(hedge_side)}")
+            logger.debug(f"Main side: {main_order_side}, type: {type(main_order_side)}")
+            logger.debug(f"Hedge side: {hedge_order_side}, type: {type(hedge_order_side)}")
 
             # Extract price from signal parameters if available
             price = signal.params.get("price")
@@ -321,9 +357,12 @@ class TradingEngine:
                     ):
                         price = float(ticker_data["last_price"])
                         logger.info(f"Using current market price: {price}")
+                    else:
+                        logger.warning(f"Could not fetch current market price for {symbol}")
+                        price = None # Let exchange handle price if possible
                 except Exception as e:
                     logger.warning(f"Could not fetch current market price: {e}")
-                    # Price will remain None, and the exchange will use the current market price
+                    price = None
 
             # Determine if we should use leverage based on market type
             use_leverage = self.main_connector.supports_derivatives
@@ -333,27 +372,27 @@ class TradingEngine:
                 # Normal position size calculation
                 logger.debug("Calculating position size...")
                 (
-                    main_size,
+                    main_position_size,
                     adjusted_main_leverage,
                 ) = self.risk_manager.calculate_position_size(
                     exchange=self.main_connector,
                     symbol=symbol,
                     available_balance=self.main_connector.get_account_balance(),
                     confidence=signal.confidence,
-                    signal_side=main_side,
+                    signal_side=main_order_side,
                     leverage=default_leverage,
                     stop_loss_pct=10.0,
                     price=price,
                 )
                 logger.debug(
-                    f"Position size calculation result: size={main_size}, leverage={adjusted_main_leverage}"
+                    f"Position size calculation result: size={main_position_size}, leverage={adjusted_main_leverage}"
                 )
             except Exception as e:
                 logger.error(f"Error calculating position size: {e}")
                 return False
 
-            if main_size <= 0:
-                logger.error(f"Invalid position size calculated: {main_size}")
+            if main_position_size <= 0:
+                logger.error(f"Invalid position size calculated: {main_position_size}")
                 return False
 
             try:
@@ -362,9 +401,9 @@ class TradingEngine:
                 is_valid, reason = self.risk_manager.validate_trade(
                     exchange=self.main_connector,
                     symbol=symbol,
-                    position_size=main_size,
+                    position_size=main_position_size,
                     leverage=adjusted_main_leverage,
-                    side=main_side,
+                    side=main_order_side,
                 )
                 logger.debug(
                     f"Trade validation result: valid={is_valid}, reason={reason}"
@@ -378,16 +417,16 @@ class TradingEngine:
                 return False
 
             # Calculate hedge position parameters if hedging is enabled and possible
-            hedge_size = 0.0
+            hedge_position_size = 0.0
             adjusted_hedge_leverage = 1.0
 
             if self._can_hedge:
                 try:
                     (
-                        hedge_size,
+                        hedge_position_size,
                         adjusted_hedge_leverage,
                     ) = self.risk_manager.calculate_hedge_parameters(
-                        main_position_size=main_size,
+                        main_position_size=main_position_size,
                         main_leverage=adjusted_main_leverage,
                         hedge_ratio=0.2,
                         max_hedge_leverage=5.0
@@ -395,7 +434,7 @@ class TradingEngine:
                         else 1.0,
                     )
                     logger.debug(
-                        f"Hedge calculation result: size={hedge_size}, leverage={adjusted_hedge_leverage}"
+                        f"Hedge calculation result: size={hedge_position_size}, leverage={adjusted_hedge_leverage}"
                     )
                 except Exception as e:
                     logger.error(f"Error calculating hedge parameters: {e}")
@@ -406,9 +445,9 @@ class TradingEngine:
                     hedge_balance = self.hedge_connector.get_account_balance()
                     hedge_available = sum(hedge_balance.values())
 
-                    if hedge_available < hedge_size:
+                    if hedge_available < hedge_position_size:
                         logger.error(
-                            f"Insufficient balance on hedge exchange: {hedge_available}, needed {hedge_size}"
+                            f"Insufficient balance on hedge exchange: {hedge_available}, needed {hedge_position_size}"
                         )
                         return False
             else:
@@ -419,11 +458,11 @@ class TradingEngine:
             # Log the trade plan
             logger.info(f"Trade plan for {symbol}:")
             logger.info(
-                f"  Main position: {main_side.value} {main_size:.2f} @ {adjusted_main_leverage:.1f}x"
+                f"  Main position: {main_order_side.value} {main_position_size:.2f} @ {adjusted_main_leverage:.1f}x"
             )
             if self._can_hedge:
                 logger.info(
-                    f"  Hedge position: {hedge_side.value} {hedge_size:.2f} @ {adjusted_hedge_leverage:.1f}x"
+                    f"  Hedge position: {hedge_order_side.value} {hedge_position_size:.2f} @ {adjusted_hedge_leverage:.1f}x"
                 )
 
             # Execute trades in dry run mode (simulation)
@@ -433,15 +472,15 @@ class TradingEngine:
                 try:
                     # Get current price for the simulation
                     current_price = self.main_connector.get_ticker(symbol).get(
-                        "last_price", 0.0
+                        "last_price", price or 0.0
                     )
                     logger.debug(f"Got current price for simulation: {current_price}")
 
                     # Create the trade record
                     logger.debug(
                         "Creating trade record with: "
-                        + f"main_side={main_side}, type={type(main_side)}, "
-                        + f"main_side.value={main_side.value}, type={type(main_side.value)}"
+                        + f"main_side={main_order_side}, type={type(main_order_side)}, "
+                        + f"main_side.value={main_order_side.value}, type={type(main_order_side.value)}"
                     )
 
                     # Record the simulated trade in active_trades
@@ -450,11 +489,12 @@ class TradingEngine:
                         "timestamp": int(time.time() * 1000),
                         "main_position": {
                             "exchange": "main",
-                            "side": main_side.value,  # Use .value to get the string
-                            "size": main_size,
+                            "side": main_order_side.value,  # Use .value to get the string
+                            "size": main_position_size,
                             "leverage": adjusted_main_leverage,
-                            "entry_price": current_price,
+                            "entry_price": current_price,  # Ensure this field is set
                             "order_id": f"dry_run_main_{int(time.time())}",
+                            "status": OrderStatus.FILLED.value # Simulate filled
                         },
                         "stop_loss_pct": 10.0,
                         "take_profit_pct": 20.0,
@@ -465,133 +505,45 @@ class TradingEngine:
                     }
 
                     # Add hedge position if applicable
-                    if self._can_hedge:
+                    if self._can_hedge and hedge_position_size > 0:
                         logger.debug(
-                            f"Adding hedge position with side={hedge_side.value}"
+                            f"Adding hedge position with side={hedge_order_side.value}"
                         )
                         trade_record["hedge_position"] = {
                             "exchange": "hedge",
-                            "side": hedge_side.value,  # Use .value to get the string
-                            "size": hedge_size,
+                            "side": hedge_order_side.value,  # Use .value to get the string
+                            "size": hedge_position_size,
                             "leverage": adjusted_hedge_leverage,
+                            "entry_price": current_price,  # Ensure this field is set
                             "order_id": f"dry_run_hedge_{int(time.time())}",
+                            "status": OrderStatus.FILLED.value # Simulate filled
                         }
 
                     logger.debug(f"Final trade record: {trade_record}")
                     self.active_trades[symbol] = trade_record
-                    return True
+                    trade_success = True # Mark success for dry run
+                    logger.info(f"DRY RUN: Simulated trade recorded for {symbol}")
                 except Exception as e:
                     logger.error(
                         f"Error creating simulation trade record: {e}", exc_info=True
                     )
-                    return False
+                    trade_success = False
 
             # Execute main position
             # Check if this is a Coinbase connector
             is_coinbase = "coinbase" in self.main_connector.__class__.__name__.lower()
 
-            # For Coinbase, ALWAYS use LIMIT orders because they may enforce limit-only mode
-            if is_coinbase:
-                # Always need a valid price for Coinbase limit orders
-                if not price or price <= 0:
-                    try:
-                        # Get optimal limit price that should fill immediately
-                        optimal_price_data = (
-                            self.main_connector.get_optimal_limit_price(
-                                symbol=symbol, side=main_side, amount=main_size
-                            )
-                        )
-
-                        price = optimal_price_data["price"]
-
-                        if not optimal_price_data["enough_liquidity"]:
-                            logger.warning(
-                                f"Limited liquidity for {symbol}, order may not fill completely"
-                            )
-
-                        logger.info(
-                            f"Using optimal limit price for immediate fill: {price}"
-                        )
-
-                    except Exception as e:
-                        logger.warning(
-                            f"Error getting optimal limit price: {e}, falling back to ticker price"
-                        )
-                        # Fallback to getting current price from ticker
-                        ticker_data = self.main_connector.get_ticker(symbol)
-                        if (
-                            ticker_data
-                            and "last_price" in ticker_data
-                            and ticker_data["last_price"] > 0
-                        ):
-                            # For BUY orders: add a small buffer to ensure immediate fill (0.1%)
-                            # For SELL orders: subtract a small buffer to ensure immediate fill (0.1%)
-                            price = float(ticker_data["last_price"])
-                            if main_side == OrderSide.BUY:
-                                price *= (
-                                    1.001  # 0.1% higher than market for immediate fill
-                                )
-                            else:
-                                price *= (
-                                    0.999  # 0.1% lower than market for immediate fill
-                                )
-                            logger.info(
-                                f"Using current market price with buffer for limit order: {price}"
-                            )
-                        else:
-                            logger.error(
-                                f"Cannot place order: No valid price for {symbol} LIMIT order"
-                            )
-                            return False
-
-                logger.info(
-                    f"Using LIMIT order for Coinbase with price {price} (required by Coinbase)"
-                )
-                order_type = OrderType.LIMIT
-            else:
-                order_type = OrderType.MARKET
-
-            # Only pass leverage parameter if derivatives are supported
-            order_params = {
-                "symbol": symbol,
-                "side": main_side,
-                "order_type": order_type,
-                "amount": main_size,
-                "price": price,
-            }
-
-            if self.main_connector.supports_derivatives:
-                order_params["leverage"] = adjusted_main_leverage
-
-            main_order = self.main_connector.place_order(**order_params)
-
-            if main_order.get("error"):
-                logger.error(f"Failed to place main order: {main_order.get('error')}")
-                return False
-
-            logger.info(f"Main order placed: {main_order}")
-
-            # Small delay to ensure main order is processed
-            time.sleep(1)
-
-            # Execute hedge position if hedge connector is available and hedging is enabled
-            hedge_order = None
-
-            if self._can_hedge and hedge_size > 0:
-                # Check if this is a Coinbase connector
-                is_coinbase_hedge = (
-                    "coinbase" in self.hedge_connector.__class__.__name__.lower()
-                )
-
-                # For Coinbase, must use LIMIT orders (they enforce limit-only mode)
-                if is_coinbase_hedge:
+            # Only execute real orders if not in dry run mode
+            if not self.dry_run:
+                # For Coinbase, ALWAYS use LIMIT orders because they may enforce limit-only mode
+                if is_coinbase:
                     # Always need a valid price for Coinbase limit orders
                     if not price or price <= 0:
                         try:
                             # Get optimal limit price that should fill immediately
                             optimal_price_data = (
-                                self.hedge_connector.get_optimal_limit_price(
-                                    symbol=symbol, side=hedge_side, amount=hedge_size
+                                self.main_connector.get_optimal_limit_price(
+                                    symbol=symbol, side=main_order_side, amount=main_position_size
                                 )
                             )
 
@@ -599,19 +551,19 @@ class TradingEngine:
 
                             if not optimal_price_data["enough_liquidity"]:
                                 logger.warning(
-                                    f"Limited liquidity for hedge {symbol}, order may not fill completely"
+                                    f"Limited liquidity for {symbol}, order may not fill completely"
                                 )
 
                             logger.info(
-                                f"Using optimal limit price for immediate hedge fill: {price}"
+                                f"Using optimal limit price for immediate fill: {price}"
                             )
 
                         except Exception as e:
                             logger.warning(
-                                f"Error getting optimal limit price for hedge: {e}, falling back to ticker price"
+                                f"Error getting optimal limit price: {e}, falling back to ticker price"
                             )
                             # Fallback to getting current price from ticker
-                            ticker_data = self.hedge_connector.get_ticker(symbol)
+                            ticker_data = self.main_connector.get_ticker(symbol)
                             if (
                                 ticker_data
                                 and "last_price" in ticker_data
@@ -620,91 +572,255 @@ class TradingEngine:
                                 # For BUY orders: add a small buffer to ensure immediate fill (0.1%)
                                 # For SELL orders: subtract a small buffer to ensure immediate fill (0.1%)
                                 price = float(ticker_data["last_price"])
-                                if hedge_side == OrderSide.BUY:
-                                    price *= 1.001  # 0.1% higher than market for immediate fill
+                                if main_order_side == OrderSide.BUY:
+                                    price *= (
+                                        1.001  # 0.1% higher than market for immediate fill
+                                    )
                                 else:
-                                    price *= 0.999  # 0.1% lower than market for immediate fill
+                                    price *= (
+                                        0.999  # 0.1% lower than market for immediate fill
+                                    )
                                 logger.info(
-                                    f"Using current market price with buffer for hedge limit order: {price}"
+                                    f"Using current market price with buffer for limit order: {price}"
                                 )
                             else:
                                 logger.error(
-                                    f"Cannot place hedge order: No valid price for {symbol} LIMIT order"
+                                    f"Cannot place order: No valid price for {symbol} LIMIT order"
                                 )
                                 return False
 
                     logger.info(
-                        f"Using LIMIT order for Coinbase hedge with price {price} (required by Coinbase)"
+                        f"Using LIMIT order for Coinbase with price {price} (required by Coinbase)"
                     )
-                    hedge_order_type = OrderType.LIMIT
+                    order_type = OrderType.LIMIT
                 else:
-                    hedge_order_type = OrderType.MARKET
+                    order_type = OrderType.MARKET
 
                 # Only pass leverage parameter if derivatives are supported
-                hedge_order_params = {
+                order_params = {
                     "symbol": symbol,
-                    "side": hedge_side,
-                    "order_type": hedge_order_type,
-                    "amount": hedge_size,
+                    "side": main_order_side,
+                    "order_type": order_type,
+                    "amount": main_position_size,
                     "price": price,
                 }
 
-                if self.hedge_connector.supports_derivatives:
-                    hedge_order_params["leverage"] = adjusted_hedge_leverage
+                if self.main_connector.supports_derivatives:
+                    order_params["leverage"] = adjusted_main_leverage
 
-                hedge_order = self.hedge_connector.place_order(**hedge_order_params)
+                main_order_result = self.main_connector.place_order(**order_params)
 
-                if hedge_order.get("error"):
-                    logger.error(
-                        f"Failed to place hedge order: {hedge_order.get('error')}"
-                    )
+                if main_order_result.get("error"):
+                    logger.error(f"Failed to place main order: {main_order_result.get('error')}")
+                    trade_success = False # Main order failed
+                else:
+                    logger.info(f"Main order placed: {main_order_result}")
+                    trade_success = True # Tentative success, hedge might fail
+                    time.sleep(1) # Small delay
 
-                    # Try to cancel the main order if hedge fails and we have a valid order_id
-                    order_id = main_order.get("order_id")
-                    if order_id:
-                        logger.info(
-                            f"Cancelling main order {order_id} after hedge failure"
+                    # Execute hedge position if hedge connector is available and hedging is enabled
+                    hedge_order_result = None
+                    if self._can_hedge and hedge_position_size > 0:
+                        # Check if this is a Coinbase connector
+                        is_coinbase_hedge = (
+                            "coinbase" in self.hedge_connector.__class__.__name__.lower()
                         )
-                        self.main_connector.cancel_order(order_id=order_id)
-            elif not self._can_hedge:
-                logger.info("Skipping hedge position (hedging not enabled)")
-            else:
-                logger.info(f"Skipping hedge position (size would be {hedge_size})")
 
-            # Record the trade in active_trades
-            trade_record = {
-                "symbol": symbol,
-                "timestamp": int(time.time() * 1000),
-                "main_position": {
-                    "exchange": "main",
-                    "side": main_side.value,
-                    "size": main_size,
-                    "leverage": adjusted_main_leverage,
-                    "order_id": main_order.get("order_id", "unknown_order_id"),
-                },
-                "stop_loss_pct": 10.0,
-                "take_profit_pct": 20.0,
-                "status": "open",
-                "market_type": self.main_connector.market_types[0]
-                if isinstance(self.main_connector.market_types[0], str)
-                else self.main_connector.market_types[0].value,
-            }
+                        # For Coinbase, must use LIMIT orders (they enforce limit-only mode)
+                        if is_coinbase_hedge:
+                            # Always need a valid price for Coinbase limit orders
+                            if not price or price <= 0:
+                                try:
+                                    # Get optimal limit price that should fill immediately
+                                    optimal_price_data = (
+                                        self.hedge_connector.get_optimal_limit_price(
+                                            symbol=symbol, side=hedge_order_side, amount=hedge_position_size
+                                        )
+                                    )
 
-            # Add hedge position if applicable
-            if self._can_hedge and hedge_order:
-                trade_record["hedge_position"] = {
-                    "exchange": "hedge",
-                    "side": hedge_side.value,
-                    "size": hedge_size,
-                    "leverage": adjusted_hedge_leverage,
-                    "order_id": hedge_order.get("order_id", "unknown_order_id"),
+                                    price = optimal_price_data["price"]
+
+                                    if not optimal_price_data["enough_liquidity"]:
+                                        logger.warning(
+                                            f"Limited liquidity for hedge {symbol}, order may not fill completely"
+                                        )
+
+                                    logger.info(
+                                        f"Using optimal limit price for immediate hedge fill: {price}"
+                                    )
+
+                                except Exception as e:
+                                    logger.warning(
+                                        f"Error getting optimal limit price for hedge: {e}, falling back to ticker price"
+                                    )
+                                    # Fallback to getting current price from ticker
+                                    ticker_data = self.hedge_connector.get_ticker(symbol)
+                                    if (
+                                        ticker_data
+                                        and "last_price" in ticker_data
+                                        and ticker_data["last_price"] > 0
+                                    ):
+                                        # For BUY orders: add a small buffer to ensure immediate fill (0.1%)
+                                        # For SELL orders: subtract a small buffer to ensure immediate fill (0.1%)
+                                        price = float(ticker_data["last_price"])
+                                        if hedge_order_side == OrderSide.BUY:
+                                            price *= 1.001  # 0.1% higher than market for immediate fill
+                                        else:
+                                            price *= 0.999  # 0.1% lower than market for immediate fill
+                                        logger.info(
+                                            f"Using current market price with buffer for hedge limit order: {price}"
+                                        )
+                                    else:
+                                        logger.error(
+                                            f"Cannot place hedge order: No valid price for {symbol} LIMIT order"
+                                        )
+                                        return False
+
+                            logger.info(
+                                f"Using LIMIT order for Coinbase hedge with price {price} (required by Coinbase)"
+                            )
+                            hedge_order_type = OrderType.LIMIT
+                        else:
+                            hedge_order_type = OrderType.MARKET
+
+                        # Only pass leverage parameter if derivatives are supported
+                        hedge_order_params = {
+                            "symbol": symbol,
+                            "side": hedge_order_side,
+                            "order_type": hedge_order_type,
+                            "amount": hedge_position_size,
+                            "price": price,
+                        }
+
+                        if self.hedge_connector.supports_derivatives:
+                            hedge_order_params["leverage"] = adjusted_hedge_leverage
+
+                        hedge_order_result = self.hedge_connector.place_order(**hedge_order_params)
+
+                        if hedge_order_result and hedge_order_result.get("error"):
+                            logger.error(
+                                f"Failed to place hedge order: {hedge_order_result.get('error')}"
+                            )
+
+                            # Try to cancel the main order if hedge fails and we have a valid order_id
+                            order_id = main_order_result.get("order_id")
+                            if order_id:
+                                logger.info(
+                                    f"Cancelling main order {order_id} after hedge failure"
+                                )
+                                self.main_connector.cancel_order(order_id=order_id)
+
+                # Record the trade in active_trades
+                trade_record = {
+                    "symbol": symbol,
+                    "timestamp": int(time.time() * 1000),
+                    "main_position": {
+                        "exchange": "main",
+                        "side": main_order_side.value,
+                        "size": main_position_size,
+                        "leverage": adjusted_main_leverage,
+                        "entry_price": main_order_result.get("entry_price", price),  # Get entry_price from the order result
+                        "order_id": main_order_result.get("order_id", "unknown_order_id"),
+                        "status": OrderStatus.OPEN.value if hedge_order_result else OrderStatus.FILLED.value
+                    },
+                    "stop_loss_pct": 10.0,
+                    "take_profit_pct": 20.0,
+                    "status": "open",
+                    "market_type": self.main_connector.market_types[0]
+                    if isinstance(self.main_connector.market_types[0], str)
+                    else self.main_connector.market_types[0].value,
                 }
 
-            self.active_trades[symbol] = trade_record
-            return True
+                # Add hedge position if applicable
+                if self._can_hedge and hedge_order_result:
+                    trade_record["hedge_position"] = {
+                        "exchange": "hedge",
+                        "side": hedge_order_side.value,
+                        "size": hedge_position_size,
+                        "leverage": adjusted_hedge_leverage,
+                        "entry_price": hedge_order_result.get("entry_price", price),  # Get entry_price from the order result
+                        "order_id": hedge_order_result.get("order_id", "unknown_order_id"),
+                        "status": OrderStatus.OPEN.value if hedge_order_result else OrderStatus.FILLED.value
+                    }
+
+                self.active_trades[symbol] = trade_record
+            else:
+                # In dry run mode, we've already created the trade record above
+                # We just need to set trade_success to True
+                trade_success = True
+
+            # --- Metrics Update ---
+            if is_target_signal: # Only record metrics for the target signal
+                # Record Trade Attempt
+                try:
+                    # Determine side based on the signal direction
+                    signal_side_str = main_order_side.value.lower() if main_order_side else 'unknown'
+                    # Record main position trade attempt
+                    if main_position_size > 0:
+                        record_mvp_trade(
+                            success=trade_success, # Reflects overall success including hedge if applicable
+                            side=signal_side_str,
+                            position_type=main_pos_type
+                        )
+                    # Record hedge position trade attempt (if applicable)
+                    # Hedge side is opposite of signal side
+                    hedge_side_str = hedge_order_side.value.lower() if hedge_order_side else 'unknown'
+                    if self._can_hedge and hedge_position_size > 0:
+                        # Success for hedge depends on hedge_order_result success
+                        hedge_success = hedge_order_result is not None and not hedge_order_result.get("error")
+                        record_mvp_trade(
+                            success=hedge_success,
+                            side=hedge_side_str,
+                            position_type=hedge_pos_type
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to record trade metric: {e}", exc_info=True)
+
+                # Update Position Size if trade was successful
+                if trade_success and trade_record:
+                    try:
+                        # Update main position size
+                        update_mvp_position_size(
+                            position_type=main_pos_type,
+                            side=main_order_side.value.lower(),
+                            size=main_position_size
+                        )
+                        # Update hedge position size
+                        if self._can_hedge and hedge_position_size > 0:
+                            update_mvp_position_size(
+                                position_type=hedge_pos_type,
+                                side=hedge_order_side.value.lower(),
+                                size=hedge_position_size
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to update position size metric: {e}", exc_info=True)
+
+                # Record Latency
+                try:
+                    processing_time_ms = (time.time() - signal_received_time) * 1000
+                    record_mvp_signal_latency(processing_time_ms)
+                except Exception as e:
+                    logger.error(f"Failed to record signal latency metric: {e}", exc_info=True)
+            # --- End Metrics Update ---
+
+            return trade_success # Return the final success state
 
         except Exception as e:
-            logger.error(f"Error processing signal: {e}")
+            logger.error(f"Error processing signal: {e}", exc_info=True)
+            # --- Metrics Update for Outer Exception ---
+            if is_target_signal:
+                try:
+                    # Record failed trade attempt if sides were determined
+                    if main_order_side:
+                        record_mvp_trade(success=False, side=main_order_side.value.lower(), position_type=main_pos_type)
+                    if hedge_order_side and self._can_hedge:
+                        record_mvp_trade(success=False, side=hedge_order_side.value.lower(), position_type=hedge_pos_type)
+                    # Record latency even on failure
+                    processing_time_ms = (time.time() - signal_received_time) * 1000
+                    record_mvp_signal_latency(processing_time_ms)
+                except Exception as metric_e:
+                    logger.error(f"Failed to record metrics after signal processing error: {metric_e}", exc_info=True)
+            # --- End Metrics Update ---
             return False
 
     def _execute_hedged_trade(
@@ -1065,10 +1181,12 @@ class TradingEngine:
                     "side": main_side.value,
                     "size": main_size,
                     "leverage": adjusted_main_leverage,
+                    "entry_price": main_order.get("entry_price", price),  # Get entry_price from the order result
                     "order_id": main_order.get("order_id", "unknown_order_id"),
+                    "status": OrderStatus.OPEN.value if hedge_order else OrderStatus.FILLED.value
                 },
-                "stop_loss_pct": stop_loss_pct,
-                "take_profit_pct": take_profit_pct,
+                "stop_loss_pct": 10.0,
+                "take_profit_pct": 20.0,
                 "status": "open",
                 "market_type": self.main_connector.market_types[0]
                 if isinstance(self.main_connector.market_types[0], str)
@@ -1082,7 +1200,9 @@ class TradingEngine:
                     "side": hedge_side.value,
                     "size": hedge_size,
                     "leverage": adjusted_hedge_leverage,
+                    "entry_price": hedge_order.get("entry_price", price),  # Get entry_price from the order result
                     "order_id": hedge_order.get("order_id", "unknown_order_id"),
+                    "status": OrderStatus.OPEN.value if hedge_order else OrderStatus.FILLED.value
                 }
 
             self.active_trades[symbol] = trade_record

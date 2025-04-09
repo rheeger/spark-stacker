@@ -1,9 +1,9 @@
 import logging
-from typing import Dict, Any, Optional
-import pandas as pd
-import numpy as np
+from typing import Any, Dict, Optional
 
-from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+import numpy as np
+import pandas as pd
+from indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 
