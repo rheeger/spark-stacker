@@ -6,8 +6,16 @@ mkdir -p /app/logs
 
 # Process the config.json file and replace environment variables
 CONFIG_FILE=${CONFIG_FILE:-"/app/config.json"}
-PROCESSED_CONFIG="/tmp/processed_config.json"
+PROCESSED_CONFIG="/app/processed_config.json"
 echo "Processing config file: $CONFIG_FILE"
+
+# Load environment variables if .env file exists
+if [ -f /app/.env ]; then
+  echo "Loading environment variables from /app/.env"
+  set -o allexport
+  source /app/.env
+  set +o allexport
+fi
 
 # Print config file content for debugging
 echo "Config file content before substitution:"
@@ -16,15 +24,21 @@ cat "$CONFIG_FILE"
 # Copy the original config file to the processed location
 cp "$CONFIG_FILE" "$PROCESSED_CONFIG"
 
-# Replace environment variables in the config file
+# Replace environment variables in the config file using a safer method
 for var in $(env | cut -d= -f1); do
   # Skip some common env vars that we don't want to replace
   if [[ "$var" =~ ^(PWD|HOME|PATH|SHELL|TERM|USER|HOSTNAME)$ ]]; then
     continue
   fi
-  # Use sed to replace ${VAR} with the actual value
-  val=$(eval echo \$$var)
-  sed -i "s|\${$var}|$val|g" "$PROCESSED_CONFIG"
+
+  # Get the value directly without using eval
+  val="${!var}"
+
+  # Escape special characters for sed
+  escaped_val=$(printf '%s\n' "$val" | sed -e 's/[\/&]/\\&/g')
+
+  # Replace the variable in the config file
+  sed -i "s|\${$var}|$escaped_val|g" "$PROCESSED_CONFIG"
 done
 
 echo "Config file processed successfully to $PROCESSED_CONFIG"

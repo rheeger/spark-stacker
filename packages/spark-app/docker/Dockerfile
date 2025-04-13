@@ -45,7 +45,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 # Create a non-root user and switch to it
 RUN useradd -m appuser && \
     chown -R appuser:appuser /app && \
-    chown -R appuser:appuser /usr/local/bin/bootstrap.sh
+    chown -R appuser:appuser /usr/local/bin/bootstrap.sh && \
+    touch /app/.env && \
+    chmod 644 /app/.env && \
+    chown appuser:appuser /app/.env
 
 USER appuser
 

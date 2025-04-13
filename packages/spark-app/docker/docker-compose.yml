@@ -13,6 +13,7 @@ services:
     volumes:
       - ../logs:/app/logs:rw
       - ../../shared/config.json:/app/config.json
+      - ../../shared/.env:/app/.env
       - ../data:/app/data
     env_file:
       - ../../shared/.env
