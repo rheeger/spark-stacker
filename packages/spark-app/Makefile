@@ -1,20 +1,28 @@
-.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build
 
 # Default target
 help:
 	@echo "Available commands for spark-app package:"
 	@echo "  make help            : Show this help message"
+	@echo "  make build           : Set up virtual environment and install dependencies"
 	@echo "  make lint            : Run all linters (Python and Markdown)"
 	@echo "  make lint-python     : Run Python linters only (black, pylint, mypy)"
 	@echo "  make lint-markdown   : Run Markdown linter only"
 	@echo "  make install-deps    : Install all dependencies"
 	@echo "  make start          : Start the spark-app services"
 	@echo "  make stop           : Stop the spark-app services"
+	@echo "  make restart        : Restart the spark-app services"
+	@echo "  make reset          : Reset everything (stop, clean, reinstall deps, start)"
 	@echo "  make clean          : Clean up temporary files and build artifacts"
 	@echo "  make clean-logs     : Clean up all log files"
 	@echo "  make test           : Run tests for spark-app"
 	@echo "  make spark-app-clean: Clean up spark-app services and volumes"
 	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
+
+# Build target
+build: install-deps
+	@echo "Building spark-app package..."
+	@echo "Build complete"
 
 # Linting
 lint: lint-python lint-markdown
@@ -37,8 +45,11 @@ lint-markdown:
 
 # Dependencies
 install-deps:
+	@echo "Setting up Python virtual environment..."
+	python3.11 -m venv .venv
 	@echo "Installing Python linting dependencies..."
-	pip install black pylint mypy
+	.venv/bin/pip install --upgrade pip
+	.venv/bin/pip install black pylint mypy
 	@echo "Installing Markdown linting dependencies..."
 	@if command -v npm > /dev/null; then \
 		npm install -g markdownlint-cli; \
@@ -46,7 +57,7 @@ install-deps:
 		echo "npm not found. Please install Node.js and npm first."; \
 	fi
 	@echo "Installing application dependencies..."
-	pip install -r requirements.txt
+	.venv/bin/pip install -r requirements.txt
 	@echo "Dependencies installed"
 
 # Application commands
@@ -93,3 +104,14 @@ clean-logs:
 	@echo "Cleaning up all logs..."
 	@cd $(CURDIR) && .venv/bin/python scripts/cleanup_logs.py
 	@echo "Logs cleaned up. New logs will be stored in app/logs directory."
+
+# Restart command
+restart: stop start
+	@echo "Spark app services restarted"
+
+# Reset command - full reset of the environment
+reset: spark-app-clean clean
+	@echo "Resetting spark-app environment..."
+	$(MAKE) build
+	$(MAKE) start
+	@echo "Spark app environment reset complete"

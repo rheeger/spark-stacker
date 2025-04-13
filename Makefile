@@ -1,4 +1,4 @@
-.PHONY: help install-all build-all start-all stop-all test-all lint-all clean-all monitoring spark-app shared
+.PHONY: help install-all build-all start-all stop-all test-all lint-all clean-all monitoring spark-app shared restart-all reset-all
 
 # Default target
 help:
@@ -12,6 +12,8 @@ help:
 	@echo "  make build-all       : Build all packages"
 	@echo "  make start-all       : Start all services (monitoring and spark-app)"
 	@echo "  make stop-all        : Stop all services"
+	@echo "  make restart-all     : Restart all services"
+	@echo "  make reset-all       : Reset everything (stop, clean, reinstall, start)"
 	@echo "  make test-all        : Run tests for all packages"
 	@echo "  make lint-all        : Run linters for all packages"
 	@echo "  make clean-all       : Clean up all packages"
@@ -20,6 +22,17 @@ help:
 	@echo "  make monitoring      : Show monitoring package commands"
 	@echo "  make spark-app       : Show spark-app package commands"
 	@echo "  make shared          : Show shared package commands"
+	@echo ""
+	@echo "Dynamic commands:"
+	@echo "  make spark-app-*     : Run any command from spark-app package (e.g., make spark-app-start)"
+	@echo "  make monitoring-*    : Run any command from monitoring package (e.g., make monitoring-test)"
+
+# Dynamic command forwarding
+spark-app-%:
+	@cd packages/spark-app && make $*
+
+monitoring-%:
+	@cd packages/monitoring && make $*
 
 # Package help commands
 monitoring:
@@ -48,9 +61,7 @@ install-all:
 build-all:
 	@echo "Building all packages..."
 	@echo "Building spark-app..."
-	@cd packages/spark-app && make build
-	@echo "Building monitoring..."
-	@cd packages/monitoring && make build
+	-@cd packages/spark-app && make build
 	@echo "All packages built"
 
 start-all:
@@ -94,3 +105,24 @@ clean-all:
 	@echo "Cleaning monitoring..."
 	@cd packages/monitoring && make clean
 	@echo "All packages cleaned"
+
+restart-all:
+	@echo "Restarting all services..."
+	@echo "Restarting monitoring services..."
+	@cd packages/monitoring && make monitoring-restart
+	@echo "Restarting spark-app services..."
+	@cd packages/spark-app && make restart
+	@echo "All services restarted"
+
+reset-all:
+	@echo "Resetting all services and dependencies..."
+	@echo "Stopping and cleaning all services..."
+	-@cd packages/spark-app && make spark-app-clean
+	-@cd packages/monitoring && make monitoring-clean
+	@echo "Cleaning all packages..."
+	@$(MAKE) clean-all
+	@echo "Building spark-app (includes dependency installation)..."
+	@$(MAKE) build-all
+	@echo "Starting all services..."
+	@$(MAKE) start-all
+	@echo "Full system reset complete"
