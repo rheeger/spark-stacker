@@ -1,7 +1,11 @@
+import os
+
+# Set PYTEST_RUNNING environment variable before any imports
+os.environ['PYTEST_RUNNING'] = 'True'
+
 import importlib.util
 import json
 import logging
-import os
 import sys
 import time
 import warnings

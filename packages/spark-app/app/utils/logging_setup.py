@@ -8,6 +8,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+# Check if we're running in a test environment
+IN_TEST_ENV = os.environ.get('PYTEST_RUNNING', 'False').lower() in ('true', '1', 't')
+
 # Basic logging to see debug info
 print("Initializing logging_setup.py")
 
@@ -27,7 +30,10 @@ else:
     logs_dir = app_dir.parent / "logs"
 
 print(f"Logs directory path: {logs_dir}")
-logs_dir.mkdir(exist_ok=True)
+
+# Only create logs directory if not in test environment
+if not IN_TEST_ENV:
+    logs_dir.mkdir(exist_ok=True)
 
 # Default log format
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -38,10 +44,15 @@ CONTAINER_BUILD_ID = str(uuid.uuid4())[:8]
 # Generate a timestamp for this build
 BUILD_TIMESTAMP = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
-# Create a build-specific directory for all logs
-BUILD_LOG_DIR = logs_dir / f"{BUILD_TIMESTAMP}_{CONTAINER_BUILD_ID}"
-print(f"Build log directory: {BUILD_LOG_DIR}")
-BUILD_LOG_DIR.mkdir(exist_ok=True)
+# Create a build-specific directory for all logs, but only if not in test environment
+if not IN_TEST_ENV:
+    BUILD_LOG_DIR = logs_dir / f"{BUILD_TIMESTAMP}_{CONTAINER_BUILD_ID}"
+    print(f"Build log directory: {BUILD_LOG_DIR}")
+    BUILD_LOG_DIR.mkdir(exist_ok=True)
+else:
+    # In test environment, use a dummy path that won't be created
+    BUILD_LOG_DIR = Path("/tmp/test_logs")
+    print(f"In test mode - using dummy log directory: {BUILD_LOG_DIR}")
 
 # Dictionary to track connector-specific log directories
 CONNECTOR_LOG_DIRS = {}
@@ -50,6 +61,10 @@ CONNECTOR_LOG_DIRS = {}
 # to maintain compatibility with monitoring tools
 def create_compat_symlink():
     """Create compatibility symlinks in the correct logs directory."""
+    # Skip in test environment
+    if IN_TEST_ENV:
+        return
+
     try:
         # We no longer need compatibility symlinks in the root directory
         # All logs will be in /app/logs (Docker) or packages/spark-app/logs (local)
@@ -130,6 +145,10 @@ def setup_connector_log_directory(connector_name: str) -> Path:
     Returns:
         Path: Path to the connector's log directory
     """
+    # In test environment, return a dummy path that won't be created
+    if IN_TEST_ENV:
+        return Path("/tmp/test_logs") / connector_name
+
     # Check if we already created this directory
     if connector_name in CONNECTOR_LOG_DIRS:
         return CONNECTOR_LOG_DIRS[connector_name]
@@ -175,6 +194,16 @@ def setup_connector_balance_logger(
     # Remove any existing handlers
     for handler in balance_logger.handlers[:]:
         balance_logger.removeHandler(handler)
+
+    # In test environment, only add console handler
+    if IN_TEST_ENV:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(log_level)
+        formatter = logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
+        console_handler.setFormatter(formatter)
+        balance_logger.addHandler(console_handler)
+        balance_logger.propagate = False
+        return balance_logger
 
     # Create connector-specific log directory and file
     connector_dir = setup_connector_log_directory(connector_name)
@@ -227,6 +256,16 @@ def setup_connector_markets_logger(
     for handler in markets_logger.handlers[:]:
         markets_logger.removeHandler(handler)
 
+    # In test environment, only add console handler
+    if IN_TEST_ENV:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(log_level)
+        formatter = logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
+        console_handler.setFormatter(formatter)
+        markets_logger.addHandler(console_handler)
+        markets_logger.propagate = False
+        return markets_logger
+
     # Create connector-specific log directory and file
     connector_dir = setup_connector_log_directory(connector_name)
     connector_log_file = connector_dir / "markets.log"
@@ -275,6 +314,16 @@ def setup_connector_orders_logger(
     # Remove any existing handlers
     for handler in orders_logger.handlers[:]:
         orders_logger.removeHandler(handler)
+
+    # In test environment, only add console handler
+    if IN_TEST_ENV:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(log_level)
+        formatter = logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
+        console_handler.setFormatter(formatter)
+        orders_logger.addHandler(console_handler)
+        orders_logger.propagate = False
+        return orders_logger
 
     # Create connector-specific log directory and file
     connector_dir = setup_connector_log_directory(connector_name)
@@ -355,8 +404,8 @@ def setup_logging(
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
 
-    # File handler
-    if log_to_file:
+    # File handler - skip in test environment
+    if log_to_file and not IN_TEST_ENV:
         # Create main log file in the build directory
         build_log_file = BUILD_LOG_DIR / "spark_stacker.log"
 
@@ -386,13 +435,15 @@ def setup_logging(
         logging.getLogger("app.connectors").setLevel(logging.INFO)
 
     logging.info(f"Logging initialized at level {logging.getLevelName(log_level)}")
-    if log_to_file:
+    if log_to_file and not IN_TEST_ENV:
         logging.info(f"Logs will be written to directory {BUILD_LOG_DIR}")
         logging.info(f"Container build ID: {CONTAINER_BUILD_ID}")
         logging.info(f"Build timestamp: {BUILD_TIMESTAMP}")
 
         # Create compatibility symlinks for monitoring systems
         create_compat_symlink()
+    elif IN_TEST_ENV:
+        logging.info("Running in test mode - file logging disabled")
 
 
 def get_structured_logger(name: str) -> StructuredLogger:

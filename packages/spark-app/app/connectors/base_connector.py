@@ -1,6 +1,7 @@
 import abc
 import functools
 import logging
+import os
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -75,6 +76,11 @@ class BaseConnector(abc.ABC):
 
     def setup_loggers(self):
         """Set up dedicated loggers for this connector."""
+        # Skip logger setup if we're in a test environment
+        if os.environ.get('PYTEST_RUNNING', 'False').lower() in ('true', '1', 't'):
+            logger.debug(f"Skipping logger setup for {self.name} in test environment")
+            return
+
         from utils.logging_setup import (setup_connector_balance_logger,
                                          setup_connector_markets_logger,
                                          setup_connector_orders_logger)

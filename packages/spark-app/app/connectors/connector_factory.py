@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any, Dict, List, Optional, Set, Type, Union
 
 from connectors.base_connector import BaseConnector, MarketType
@@ -36,6 +37,11 @@ class ConnectorFactory:
         # Add more connectors as they are implemented
         # 'synthetix': SynthetixConnector,
     }
+
+    @classmethod
+    def _is_test_environment(cls) -> bool:
+        """Check if we're running in a test environment."""
+        return os.environ.get('PYTEST_RUNNING', 'False').lower() in ('true', '1', 't')
 
     @classmethod
     def create_connector(
@@ -177,8 +183,11 @@ class ConnectorFactory:
             if connector:
                 # Set up dedicated loggers for this connector
                 try:
+                    # Skip logger setup if we're in a test environment
+                    if cls._is_test_environment():
+                        logger.debug(f"Skipping logger setup for {connector.name} in test environment")
                     # Check if loggers are already set up to avoid duplication
-                    if (
+                    elif (
                         not hasattr(connector, "balance_logger")
                         or not hasattr(connector, "markets_logger")
                         or not hasattr(connector, "orders_logger")
