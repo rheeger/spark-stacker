@@ -13,6 +13,11 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
+import pytest_asyncio
+
+# Configure pytest-asyncio
+pytest.mark.asyncio.apply_to_all = True
+pytest_asyncio.default_fixture_loop_scope = "function"  # Set default fixture loop scope
 
 # Filter out the specific pandas_ta pkg_resources deprecation warning
 warnings.filterwarnings(

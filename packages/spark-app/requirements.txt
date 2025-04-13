@@ -42,6 +42,7 @@ pytest>=7.3.0
 pytest-mock>=3.10.0
 pytest-cov
 coverage
+pytest-asyncio>=0.21.0  # For async test support
 
 # Development tools
 watchdog  # For file watching

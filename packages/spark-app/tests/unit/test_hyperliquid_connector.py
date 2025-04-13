@@ -740,15 +740,13 @@ async def test_place_order(hyperliquid_connector):
 
     # Place a limit order
     response = await hyperliquid_connector.place_order(
-        symbol="BTC",  # Use BTC instead of BTC-USD
+        symbol="BTC",
         side=OrderSide.BUY,
         order_type=OrderType.LIMIT,
-        amount=0.001,  # Small test amount
-        price=50000.0,  # Test price
+        amount=0.001,
+        price=50000.0,
         leverage=1.0
     )
-
-    logging.info(f"Place order response: {response}")
 
     assert isinstance(response, dict)
     assert response["status"] == "OPEN"
@@ -790,12 +788,13 @@ async def test_invalid_order_params(hyperliquid_connector):
 
 @pytest.mark.asyncio
 @pytest.mark.production
-@pytest.mark.skipif(not has_hyperliquid_creds() or get_hyperliquid_creds().get('testnet', True), reason="Requires PRODUCTION Hyperliquid credentials (testnet=False)")
+@pytest.mark.skipif(not has_hyperliquid_creds() or get_hyperliquid_creds().get('testnet', True),
+                    reason="Requires PRODUCTION Hyperliquid credentials (testnet=False)")
 @patch("app.connectors.hyperliquid_connector.HyperliquidConnector.get_markets")
 async def test_place_and_close_minimum_size_order_production(mock_get_markets, hyperliquid_connector):
     # Mock market metadata
     mock_markets = [{
-        "symbol": "BTC",  # Use BTC instead of BTC-USD
+        "symbol": "BTC",
         "base_asset": "BTC",
         "quote_asset": "USD",
         "price_precision": 8,
@@ -862,7 +861,7 @@ async def test_place_and_close_minimum_size_order_production(mock_get_markets, h
 
     # Place buy order
     buy_response = await hyperliquid_connector.place_order(
-        symbol="BTC",  # Use BTC instead of BTC-USD
+        symbol="BTC",
         side=OrderSide.BUY,
         order_type=OrderType.MARKET,
         amount=Decimal("0.001")
