@@ -45,6 +45,16 @@ try:
 except:
     pass
 
+# Import metrics first to ensure proper initialization
+from app.metrics.metrics import clear_metrics
+
+
+@pytest.fixture(autouse=True)
+def clear_metrics_before_test():
+    """Clear all metrics before each test."""
+    clear_metrics()
+    yield
+
 from app.connectors.base_connector import (BaseConnector, MarketType,
                                            OrderSide, OrderType)
 from app.connectors.connector_factory import ConnectorFactory
