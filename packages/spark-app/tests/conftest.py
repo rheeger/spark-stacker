@@ -29,6 +29,13 @@ warnings.filterwarnings(
     category=DeprecationWarning
 )
 
+# Filter numpy deprecation warning
+warnings.filterwarnings(
+    "ignore",
+    message=".*np.find_common_type is deprecated.*",
+    category=DeprecationWarning
+)
+
 # Add the package root to the Python path so imports work correctly
 # when running pytest from the command line
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
@@ -367,12 +374,14 @@ def market_data_params(request):
 
 
 def pytest_configure(config):
-    """Register custom pytest markers."""
-    config.addinivalue_line(
-        "markers", "production: mark tests that should only run in production environment"
-    )
+    """Configure pytest with custom markers and settings."""
+    # Register custom markers
+    config.addinivalue_line("markers", "asyncio: mark test as async")
+    config.addinivalue_line("markers", "production: mark test that should only run in production")
 
-    # Configure pytest_asyncio to use function scope for event loops
-    # This avoids the "asyncio_default_fixture_loop_scope" warning
-    if hasattr(config, "option"):
-        setattr(config.option, "asyncio_default_fixture_loop_scope", "function")
+    # Configure asyncio
+    try:
+        import pytest_asyncio
+        config.option.asyncio_mode = "auto"
+    except ImportError:
+        pass
