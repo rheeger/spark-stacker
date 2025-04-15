@@ -480,7 +480,7 @@ class StrategyManager:
 
         return signals
 
-    def run_cycle(self, symbols: List[str] = None) -> int:
+    async def run_cycle(self, symbols: List[str] = None) -> int:
         """
         Run a full cycle of the strategy for all or specified symbols.
 
@@ -516,7 +516,7 @@ class StrategyManager:
 
                 # Process any signals generated
                 for signal in signals:
-                    success = self.trading_engine.process_signal(signal)
+                    success = await self.trading_engine.process_signal(signal)
                     if success:
                         signal_count += 1
                         logger.info(f"Processed signal for {symbol}")

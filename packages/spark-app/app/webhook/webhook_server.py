@@ -2,7 +2,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from flask import Flask, jsonify, request
 from indicators.base_indicator import Signal, SignalDirection
@@ -24,7 +24,7 @@ class WebhookServer:
         self,
         host: str = "0.0.0.0",
         port: int = 8080,
-        signal_handlers: Optional[List[Callable[[Signal], None]]] = None,
+        signal_handlers: Optional[List[Callable[[Signal], Awaitable[None]]]] = None,
         auth_token: Optional[str] = None,
     ):
         """
@@ -33,7 +33,7 @@ class WebhookServer:
         Args:
             host: Host address to bind the server
             port: Port to listen on
-            signal_handlers: List of callback functions to handle received signals
+            signal_handlers: List of async callback functions to handle received signals
             auth_token: Optional authentication token for webhook security
         """
         self.host = host
@@ -65,7 +65,7 @@ class WebhookServer:
             )
 
         @self.app.route("/webhook", methods=["POST"])
-        def webhook():
+        async def webhook():
             """
             Main webhook endpoint for receiving trading signals.
 
@@ -101,7 +101,7 @@ class WebhookServer:
                     # Notify all registered handlers
                     for handler in self.signal_handlers:
                         try:
-                            handler(signal)
+                            await handler(signal)
                         except Exception as e:
                             logger.error(f"Error in signal handler: {e}")
 
@@ -124,7 +124,7 @@ class WebhookServer:
                 )
 
         @self.app.route("/webhook/tradingview", methods=["POST"])
-        def tradingview_webhook():
+        async def tradingview_webhook():
             """
             Specialized endpoint for TradingView alerts.
 
@@ -153,7 +153,7 @@ class WebhookServer:
                     # Notify all registered handlers
                     for handler in self.signal_handlers:
                         try:
-                            handler(signal)
+                            await handler(signal)
                         except Exception as e:
                             logger.error(f"Error in signal handler: {e}")
 
@@ -317,12 +317,12 @@ class WebhookServer:
             logger.error(f"Error parsing TradingView alert: {e}")
             return None
 
-    def add_signal_handler(self, handler: Callable[[Signal], None]) -> None:
+    def add_signal_handler(self, handler: Callable[[Signal], Awaitable[None]]) -> None:
         """
         Add a signal handler callback function.
 
         Args:
-            handler: Function to call when a signal is received
+            handler: Async function to call when a signal is received
         """
         if handler not in self.signal_handlers:
             self.signal_handlers.append(handler)

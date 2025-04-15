@@ -234,7 +234,7 @@ class ConnectorFactory:
             # Check if config is a dictionary, an ExchangeConfig object, or another type
             logger.debug(f"Processing config: {type(config)}")
 
-            # Check if it's an ExchangeConfig object from app.utils.config
+            # Check if it's an ExchangeConfig object from utils.config
             if hasattr(config, "name") and hasattr(config, "exchange_type"):
                 # Direct attribute access for ExchangeConfig objects
                 name = config.name

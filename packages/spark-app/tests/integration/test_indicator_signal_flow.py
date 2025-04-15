@@ -1,7 +1,7 @@
 import logging
 import time
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -85,7 +85,8 @@ def price_data():
     )
 
 
-def test_indicator_signal_to_engine(
+@pytest.mark.asyncio
+async def test_indicator_signal_to_engine(
     price_data, mock_connector, mock_risk_manager, trading_engine
 ):
     """
@@ -122,7 +123,8 @@ def test_indicator_signal_to_engine(
 
     # Pass the signal to the trading engine if one was generated
     if signal:
-        trading_engine.process_signal(signal)
+        result = await trading_engine.process_signal(signal)
+        assert result is True, "Signal processing should succeed"
 
         # Check that the trading engine processed the signal
         assert (
@@ -139,7 +141,8 @@ def test_indicator_signal_to_engine(
             timestamp=int(time.time() * 1000),
             params={"threshold": 30, "price": 100.0},
         )
-        trading_engine.process_signal(test_signal)
+        result = await trading_engine.process_signal(test_signal)
+        assert result is True, "Signal processing should succeed"
 
         # Check that the trading engine processed the signal
         assert (
@@ -151,7 +154,8 @@ def test_indicator_signal_to_engine(
     trading_engine.stop()
 
 
-def test_macd_signal_to_engine(
+@pytest.mark.asyncio
+async def test_macd_signal_to_engine(
     sample_price_data,
     mock_connector,
     mock_risk_manager,
@@ -165,17 +169,22 @@ def test_macd_signal_to_engine(
 
     # --- Setup Mocks ---
     mock_connector.get_ticker.return_value = {"symbol": "ETH", "last_price": 100.0}
-    mock_connector.place_order.return_value = {
-        "status": "OPEN",
+    mock_connector.place_order = AsyncMock(return_value={
+        "status": "FILLED",
         "order_id": "mock_order_123",
-        "client_order_id": None,
         "symbol": "ETH",
         "side": "BUY",
-        "type": "MARKET",
-        "amount": 1.0,
-        "price": None,
-        "raw_response": {}
-    }
+        "size": 1.0,
+        "price": 1500.0,
+        "entry_price": 1500.0,
+        "status": "FILLED",
+        "leverage": 5.0,
+        "position_id": "mock_position_1",
+        "unrealized_pnl": 0.0,
+        "liquidation_price": 0.0,
+        "margin": 300.0,
+        "timestamp": int(time.time() * 1000)
+    })
     mock_connector.get_account_balance.return_value = {"PERP_USDC": 1000.0}
     mock_connector.get_markets.return_value = [{
         "symbol": "ETH", "base_asset": "ETH", "quote_asset": "USD", "price_precision": 2,
@@ -244,20 +253,16 @@ def test_macd_signal_to_engine(
         logger.info(f"Processing {len(signals)} signals...")
         for signal in signals:
             logger.debug(f"Processing signal: {signal}")
-            success = trading_engine.process_signal(signal)
+            success = await trading_engine.process_signal(signal)
             logger.debug(f"Signal processing result: {success}")
+            assert success is True, "Signal processing should succeed"
 
         # --- Assertions ---
         logger.info("Checking assertions...")
         assert mock_connector.place_order.called, "TradingEngine did not call place_order on the mock connector."
-        call_count = mock_connector.place_order.call_count
-        logger.info(f"mock_connector.place_order was called {call_count} times.")
-
-        first_call_args, first_call_kwargs = mock_connector.place_order.call_args_list[0]
-        logger.info(f"First place_order call args: {first_call_args}")
-        logger.info(f"First place_order call kwargs: {first_call_kwargs}")
 
     finally:
+        # Stop the engine
         logger.info("Stopping trading engine...")
         trading_engine.stop()
         logger.info("Trading engine stopped.")

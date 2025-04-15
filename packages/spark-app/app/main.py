@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import asyncio
 import json
 import logging
 import os
@@ -70,7 +71,7 @@ def initialize_logging(config: Dict[str, Any]) -> None:
         connector_log_level_int = getattr(
             logging, connector_log_level.upper(), logging.WARNING
         )
-        logging.getLogger("app.connectors").setLevel(connector_log_level_int)
+        logging.getLogger("connectors").setLevel(connector_log_level_int)
 
         # Store logging preferences in global state for use elsewhere
         global SHOW_MARKET_DETAILS, SHOW_ZERO_BALANCES
@@ -193,6 +194,54 @@ def create_trading_engine(
     return engine
 
 
+async def handle_webhook_signal(signal):
+    """Handle incoming webhook signals."""
+    try:
+        # Validate signal format
+        if not isinstance(signal, dict):
+            logger.error("Invalid signal format: not a dictionary")
+            return {"error": "Invalid signal format"}
+
+        # Extract required fields
+        symbol = signal.get("symbol")
+        direction = signal.get("direction")
+        confidence = signal.get("confidence", 0.5)  # Default confidence of 0.5
+
+        if not symbol or not direction:
+            logger.error("Missing required fields in signal")
+            return {"error": "Missing required fields"}
+
+        # Convert direction string to SignalDirection enum
+        try:
+            signal_direction = SignalDirection[direction.upper()]
+        except (KeyError, AttributeError):
+            logger.error(f"Invalid signal direction: {direction}")
+            return {"error": "Invalid signal direction"}
+
+        # Create Signal object
+        signal_obj = Signal(
+            direction=signal_direction,
+            symbol=symbol,
+            source="webhook",
+            confidence=confidence,
+            timestamp=int(time.time() * 1000)
+        )
+
+        # Process signal
+        success = await trading_engine.process_signal(signal_obj)
+
+        if success:
+            logger.info(f"Successfully processed webhook signal for {symbol}")
+            return {"status": "success"}
+        else:
+            logger.warning(f"Failed to process webhook signal for {symbol}")
+            return {"error": "Failed to process signal"}
+
+    except Exception as e:
+        logger.error(f"Error processing webhook signal: {e}", exc_info=True)
+        return {"error": str(e)}
+
+
 def setup_webhook_server(
     config: Dict[str, Any], trading_engine: TradingEngine
 ) -> Optional[WebhookServer]:
@@ -205,11 +254,6 @@ def setup_webhook_server(
     webhook_port = config.get("webhook_port", 8080)
 
     logger.info(f"Setting up webhook server on {webhook_host}:{webhook_port}...")
-
-    # Define the signal handler function
-    def handle_webhook_signal(signal):
-        logger.info(f"Received signal from webhook: {signal}")
-        trading_engine.process_signal(signal)
 
     # Create and start the webhook server
     server = WebhookServer(
@@ -314,8 +358,27 @@ def create_connector(
         return None
 
 
-def main():
-    """Main application entry point."""
+async def run_trading_loop(strategy_manager, config, is_running, indicators):
+    """Run the main trading loop."""
+    logger.info("Starting main trading loop")
+    while is_running:
+        try:
+            # Run strategy cycle to check for signals from indicators
+            if indicators:
+                signal_count = await strategy_manager.run_cycle()
+                if signal_count > 0:
+                    logger.info(
+                        f"Generated and processed {signal_count} signals in this cycle"
+                    )
+        except Exception as e:
+            logger.error(f"Error in strategy cycle: {str(e)}", exc_info=True)
+
+        # Wait for next cycle
+        await asyncio.sleep(config.get("polling_interval", 60))
+
+
+async def async_main():
+    """Async main application entry point."""
     try:
         # Register signal handlers for graceful shutdown
         signal_module.signal(signal_module.SIGINT, signal_handler)
@@ -510,33 +573,12 @@ def main():
             logger.error("Failed to start trading engine")
             sys.exit(1)
 
-        # Initialize and start webhook server if enabled
-        if config.get("webhook_enabled", False):
-            global webhook_server
-            webhook_server = setup_webhook_server(config, engine)
-            if not webhook_server:
-                logger.warning(
-                    "Failed to start webhook server, continuing without webhook support"
-                )
+        # Set up webhook server if configured
+        webhook_server = setup_webhook_server(config, engine)
 
         # Main trading loop
         try:
-            logger.info("Starting main trading loop")
-            while is_running:
-                try:
-                    # Run strategy cycle to check for signals from indicators
-                    if indicators:
-                        signal_count = strategy_manager.run_cycle()
-                        if signal_count > 0:
-                            logger.info(
-                                f"Generated and processed {signal_count} signals in this cycle"
-                            )
-                except Exception as e:
-                    logger.error(f"Error in strategy cycle: {str(e)}", exc_info=True)
-
-                # Wait for next cycle
-                time.sleep(config.get("polling_interval", 60))
-
+            await run_trading_loop(strategy_manager, config, is_running, indicators)
         except KeyboardInterrupt:
             logger.info("Shutting down gracefully...")
         except Exception as e:
@@ -557,6 +599,11 @@ def main():
     except Exception as e:
         logger.error(f"Fatal error during startup: {str(e)}", exc_info=True)
         sys.exit(1)
+
+
+def main():
+    """Main application entry point."""
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

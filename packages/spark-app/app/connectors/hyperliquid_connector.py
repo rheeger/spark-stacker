@@ -9,8 +9,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 import urllib3.exceptions
 # Import the BaseConnector interface
-from connectors.base_connector import (BaseConnector, MarketType, OrderSide,
-                                       OrderStatus, OrderType)
+from connectors.base_connector import (BaseConnector, ConnectorError,
+                                       MarketType, OrderSide, OrderStatus,
+                                       OrderType)
 
 # For type hinting and future import
 try:
@@ -412,12 +413,8 @@ class HyperliquidConnector(BaseConnector):
             raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
-            # --- Find Market Index Modification ---
-            base_symbol = symbol
-            if "-" in symbol:
-                base_symbol = symbol.split("-")[0]
-                logger.debug(f"Symbol '{symbol}' contains '-', using base '{base_symbol}' for lookup.")
-            # --- End Find Market Index Modification ---
+            # Translate symbol to base format for Hyperliquid
+            base_symbol = self.translate_symbol(symbol)
 
             meta = self.info.meta() # Fetch metadata once
 
@@ -426,7 +423,7 @@ class HyperliquidConnector(BaseConnector):
             coin_idx = None
             market_found_in_meta = False
             for i, coin in enumerate(meta.get("universe", [])):
-                # Compare using the potentially modified search_symbol (now base_symbol)
+                # Compare using the translated base_symbol
                 if coin.get("name") == base_symbol:
                     coin_idx = i
                     market_found_in_meta = True
@@ -516,12 +513,15 @@ class HyperliquidConnector(BaseConnector):
             raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
+            # Translate symbol to base format for Hyperliquid
+            base_symbol = self.translate_symbol(symbol)
+
             # Get market index
             meta = self.info.meta()
             coin_idx = None
 
             for i, coin in enumerate(meta["universe"]):
-                if coin["name"] == symbol:
+                if coin["name"] == base_symbol:
                     coin_idx = i
                     break
 
@@ -529,97 +529,55 @@ class HyperliquidConnector(BaseConnector):
                 raise ValueError(f"Market {symbol} not found")
 
             # Get L2 orderbook with retry on rate limit
-            try:
-                # Make POST request to /info endpoint for L2 book snapshot
-                response = requests.post(
-                    f"{self.api_url}/info",
-                    json={
-                        "type": "l2Book",
-                        "coin": str(coin_idx),  # API expects coin index, not symbol
-                        "nSigFigs": None  # Use full precision
-                    },
-                    headers={"Content-Type": "application/json"}
-                )
+            max_retries = 3
+            retry_delay = 1  # seconds
 
-                if response.status_code == 429:
-                    logger.warning(f"Rate limit hit while getting orderbook for {symbol}. Retrying after delay...")
-                    time.sleep(1)  # Add delay before retry
-                    response = requests.post(  # Retry once
+            for attempt in range(max_retries):
+                try:
+                    # Make POST request to /info endpoint for L2 book snapshot
+                    response = requests.post(
                         f"{self.api_url}/info",
                         json={
                             "type": "l2Book",
-                            "coin": str(coin_idx),
-                            "nSigFigs": None
+                            "coin": base_symbol,  # Use symbol name instead of index
                         },
-                        headers={"Content-Type": "application/json"}
+                        headers={"Content-Type": "application/json"},
+                        timeout=10
                     )
 
-                if response.status_code != 200:
-                    logger.error(f"API error response: {response.text}")
-                    raise HyperliquidAPIError(f"API returned status code: {response.status_code}")
+                    if response.status_code == 429:  # Rate limit
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Rate limit hit while getting orderbook for {symbol}. Retrying after delay...")
+                            time.sleep(retry_delay)
+                            continue
+                    elif response.status_code == 500:  # Server error
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Server error while getting orderbook for {symbol}. Retrying after delay...")
+                            time.sleep(retry_delay)
+                            continue
 
-                data = response.json()
-                logger.info(f"Orderbook response for {symbol}: {data}")
+                    response.raise_for_status()
+                    data = response.json()
 
-                if not data or not isinstance(data, list) or len(data) != 2:
-                    logger.error(f"Invalid orderbook format: {data}")
-                    raise ValueError(f"Invalid orderbook data for {symbol}")
+                    if not data or not isinstance(data, list) or len(data) != 2:
+                        raise ValueError(f"Invalid orderbook format: {data}")
 
-                # Format response from snapshot - data[0] is bids, data[1] is asks
-                # Handle different response formats (API may return array of arrays or object with levels)
-                try:
-                    # First try to parse as array of arrays format
+                    # Format response - data[0] is bids, data[1] is asks
                     return {
-                        "bids": [
-                            [float(price), float(size)]
-                            for price, size in data[0][:depth]
-                        ],
-                        "asks": [
-                            [float(price), float(size)]
-                            for price, size in data[1][:depth]
-                        ]
+                        "bids": [[float(price), float(size)] for price, size in data[0][:depth]],
+                        "asks": [[float(price), float(size)] for price, size in data[1][:depth]]
                     }
-                except (IndexError, TypeError) as e:
-                    logger.warning(f"Error parsing orderbook in array format: {e}, trying alternative format")
-                    # Try parsing as object with px/sz format
-                    try:
-                        return {
-                            "bids": [
-                                [float(level["px"]), float(level["sz"])]
-                                for level in (data[0] or [])[:depth]
-                            ],
-                            "asks": [
-                                [float(level["px"]), float(level["sz"])]
-                                for level in (data[1] or [])[:depth]
-                            ]
-                        }
-                    except (KeyError, TypeError) as e:
-                        logger.error(f"Failed to parse orderbook data: {e}")
-                        return {"bids": [], "asks": []}
 
-            except requests.exceptions.HTTPError as e:
-                if e.response and e.response.status_code == 429:
-                    logger.warning(f"Rate limit hit while getting orderbook for {symbol}. Retrying after delay...")
-                    time.sleep(1)  # Add delay before retry
-                    # Try getting state which includes orderbook
-                    state = self.info.user_state(self.wallet_address)
-                    if "orderBook" in state:
-                        return {
-                            "bids": [
-                                [float(level["px"]), float(level["sz"])]
-                                for level in state["orderBook"].get("bids", [])[:depth]
-                            ],
-                            "asks": [
-                                [float(level["px"]), float(level["sz"])]
-                                for level in state["orderBook"].get("asks", [])[:depth]
-                            ],
-                        }
-                raise
+                except (requests.exceptions.RequestException, ValueError) as e:
+                    if attempt == max_retries - 1:
+                        logger.error(f"Failed to get orderbook after {max_retries} attempts: {e}")
+                        raise
+                    time.sleep(retry_delay)
+
+            raise ValueError(f"Failed to get orderbook after {max_retries} attempts")
 
         except Exception as e:
             logger.error(f"Failed to get orderbook for {symbol}: {e}")
-            if isinstance(e, ValueError):
-                raise HyperliquidAPIError(str(e))
             return {"bids": [], "asks": []}
 
     @retry_api_call(max_tries=3, backoff_factor=2)
@@ -742,6 +700,9 @@ class HyperliquidConnector(BaseConnector):
             raise HyperliquidConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
+            # Translate symbol to base format for Hyperliquid
+            base_symbol = self.translate_symbol(symbol)
+
             # Convert amount to Decimal for consistent comparison
             amount_decimal = Decimal(str(amount))
             if amount_decimal <= Decimal('0'):
@@ -757,9 +718,25 @@ class HyperliquidConnector(BaseConnector):
                 if price is None or price <= 0:
                     logger.error(f"Limit order requires a positive price, got {price}")
                     raise ValueError("Limit order price must be positive and provided")
-            elif order_type == OrderType.MARKET and price is not None:
-                logger.warning("Price is ignored for MARKET orders.")
-                price = None # Ensure price is None for market orders
+            elif order_type == OrderType.MARKET:
+                # For market orders, get optimal price from orderbook analysis
+                try:
+                    optimal_price_data = self.get_optimal_limit_price(symbol, side, amount)
+                    if not optimal_price_data["enough_liquidity"]:
+                        logger.warning(f"Limited liquidity for {symbol} order of size {amount}. Slippage may be high.")
+
+                    price = optimal_price_data["price"]
+                    if price <= 0:
+                        raise ValueError(f"Could not determine valid market price from orderbook for {symbol}")
+
+                    logger.info(
+                        f"Using optimal price {price} for {side.value} order of {amount} {symbol}. "
+                        f"Expected slippage: {optimal_price_data['slippage']}%, "
+                        f"Enough liquidity: {optimal_price_data['enough_liquidity']}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to get optimal price for {symbol}: {e}")
+                    raise ValueError(f"Could not determine optimal market price for {symbol}: {e}")
 
             if leverage is not None and leverage <= 0:
                  logger.error(f"Leverage must be positive, got {leverage}")
@@ -770,13 +747,13 @@ class HyperliquidConnector(BaseConnector):
             market_info = None
             coin_idx = None
             for i, coin_data in enumerate(meta.get("universe", [])):
-                if coin_data.get("name") == symbol.upper(): # Match symbol case-insensitively
+                if coin_data.get("name") == self.translate_symbol(base_symbol): # Use translate_symbol for consistent case handling
                     market_info = coin_data
                     coin_idx = i
                     break
 
             if market_info is None or coin_idx is None:
-                logger.error(f"Market {symbol} not found in Hyperliquid metadata.")
+                logger.error(f"Market {symbol} (base: {base_symbol}) not found in Hyperliquid metadata.")
                 raise ValueError(f"Market {symbol} not found")
 
             size_decimals = market_info.get("szDecimals", 8) # Default to 8 if not found
@@ -818,16 +795,22 @@ class HyperliquidConnector(BaseConnector):
             if client_order_id:
                 order_params["cloid"] = client_order_id
 
+            # Format the price according to market precision
+            formatted_price = None
+            if price is not None:
+                formatted_price = f"{price:.{price_decimals}f}"
+
             sdk_limit_price = 0.0
-            if order_type == OrderType.LIMIT and formatted_price:
+            if formatted_price:
                 try:
                     sdk_limit_price = float(formatted_price)
                 except (ValueError, TypeError):
-                    logger.error(f"Invalid formatted price for LIMIT order: {formatted_price}")
-                    raise ValueError(f"Invalid price for LIMIT order: {price}")
+                    logger.error(f"Invalid formatted price: {formatted_price}")
+                    raise ValueError(f"Invalid price: {price}")
 
+            # Record the order parameters for SDK call
             order_data_for_sdk = {
-                 "coin": symbol.upper(),
+                 "coin": base_symbol.upper(),  # Use translated base symbol for API
                  "is_buy": side == OrderSide.BUY,
                  "sz": float(formatted_amount),
                  "limit_px": sdk_limit_price,
@@ -865,7 +848,7 @@ class HyperliquidConnector(BaseConnector):
                     "type": order_type.value,
                     "amount": amount,
                     "price": price,
-                    "entry_price": price if price is not None else 0.0,  # Add entry_price
+                    "entry_price": price if price is not None else 0.0,
                     "raw_response": response
                 }
                 if isinstance(response, dict) and response.get("status") == "ok":
@@ -875,14 +858,12 @@ class HyperliquidConnector(BaseConnector):
                         if "resting" in order_info:
                             processed_response["status"] = OrderStatus.OPEN.value
                             processed_response["order_id"] = order_info["resting"].get("oid")
-                            # Set entry_price for resting orders (limit orders)
                             if "px" in order_info["resting"]:
                                 processed_response["entry_price"] = float(order_info["resting"]["px"])
                         elif "filled" in order_info:
-                            processed_response["status"] = OrderStatus.CLOSED.value
+                            processed_response["status"] = OrderStatus.FILLED.value
                             processed_response["order_id"] = order_info["filled"].get("oid")
                             processed_response["filled_amount"] = order_info["filled"].get("totalSz")
-                            # Use avgPx as entry_price for filled orders
                             avg_price = order_info["filled"].get("avgPx")
                             processed_response["average_price"] = avg_price
                             processed_response["entry_price"] = float(avg_price) if avg_price is not None else price
@@ -892,9 +873,7 @@ class HyperliquidConnector(BaseConnector):
                             logger.error(f"Order placement failed (API Error): {order_info.get('error')}")
                         else:
                             logger.warning(f"Order placed but status unclear: {order_info}")
-                    else:
-                        logger.warning("Order status 'ok' but no order details found in response.")
-                        processed_response["status"] = "ACCEPTED_UNKNOWN_STATUS"
+                            processed_response["status"] = "ACCEPTED_UNKNOWN_STATUS"
                 elif isinstance(response, dict) and response.get("status") == "error":
                     processed_response["status"] = OrderStatus.REJECTED.value
                     processed_response["error_message"] = response.get("error")
@@ -942,7 +921,7 @@ class HyperliquidConnector(BaseConnector):
                  "entry_price": price if price is not None else 0.0  # Add entry_price for all error cases
              }
 
-    def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]: # Added symbol
+    def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         """
         Cancel an existing order by its ID.
 
@@ -964,7 +943,7 @@ class HyperliquidConnector(BaseConnector):
         logger.info(f"Attempting to cancel order {order_id} for symbol {symbol}")
         try:
             # Hyperliquid API requires symbol (coin) and order ID (oid)
-            response = self.exchange.cancel(symbol.upper(), int(order_id))
+            response = self.exchange.cancel(self.translate_symbol(symbol), int(order_id))
             logger.info(f"Cancel order response for {order_id}: {response}")
 
             # Process response
@@ -1285,103 +1264,199 @@ class HyperliquidConnector(BaseConnector):
             logger.error(f"Failed to get funding rate for {symbol}: {e}")
             return {"symbol": symbol, "funding_rate": 0, "error": str(e)}
 
+    def translate_symbol(self, symbol: str) -> str:
+        """
+        Convert composite symbols like 'ETH-USD' to base asset 'ETH' for Hyperliquid API.
+
+        IMPORTANT: This method is used throughout the connector to ensure compatibility
+        between the application's symbol format (ETH-USD) and Hyperliquid's format (ETH).
+        All methods that need to lookup symbols in Hyperliquid should use this translation.
+        The method will always return the symbol in uppercase for consistency with Hyperliquid API.
+
+        Args:
+            symbol: Trading symbol that may contain a separator (e.g., 'ETH-USD')
+
+        Returns:
+            str: Base symbol in uppercase for use with Hyperliquid API
+
+        Raises:
+            ValueError: If symbol is None, empty, or in an invalid format
+        """
+        if not symbol:
+            logger.error("Received empty or None symbol for translation")
+            raise ValueError("Symbol cannot be None or empty")
+
+        # Strip whitespace and convert to uppercase first
+        cleaned_symbol = symbol.strip().upper()
+
+        if not cleaned_symbol:
+            logger.error("Symbol contains only whitespace")
+            raise ValueError("Symbol cannot be only whitespace")
+
+        # Check for invalid characters
+        valid_chars = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+        invalid_chars = set(cleaned_symbol) - valid_chars
+        if invalid_chars:
+            logger.error(f"Symbol contains invalid characters: {invalid_chars}")
+            raise ValueError(f"Symbol contains invalid characters: {invalid_chars}")
+
+        original_symbol = cleaned_symbol
+        translated_symbol = original_symbol.split('-')[0] if '-' in original_symbol else original_symbol
+
+        # Log the translation with structured data
+        log_data = {
+            "original_symbol": original_symbol,
+            "translated_symbol": translated_symbol,
+            "has_separator": '-' in original_symbol,
+            "method": "translate_symbol"
+        }
+        logger.debug(f"Symbol translation: {json.dumps(log_data)}")
+
+        return translated_symbol
+
     def get_leverage_tiers(self, symbol: str) -> List[Dict[str, Any]]:
         """
-        Get information about leverage tiers and limits.
+        Get leverage tiers for a given symbol from Hyperliquid API.
 
         Args:
-            symbol: Market symbol (e.g., 'BTC')
+            symbol: Trading symbol (e.g., 'ETH-USD')
 
         Returns:
-            List[Dict[str, Any]]: Information about leverage tiers
+            List[Dict[str, Any]]: List of leverage tier information
+
+        Raises:
+            ConnectorError: If API request fails or returns invalid data
         """
-        if not self.info:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
-
         try:
-            # Get coin index and info
-            meta = self.info.meta()
-            coin_info = None
+            translated_symbol = self.translate_symbol(symbol)
 
-            for coin in meta["universe"]:
-                if coin["name"] == symbol:
-                    coin_info = coin
+            log_data = {
+                "method": "get_leverage_tiers",
+                "original_symbol": symbol,
+                "translated_symbol": translated_symbol,
+                "action": "fetching_leverage_tiers"
+            }
+            logger.info(f"Fetching leverage tiers: {json.dumps(log_data)}")
+
+            markets = self.get_markets()
+
+            # Log available markets for debugging
+            logger.debug(f"Available markets: {[m.get('symbol') for m in markets[:5]]}...")
+
+            # Find the market info for our symbol - we need to match the base_asset with our translated symbol
+            market_info = None
+            for market in markets:
+                base_asset = market.get('base_asset', '')
+                if base_asset.upper() == translated_symbol.upper():
+                    market_info = market
+                    logger.debug(f"Found market info for {translated_symbol}: {market.get('symbol')}")
                     break
 
-            if coin_info is None:
-                raise ValueError(f"Market {symbol} not found")
+            if not market_info:
+                available_markets = [m.get('base_asset') for m in markets]
+                error_msg = f"Market info not found for symbol: {translated_symbol}"
+                logger.error(f"{error_msg}. Available markets: {available_markets[:10]}...",
+                             extra={"symbol": translated_symbol, "available_markets": available_markets})
+                raise ConnectorError(error_msg)
 
-            # Extract leverage information
-            max_leverage = float(coin_info.get("maxLeverage", 50.0))
+            # Extract leverage information from exchange_specific data
+            exchange_specific = market_info.get('exchange_specific', {})
+            leverage_info = {
+                "max_leverage": exchange_specific.get('max_leverage', 20.0),
+                "maintenance_margin_fraction": 0.025,  # Default to 2.5%
+                "initial_margin_fraction": 0.05,      # Default to 5%
+                "base_position_notional": 0.0,
+                "base_position_value": 0.0
+            }
 
-            # Hyperliquid may have a simpler leverage structure than tiered
-            # This is a simplified representation
-            tiers = [
-                {
-                    "min_notional": 0,
-                    "max_notional": float("inf"),
-                    "max_leverage": max_leverage,
-                    "maintenance_margin_rate": 0.02,  # Placeholder value
-                    "initial_margin_rate": 0.04,  # Placeholder value
-                }
-            ]
+            logger.info(f"Retrieved leverage tiers: {json.dumps({**log_data, 'leverage_info': leverage_info})}")
 
-            return tiers
+            return [leverage_info]  # Return as list for consistency with other exchanges
 
         except Exception as e:
-            logger.error(f"Failed to get leverage tiers for {symbol}: {e}")
-            return []
+            error_msg = f"Error fetching leverage tiers for {symbol}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ConnectorError(error_msg) from e
 
     def calculate_margin_requirement(
-        self, symbol: str, size: float, leverage: float
-    ) -> Tuple[float, float]:
+        self, symbol: str, quantity: float, price: float, leverage: float = 1.0
+    ) -> Dict[str, float]:
         """
-        Calculate initial and maintenance margin requirements.
+        Calculate initial and maintenance margin requirements for a position.
 
         Args:
-            symbol: Market symbol (e.g., 'BTC')
-            size: Position size
-            leverage: Leverage multiplier
+            symbol: Trading symbol (e.g., 'ETH-USD')
+            quantity: Position size in base currency
+            price: Current market price
+            leverage: Desired leverage (default: 1.0)
 
         Returns:
-            Tuple[float, float]: (initial_margin, maintenance_margin)
+            Dict[str, float]: Dictionary containing:
+                - initial_margin: Required initial margin
+                - maintenance_margin: Required maintenance margin
+                - effective_leverage: Actual leverage after applying limits
+
+        Raises:
+            ConnectorError: If margin calculation fails or parameters are invalid
         """
-        if not self.info:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
-
         try:
-            # Get current price
-            ticker = self.get_ticker(symbol)
-            price = ticker["last_price"]
+            if not symbol or not isinstance(symbol, str):
+                raise ValueError("Symbol must be a non-empty string")
+            if not isinstance(quantity, (int, float)) or quantity <= 0:
+                raise ValueError("Quantity must be a positive number")
+            if not isinstance(price, (int, float)) or price <= 0:
+                raise ValueError("Price must be a positive number")
+            if not isinstance(leverage, (int, float)) or leverage <= 0:
+                raise ValueError("Leverage must be a positive number")
 
-            # Get leverage tiers
-            tiers = self.get_leverage_tiers(symbol)
+            log_data = {
+                "method": "calculate_margin_requirement",
+                "symbol": symbol,
+                "quantity": quantity,
+                "price": price,
+                "requested_leverage": leverage,
+            }
+            logger.info(f"Calculating margin requirements: {json.dumps(log_data)}")
 
-            if not tiers:
-                # Use default calculation
-                return super().calculate_margin_requirement(symbol, size, leverage)
+            # Get leverage tiers for the symbol
+            leverage_tiers = self.get_leverage_tiers(symbol)
+            if not leverage_tiers:
+                raise ConnectorError(f"No leverage tiers found for symbol: {symbol}")
 
-            # Find applicable tier
-            notional_value = size * price
-            applicable_tier = tiers[0]  # Default to first tier
+            tier = leverage_tiers[0]  # Hyperliquid uses a single tier system
 
-            for tier in tiers:
-                if tier["min_notional"] <= notional_value <= tier["max_notional"]:
-                    applicable_tier = tier
-                    break
+            # Calculate position value
+            position_value = abs(quantity * price)
 
-            # Calculate margins
-            initial_margin = notional_value / leverage
-            maintenance_margin = (
-                notional_value * applicable_tier["maintenance_margin_rate"]
+            # Apply leverage limits
+            max_leverage = float(tier.get('max_leverage', 1.0))
+            effective_leverage = min(leverage, max_leverage)
+
+            # Calculate margins using the effective leverage
+            initial_margin = position_value / effective_leverage
+            maintenance_margin = initial_margin * (
+                tier.get('maintenance_margin_fraction', 0.02) /
+                tier.get('initial_margin_fraction', 0.04)
             )
 
-            return initial_margin, maintenance_margin
+            result = {
+                'initial_margin': initial_margin,
+                'maintenance_margin': maintenance_margin,
+                'effective_leverage': effective_leverage
+            }
 
+            logger.info(f"Margin calculation completed: {json.dumps({**log_data, 'result': result})}")
+
+            return result
+
+        except ValueError as ve:
+            error_msg = f"Invalid parameters for margin calculation: {str(ve)}"
+            logger.error(error_msg)
+            raise ConnectorError(error_msg) from ve
         except Exception as e:
-            logger.error(f"Failed to calculate margin requirements: {e}")
-            # Fallback to base implementation
-            return super().calculate_margin_requirement(symbol, size, leverage)
+            error_msg = f"Error calculating margin requirements: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ConnectorError(error_msg) from e
 
     def disconnect(self) -> bool:
         """
@@ -1437,86 +1512,83 @@ class HyperliquidConnector(BaseConnector):
         return {"success": True, "message": f"Leverage for {symbol} set to {leverage}x"}
 
     def get_optimal_limit_price(
-        self, symbol: str, side: OrderSide, amount: float
+        self, symbol: str, side: OrderSide, amount: Union[float, Decimal]
     ) -> Dict[str, Any]:
         """
-        Calculate the optimal limit price for immediate execution based on order book depth.
-
-        Args:
-            symbol: The market symbol (e.g., 'BTC')
-            side: Buy or sell
-            amount: The amount/size to trade
-
-        Returns:
-            Dict with optimal price and batching information
+        Calculate the optimal limit price for an order based on current orderbook.
         """
         try:
-            if not self.info:
-                self.connect()
+            # Convert amount to Decimal if it isn't already
+            amount_decimal = Decimal(str(amount))
 
-            # Get a deeper order book for large orders
-            depth = 50  # Use a deeper order book for better analysis
-            orderbook = self.get_orderbook(symbol, depth)
-
-            # For buy orders, we need to look at the ask side
-            # For sell orders, we need to look at the bid side
-            if side == OrderSide.BUY:
-                price_levels = orderbook["asks"]
-                # Find the worst price (highest) we'd need to pay to fill the entire order
-                best_price = price_levels[0][0] if price_levels else None
-            else:  # SELL
-                price_levels = orderbook["bids"]
-                # Find the worst price (lowest) we'd receive to fill the entire order
-                best_price = price_levels[0][0] if price_levels else None
-
-            if not price_levels or best_price is None:
-                logger.warning(
-                    f"Empty price levels for {symbol}, cannot calculate optimal price"
-                )
-                # Fallback to current market price from ticker
-                ticker = self.get_ticker(symbol)
+            # Get order book
+            orderbook = self.get_orderbook(symbol)
+            if not orderbook:
+                logger.warning("Empty price levels for {symbol}, cannot calculate optimal price")
                 return {
-                    "price": float(ticker.get("last_price", 0)),
-                    "batches": [
-                        {"price": float(ticker.get("last_price", 0)), "amount": amount}
-                    ],
-                    "total_cost": float(ticker.get("last_price", 0)) * amount,
+                    "price": 0.0,
+                    "batches": [],
+                    "total_cost": 0.0,
                     "slippage": 0.0,
                     "enough_liquidity": False,
                 }
 
+            # Get price levels based on order side
+            price_levels = (
+                orderbook["asks"] if side == OrderSide.BUY else orderbook["bids"]
+            )
+
+            if not price_levels:
+                logger.warning(f"No {side.value} price levels found for {symbol}")
+                return {
+                    "price": 0.0,
+                    "batches": [],
+                    "total_cost": 0.0,
+                    "slippage": 0.0,
+                    "enough_liquidity": False,
+                }
+
+            # Get best price from first level
+            best_price = Decimal(str(price_levels[0][0]))
+
             # Calculate how much we can fill at each price level
-            cumulative_volume = 0.0
+            cumulative_volume = Decimal('0')
             batches = []
-            total_cost = 0.0
+            total_cost = Decimal('0')
             worst_price = best_price  # Initialize with best price
 
             for price, size in price_levels:
-                if cumulative_volume >= amount:
+                price_decimal = Decimal(str(price))
+                size_decimal = Decimal(str(size))
+
+                if cumulative_volume >= amount_decimal:
                     break
 
-                remaining = amount - cumulative_volume
-                fill_amount = min(remaining, size)
+                remaining = amount_decimal - cumulative_volume
+                fill_amount = min(remaining, size_decimal)
 
-                batches.append({"price": float(price), "amount": float(fill_amount)})
+                batches.append({
+                    "price": float(price_decimal),
+                    "amount": float(fill_amount)
+                })
 
-                total_cost += float(price) * float(fill_amount)
-                cumulative_volume += float(fill_amount)
-                worst_price = float(price)  # Update to current price level
+                total_cost += price_decimal * fill_amount
+                cumulative_volume += fill_amount
+                worst_price = price_decimal
 
             # Check if we have enough liquidity
-            enough_liquidity = cumulative_volume >= amount
+            enough_liquidity = cumulative_volume >= amount_decimal
 
             # Calculate slippage as percentage difference between best and worst price
             slippage = (
-                abs((worst_price - best_price) / best_price) * 100
+                abs((worst_price - best_price) / best_price) * Decimal('100')
                 if best_price > 0
-                else 0.0
+                else Decimal('0')
             )
 
             # For BUY orders: add a small buffer to ensure immediate fill
             # For SELL orders: subtract a small buffer to ensure immediate fill
-            buffer_percentage = 0.0005  # 0.05%
+            buffer_percentage = Decimal('0.0005')  # 0.05%
             price_adjustment = worst_price * buffer_percentage
 
             if side == OrderSide.BUY:
@@ -1532,8 +1604,8 @@ class HyperliquidConnector(BaseConnector):
                 )
 
             # For very small orders or perfect amount match, simplify to a single price
-            if len(batches) == 1 or (slippage < 0.1 and enough_liquidity):
-                batches = [{"price": optimal_price, "amount": amount}]
+            if len(batches) == 1 or (slippage < Decimal('0.1') and enough_liquidity):
+                batches = [{"price": float(optimal_price), "amount": float(amount_decimal)}]
 
             return {
                 "price": float(optimal_price),
@@ -1550,9 +1622,9 @@ class HyperliquidConnector(BaseConnector):
             return {
                 "price": float(ticker.get("last_price", 0)),
                 "batches": [
-                    {"price": float(ticker.get("last_price", 0)), "amount": amount}
+                    {"price": float(ticker.get("last_price", 0)), "amount": float(amount_decimal)}
                 ],
-                "total_cost": float(ticker.get("last_price", 0)) * amount,
+                "total_cost": float(ticker.get("last_price", 0)) * float(amount_decimal),
                 "slippage": 0.0,
                 "enough_liquidity": False,
             }
@@ -1577,16 +1649,19 @@ class HyperliquidConnector(BaseConnector):
             Optional[Dict]: Position information if exists, None otherwise
         """
         try:
+            # Translate symbol to base format for Hyperliquid
+            base_symbol = self.translate_symbol(symbol)
+
             response = self.exchange.user_state()
             if not response or "assetPositions" not in response:
-                logger.warning(f"No position data found for {symbol}")
+                logger.warning(f"No position data found for {base_symbol}")
                 return None
 
             # Find position for the specified symbol
             for position in response["assetPositions"]:
-                if position.get("coin") == symbol:
+                if position.get("coin") == base_symbol:
                     return {
-                        "symbol": symbol,
+                        "symbol": symbol,  # Keep original symbol in response
                         "size": float(position.get("position", "0")),
                         "entry_price": float(position.get("entryPx", "0")),
                         "liquidation_price": float(position.get("liquidationPx", "0")),
@@ -1594,11 +1669,11 @@ class HyperliquidConnector(BaseConnector):
                         "leverage": float(position.get("leverage", "1"))
                     }
 
-            logger.debug(f"No active position found for {symbol}")
+            logger.debug(f"No active position found for {base_symbol}")
             return None
 
         except Exception as e:
-            logger.error(f"Error getting position for {symbol}: {str(e)}")
+            logger.error(f"Error getting position for {symbol} (base: {base_symbol}): {str(e)}")
             return None
 
     def get_min_order_size(self, symbol: str) -> float:
@@ -1615,20 +1690,24 @@ class HyperliquidConnector(BaseConnector):
             raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
+            # Translate symbol to base format for Hyperliquid
+            base_symbol = self.translate_symbol(symbol)
+
             # Get market metadata
             meta = self.info.meta()
 
             # Find the market info for the symbol
             for coin in meta.get("universe", []):
-                if coin.get("name") == symbol:
+                if coin.get("name") == base_symbol:
                     # Get minSize from market info, default to 0.001 if not found
                     min_size = coin.get("minSize", 0.001)
                     # Convert to float if it's a string
                     return float(min_size) if isinstance(min_size, str) else min_size
 
-            # If market not found, raise error
-            raise ValueError(f"Market {symbol} not found")
+            # If market not found, log warning and return default
+            logger.warning(f"Market {symbol} not found for min order size, using default")
+            return 0.001  # Default minimum size
 
         except Exception as e:
             logger.error(f"Error getting minimum order size for {symbol}: {e}")
-            raise
+            return 0.001  # Return default minimum size in case of error

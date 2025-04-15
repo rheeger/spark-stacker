@@ -11,6 +11,11 @@ from metrics.decorators import track_api_latency, update_rate_limit
 logger = logging.getLogger(__name__)
 
 
+class ConnectorError(Exception):
+    """Base exception class for connector-related errors."""
+    pass
+
+
 class OrderSide(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
@@ -460,3 +465,21 @@ class BaseConnector(abc.ABC):
                 'enough_liquidity': Boolean indicating if there's enough liquidity
         """
         pass
+
+    def translate_symbol(self, symbol: str) -> str:
+        """
+        Translate composite symbols like 'ETH-USD' to simple form ('ETH').
+
+        This is a base implementation that doesn't modify the symbol.
+        Exchange-specific connectors should override this if they need
+        a different symbol format.
+
+        Args:
+            symbol: Original symbol string (e.g., 'ETH-USD')
+
+        Returns:
+            str: Translated symbol suitable for the exchange API
+        """
+        # Base implementation just returns the original symbol
+        # Subclasses should override this if they need different logic
+        return symbol

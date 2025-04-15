@@ -280,22 +280,25 @@ def mock_connector():
     connector.get_account_balance.return_value = {"USD": 10000.0}
     connector.get_positions.return_value = []
 
-    # Mock the place_order method to return a successful order with all required fields
-    connector.place_order.return_value = {
-        "order_id": "mock_order_123",
-        "symbol": "ETH",
-        "side": "BUY",
-        "size": 1.0,
-        "price": 1500.0,
-        "entry_price": 1500.0,
-        "status": "FILLED",
-        "leverage": 5.0,
-        "position_id": "mock_position_1",
-        "unrealized_pnl": 0.0,
-        "liquidation_price": 0.0,
-        "margin": 300.0,
-        "timestamp": int(time.time() * 1000)
-    }
+    # Create an async mock for place_order
+    async def mock_place_order(*args, **kwargs):
+        return {
+            "order_id": "mock_order_123",
+            "symbol": "ETH",
+            "side": "BUY",
+            "size": 1.0,
+            "price": 1500.0,
+            "entry_price": 1500.0,
+            "status": "FILLED",
+            "leverage": 5.0,
+            "position_id": "mock_position_1",
+            "unrealized_pnl": 0.0,
+            "liquidation_price": 0.0,
+            "margin": 300.0,
+            "timestamp": int(time.time() * 1000)
+        }
+
+    connector.place_order = mock_place_order
 
     # Add supports_derivatives property
     connector.supports_derivatives = True

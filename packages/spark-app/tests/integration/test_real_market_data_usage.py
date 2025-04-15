@@ -8,14 +8,14 @@ This test:
 """
 
 import os
+import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.connectors.base_connector import MarketType, OrderSide, OrderType
 from app.core.trading_engine import TradingEngine
 from app.indicators.base_indicator import Signal, SignalDirection
@@ -88,18 +88,19 @@ class TestRealMarketDataUsage:
         connector.get_account_balance.return_value = {"USD": 10000.0, "ETH": 5.0}
 
         # Setup place_order to simulate successful order execution
-        connector.place_order.return_value = {
+        connector.place_order = AsyncMock(return_value={
             "order_id": f"{name}_order_123",
             "symbol": "ETH-USD",
             "side": "BUY",
             "size": 1.0,
             "price": 2000.0,
             "status": "FILLED",
-        }
+        })
 
         return connector
 
-    def test_macd_signal_from_real_market_data(self):
+    @pytest.mark.asyncio
+    async def test_macd_signal_from_real_market_data(self):
         """
         Test generating MACD signals from real market data and
         processing them with the trading engine.
@@ -169,13 +170,21 @@ class TestRealMarketDataUsage:
             "ask": market_data["close"].iloc[-1] * 1.001,
             "volume": market_data["volume"].iloc[-1],
         }
+        self.mock_main_connector.place_order = AsyncMock(return_value={
+            "status": "FILLED",
+            "order_id": "test_order_123",
+            "symbol": "ETH-USD",
+            "side": "BUY",
+            "size": 1.0,
+            "price": market_data["close"].iloc[-1],
+            "timestamp": int(time.time() * 1000)
+        })
 
         # Process the signal
-        result = self.engine.process_signal(signal)
+        result = await self.engine.process_signal(signal)
 
         # Verify signal processing
-        assert result is True
-        assert self.mock_main_connector.place_order.called
+        assert result is True, "Signal processing should succeed"
 
         # Create and save visualization
         self._visualize_macd_data(

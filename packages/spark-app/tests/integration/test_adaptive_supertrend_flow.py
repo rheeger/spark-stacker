@@ -6,17 +6,16 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.core.trading_engine import TradingEngine
-from app.indicators.adaptive_supertrend_indicator import AdaptiveSupertrendIndicator
+from app.indicators.adaptive_supertrend_indicator import \
+    AdaptiveSupertrendIndicator
 from app.indicators.base_indicator import Signal, SignalDirection
 
 
-def test_adaptive_supertrend_integration(
-    mock_connector, mock_risk_manager, trading_engine
-):
+@pytest.mark.asyncio
+async def test_adaptive_supertrend_integration(mock_connector, mock_risk_manager, trading_engine):
     """
-    Test that the Adaptive SuperTrend indicator can generate signals that are properly
+    Test that the Adaptive Supertrend indicator can generate signals that are properly
     processed by the trading engine.
     """
     # Set up the mock connector
@@ -37,43 +36,23 @@ def test_adaptive_supertrend_integration(
     trading_engine.start()
 
     try:
-        # Create an Adaptive SuperTrend indicator
+        # Create an Adaptive Supertrend indicator
         ast = AdaptiveSupertrendIndicator(
             name="AdaptiveSupertrend",
-            params={
-                "atr_length": 10,
-                "factor": 3.0,
-                "training_length": 50,  # Smaller training length for testing
-                "max_iterations": 5,  # Fewer iterations for faster testing
-            },
+            params={"period": 10, "multiplier": 3.0, "use_ema": True},
         )
 
-        # Create synthetic price data with a trend and volatility change
-        # This simulates a market that trends up, then down with volatility changes
-        num_periods = 150
+        # Create synthetic price data
+        num_periods = 100
         timestamps = pd.date_range(start="2023-01-01", periods=num_periods, freq="1h")
 
-        # Create a trend with changing direction
-        base_trend = np.linspace(1000, 1300, num_periods // 2)
-        base_trend = np.concatenate(
-            [base_trend, np.linspace(1300, 1100, num_periods // 2)]
+        # Create a trend with some noise
+        base_close = np.linspace(1000, 1500, num_periods) + np.random.normal(
+            0, 20, num_periods
         )
 
-        # Create volatility regimes
-        volatility = np.ones(num_periods) * 15  # Base volatility
-
-        # High volatility in the beginning
-        volatility[: num_periods // 3] = 30
-
-        # Medium volatility in the middle
-        volatility[num_periods // 3 : 2 * num_periods // 3] = 20
-
-        # Low volatility at the end
-        volatility[2 * num_periods // 3 :] = 10
-
-        # Add noise based on volatility
-        noise = np.array([np.random.normal(0, v) for v in volatility])
-        base_close = base_trend + noise
+        # Add a dip at the end to generate a buy signal
+        base_close[-5:] = [1480, 1460, 1430, 1420, 1450]
 
         # Create OHLC data
         data = pd.DataFrame(
@@ -144,9 +123,10 @@ def test_adaptive_supertrend_integration(
             logging.info(f"Signal params: {signal.params}")
 
             # Pass the signal to the trading engine
-            trading_engine.process_signal(signal)
+            result = await trading_engine.process_signal(signal)
 
             # Check that the trading engine processed the signal
+            assert result is True, "Signal processing should succeed"
             assert (
                 len(trading_engine.active_trades) > 0
                 or len(trading_engine.get_trade_history()) > 0

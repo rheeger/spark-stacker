@@ -1,4 +1,4 @@
-.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build rebuild force-rebuild
 
 # Default target
 help:
@@ -9,14 +9,16 @@ help:
 	@echo "  make lint-python     : Run Python linters only (black, pylint, mypy)"
 	@echo "  make lint-markdown   : Run Markdown linter only"
 	@echo "  make install-deps    : Install all dependencies"
-	@echo "  make start          : Start the spark-app services"
-	@echo "  make stop           : Stop the spark-app services"
-	@echo "  make restart        : Restart the spark-app services"
-	@echo "  make reset          : Reset everything (stop, clean, reinstall deps, start)"
-	@echo "  make clean          : Clean up temporary files and build artifacts"
-	@echo "  make clean-logs     : Clean up all log files"
-	@echo "  make test           : Run tests for spark-app"
-	@echo "  make spark-app-clean: Clean up spark-app services and volumes"
+	@echo "  make start           : Start the spark-app services"
+	@echo "  make stop            : Stop the spark-app services"
+	@echo "  make restart         : Restart the spark-app services"
+	@echo "  make reset           : Reset everything (stop, clean, reinstall deps, start)"
+	@echo "  make rebuild         : Rebuild Docker image and restart services"
+	@echo "  make force-rebuild   : Force rebuild Docker image without cache and restart"
+	@echo "  make clean           : Clean up temporary files and build artifacts"
+	@echo "  make clean-logs      : Clean up all log files"
+	@echo "  make test            : Run tests for spark-app"
+	@echo "  make spark-app-clean : Clean up spark-app services and volumes"
 	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
 
 # Build target
@@ -112,6 +114,21 @@ restart: stop start
 # Reset command - full reset of the environment
 reset: spark-app-clean clean
 	@echo "Resetting spark-app environment..."
-	$(MAKE) build
-	$(MAKE) start
+	$(MAKE) rebuild
 	@echo "Spark app environment reset complete"
+
+# Rebuild Docker image and restart services
+rebuild:
+	@echo "Rebuilding Docker image and restarting services..."
+	cd docker && docker-compose down
+	cd docker && docker-compose build
+	cd docker && docker-compose up -d
+	@echo "Docker image rebuilt and services restarted"
+
+# Force rebuild Docker image without cache and restart services
+force-rebuild:
+	@echo "Force rebuilding Docker image without cache and restarting services..."
+	cd docker && docker-compose down
+	cd docker && docker-compose build --no-cache
+	cd docker && docker-compose up -d
+	@echo "Docker image force rebuilt and services restarted"

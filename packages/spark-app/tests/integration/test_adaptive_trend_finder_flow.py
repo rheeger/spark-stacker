@@ -6,13 +6,14 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.core.trading_engine import TradingEngine
-from app.indicators.adaptive_trend_finder_indicator import AdaptiveTrendFinderIndicator
+from app.indicators.adaptive_trend_finder_indicator import \
+    AdaptiveTrendFinderIndicator
 from app.indicators.base_indicator import Signal, SignalDirection
 
 
-def test_adaptive_trend_finder_integration(
+@pytest.mark.asyncio
+async def test_adaptive_trend_finder_integration(
     mock_connector, mock_risk_manager, trading_engine
 ):
     """
@@ -116,9 +117,10 @@ def test_adaptive_trend_finder_integration(
             logging.info(f"Signal params: {signal.params}")
 
             # Pass the signal to the trading engine
-            trading_engine.process_signal(signal)
+            result = await trading_engine.process_signal(signal)
 
             # Check that the trading engine processed the signal
+            assert result is True, "Signal processing should succeed"
             assert (
                 len(trading_engine.active_trades) > 0
                 or len(trading_engine.get_trade_history()) > 0

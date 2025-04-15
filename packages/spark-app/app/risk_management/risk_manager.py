@@ -48,7 +48,7 @@ class RiskManager:
         self,
         exchange: BaseConnector,
         symbol: str,
-        available_balance: float,
+        available_balance: Union[float, Dict[str, Any]],
         confidence: float,
         signal_side: OrderSide,
         leverage: float,
@@ -56,75 +56,103 @@ class RiskManager:
         stop_loss_pct: Optional[float] = None,
     ) -> Tuple[float, float]:
         """
-        Calculate appropriate position size and leverage based on risk parameters.
+        Calculate position size based on risk parameters.
 
         Args:
             exchange: Exchange connector
             symbol: Market symbol (e.g., 'ETH')
-            available_balance: Available account balance
+            available_balance: Available balance (either as float or dictionary of balances)
             confidence: Signal confidence (0-1)
-            signal_side: Trade direction (BUY or SELL)
-            leverage: Requested leverage
-            price: Current price (optional, will be fetched if not provided)
-            stop_loss_pct: Stop loss percentage (optional)
+            signal_side: Order side (BUY/SELL)
+            leverage: Initial leverage
+            price: Optional price override
+            stop_loss_pct: Stop loss percentage
 
         Returns:
             Tuple of (position_size, adjusted_leverage)
         """
-        # Fetch price if not provided
-        if price is None:
-            try:
-                ticker = exchange.get_ticker(symbol)
-                price = ticker.get("last_price", 0.0)
-                if price <= 0:
-                    logger.error(f"Invalid price for {symbol}: {price}")
-                    return 0.0, 0.0
-            except Exception as e:
-                logger.error(f"Failed to fetch price for {symbol}: {e}")
-                return 0.0, 0.0
-
-        # Check exchange leverage limits
+        # Handle balance input - convert dictionary to total if needed
         try:
-            leverage_tiers = exchange.get_leverage_tiers(symbol)
-            if leverage_tiers:
-                # Find max allowed leverage (simplification)
-                exchange_max_leverage = max(
-                    [tier.get("max_leverage", 1.0) for tier in leverage_tiers]
-                )
-                leverage = min(leverage, exchange_max_leverage, self.max_leverage)
+            if isinstance(available_balance, dict):
+                total_balance = sum(float(val) for val in available_balance.values())
+                logger.debug(f"Converted balance dictionary {available_balance} to total: {total_balance}")
             else:
-                leverage = min(leverage, self.max_leverage)
+                total_balance = float(available_balance)
+                logger.debug(f"Using direct balance value: {total_balance}")
+
+            if total_balance <= 0:
+                logger.warning("Available balance is zero or negative")
+                return 0.0, 1.0
+        except (TypeError, ValueError) as e:
+            logger.error(f"Error processing available balance: {e}")
+            return 0.0, 1.0
+
+        # Determine max leverage from exchange
+        try:
+            exchange_max_leverage = 25.0  # Default max leverage
+            leverage_tiers = exchange.get_leverage_tiers(symbol)
+
+            if leverage_tiers:
+                max_leverages = []
+                for tier in leverage_tiers:
+                    if isinstance(tier, dict) and 'max_leverage' in tier:
+                        max_leverages.append(float(tier['max_leverage']))
+
+                if max_leverages:
+                    exchange_max_leverage = max(max_leverages)
+                    logger.debug(f"Found max exchange leverage: {exchange_max_leverage}")
+                else:
+                    logger.warning(f"Empty or invalid leverage tiers for {symbol}, using default max_leverage: {exchange_max_leverage}")
+            else:
+                logger.warning(f"No leverage tiers found for {symbol}, using default max_leverage: {exchange_max_leverage}")
+
+            # Apply the leverage cap based on our findings
+            adjusted_leverage = min(leverage, exchange_max_leverage, self.max_leverage)
+            logger.debug(f"Adjusted leverage to {adjusted_leverage} based on limits")
+
         except Exception as e:
-            logger.warning(f"Failed to get leverage tiers, using default limits: {e}")
-            leverage = min(leverage, self.max_leverage)
+            logger.error(f"Unexpected error determining leverage for {symbol}: {e}")
+            adjusted_leverage = min(leverage, self.max_leverage)
+            logger.debug(f"Using fallback leverage: {adjusted_leverage}")
 
         # Calculate max position size based on risk percentage
-        risk_amount = available_balance * (self.max_account_risk_pct / 100.0)
+        try:
+            risk_amount = total_balance * (self.max_account_risk_pct / 100.0)
+            logger.debug(f"Risk amount: {risk_amount} (from {self.max_account_risk_pct}% of {total_balance})")
 
-        # Adjust by confidence
-        # Higher confidence = use more of the available risk amount
-        confidence_adjusted_risk = risk_amount * (0.5 + confidence * 0.5)
+            # Adjust by confidence
+            # Higher confidence = use more of the available risk amount
+            confidence_adjusted_risk = risk_amount * (0.5 + confidence * 0.5)
+            logger.debug(f"Confidence-adjusted risk: {confidence_adjusted_risk} (confidence: {confidence})")
 
-        # Calculate position size from risk amount and leverage
-        # If we have a stop loss percentage, use that to determine max position size
-        if stop_loss_pct and stop_loss_pct > 0:
-            # Determine how much we can lose before hitting the stop loss
-            max_loss_pct = stop_loss_pct / 100.0
-            # Calculate position size based on risk amount and potential loss
-            position_size = confidence_adjusted_risk / (max_loss_pct / leverage)
-        else:
-            # Without specific stop-loss, use a more conservative approach
-            position_size = confidence_adjusted_risk * leverage
+            # Calculate position size from risk amount and leverage
+            # If we have a stop loss percentage, use that to determine max position size
+            if stop_loss_pct and stop_loss_pct > 0:
+                # Determine how much we can lose before hitting the stop loss
+                max_loss_pct = stop_loss_pct / 100.0
+                # Calculate position size based on risk amount and potential loss
+                position_size = confidence_adjusted_risk / (max_loss_pct / adjusted_leverage)
+                logger.debug(f"Using stop-loss calculation: position_size = {position_size}")
+            else:
+                # Without specific stop-loss, use a more conservative approach
+                position_size = confidence_adjusted_risk * adjusted_leverage
+                logger.debug(f"Using conservative calculation: position_size = {position_size}")
 
-        # Apply absolute position size limit if configured
-        if self.max_position_size_usd and position_size > self.max_position_size_usd:
-            position_size = self.max_position_size_usd
+            # Apply absolute position size limit if configured
+            if self.max_position_size_usd and position_size > self.max_position_size_usd:
+                logger.debug(f"Reducing position size from {position_size} to max limit: {self.max_position_size_usd}")
+                position_size = self.max_position_size_usd
 
-        # Convert to base asset units (e.g., BTC)
-        # position_size_base = position_size / price
+            logger.info(f"Final position calculation for {symbol}: size={position_size:.2f}, leverage={adjusted_leverage:.1f}x")
+            return position_size, adjusted_leverage
 
-        # We return position size in USD
-        return position_size, leverage
+        except Exception as e:
+            logger.error(f"Error in position size calculation for {symbol}: {e}", exc_info=True)
+            # Return conservative values
+            default_position = total_balance * 0.05  # Use 5% of balance as safe default
+            default_leverage = min(2.0, self.max_leverage)  # Use low leverage as safe default
+            logger.warning(f"Using fallback position size: {default_position:.2f} with leverage: {default_leverage:.1f}x")
+            return default_position, default_leverage
 
     def calculate_hedge_parameters(
         self,

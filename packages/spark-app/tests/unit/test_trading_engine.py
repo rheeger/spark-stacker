@@ -1,9 +1,9 @@
-import pytest
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.core.trading_engine import TradingEngine, TradingState
+import pytest
 from app.connectors.base_connector import OrderSide, OrderType
+from app.core.trading_engine import TradingEngine, TradingState
 from app.indicators.base_indicator import Signal, SignalDirection
 
 
@@ -87,7 +87,8 @@ def test_pause_resume_engine(trading_engine):
     trading_engine.stop()
 
 
-def test_process_signal(
+@pytest.mark.asyncio
+async def test_process_signal(
     trading_engine, sample_signal, mock_risk_manager, mock_connector
 ):
     """Test processing a trading signal."""
@@ -97,16 +98,35 @@ def test_process_signal(
     mock_risk_manager.validate_trade.return_value = (True, "Trade validated")
 
     mock_connector.get_ticker.return_value = {"symbol": "ETH", "last_price": 1500.0}
+    mock_connector.place_order = AsyncMock(return_value={
+        "status": "FILLED",
+        "order_id": "test_order_123",
+        "symbol": "ETH",
+        "side": "BUY",
+        "size": 100.0,
+        "price": 1500.0,
+        "timestamp": int(time.time() * 1000)
+    })
 
-    # Start the engine
+    # Start the engine with dry_run=False to test actual order placement
+    trading_engine.dry_run = False
     trading_engine.start()
 
     # Process a buy signal
-    result = trading_engine.process_signal(sample_signal)
-    assert result is True
+    result = await trading_engine.process_signal(sample_signal)
+    assert result is True, "Signal processing should succeed"
 
     # Check that orders were placed
-    assert mock_connector.place_order.call_count == 0  # No orders in dry run mode
+    assert mock_connector.place_order.call_count == 2  # Main and hedge orders
+
+    # Verify the order parameters
+    main_call = mock_connector.place_order.call_args_list[0]
+    hedge_call = mock_connector.place_order.call_args_list[1]
+
+    assert main_call.kwargs["side"] == OrderSide.BUY
+    assert main_call.kwargs["amount"] == 100.0
+    assert hedge_call.kwargs["side"] == OrderSide.SELL
+    assert hedge_call.kwargs["amount"] == 20.0
 
     # Check that an active trade was created
     assert "ETH" in trading_engine.active_trades
@@ -124,12 +144,12 @@ def test_process_signal(
         confidence=0.5,
     )
 
-    result = trading_engine.process_signal(neutral_signal)
+    result = await trading_engine.process_signal(neutral_signal)
     assert result is False  # Neutral signals should be ignored
 
     # Test with engine in incorrect state
     trading_engine.state = TradingState.PAUSED
-    result = trading_engine.process_signal(sample_signal)
+    result = await trading_engine.process_signal(sample_signal)
     assert result is False  # Should queue the signal instead of processing
     assert len(trading_engine.pending_signals) == 1
 
@@ -145,7 +165,7 @@ def test_process_signal(
         confidence=0.8,
     )
 
-    result = trading_engine.process_signal(new_signal)
+    result = await trading_engine.process_signal(new_signal)
     assert result is False  # Should queue the signal
     assert len(trading_engine.pending_signals) == 2
 

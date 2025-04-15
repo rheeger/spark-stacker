@@ -905,6 +905,6 @@ def test_get_min_order_size(hyperliquid_connector):
     min_size = hyperliquid_connector.get_min_order_size("ETH")
     assert min_size == 0.01
 
-    # Test for non-existent market
-    with pytest.raises(ValueError, match="Market SOL not found"):
-        hyperliquid_connector.get_min_order_size("SOL")
+    # Test for non-existent market should return default value
+    min_size = hyperliquid_connector.get_min_order_size("SOL")
+    assert min_size == 0.001, "Should return default min size for unknown market"
