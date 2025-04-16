@@ -1457,19 +1457,26 @@ class HyperliquidConnector(BaseConnector):
 
             for attempt in range(max_retries):
                 try:
-                    # Format time range parameters
-                    request_data = {
-                        "type": "candles",
-                        "coin": base_symbol,
-                        "interval": interval_seconds,
-                    }
+                    # Per Hyperliquid API documentation, the correct format for candleSnapshot is:
+                    # {"type": "candleSnapshot", "req": {"coin": <coin>, "interval": <interval>, "startTime": <time>, "endTime": <time>}}
+                    # Calculate lookback days - default to 1 if not specified by time range
+                    lookback_days = 1
+                    if start_time and end_time:
+                        # Calculate days between start and end time
+                        days_diff = (end_time - start_time) / (1000 * 60 * 60 * 24)
+                        lookback_days = max(1, int(days_diff) + 1)  # Round up to at least 1 day
 
-                    if start_time:
-                        request_data["startTime"] = start_time
-                    if end_time:
-                        request_data["endTime"] = end_time
-                    if limit:
-                        request_data["limit"] = limit
+                    # Build API request according to official documentation
+                    # The API documentation shows this exact format is required
+                    request_data = {
+                        "type": "candleSnapshot",
+                        "req": {
+                            "coin": base_symbol,
+                            "interval": interval,
+                            "startTime": start_time if start_time is not None else int(time.time() * 1000) - (86400000 * lookback_days),
+                            "endTime": end_time if end_time is not None else int(time.time() * 1000)
+                        }
+                    }
 
                     # Add more detailed debugging for request
                     logger.debug(f"Requesting candles for {symbol} with data: {json.dumps(request_data)}")
@@ -1488,48 +1495,99 @@ class HyperliquidConnector(BaseConnector):
                             time.sleep(retry_delay)
                             continue
 
-                    # Handle 422 Unprocessable Entity errors (likely invalid coin)
+                    # Handle 422 Unprocessable Entity errors (likely invalid coin or format)
                     if response.status_code == 422:
-                        logger.error(f"Received 422 error from Hyperliquid API: {response.text}")
-                        # Try to parse error response
-                        try:
-                            error_data = response.json()
-                            error_msg = error_data.get("error", "Unknown error")
-                            logger.error(f"Hyperliquid API error: {error_msg}")
-                        except:
-                            pass
-                        # Return empty list for this error case
-                        return []
+                        error_text = response.text
+                        logger.error(f"Received 422 error from Hyperliquid API: {error_text}")
+
+                        # Create a fallback request if first attempt fails (with slightly different format)
+                        if attempt == 0:
+                            # Try with lookbackDays parameter instead of time range
+                            fallback_request = {
+                                "type": "candles",  # Different endpoint
+                                "coin": base_symbol,
+                                "interval": interval,
+                                "lookbackDays": lookback_days
+                            }
+                            logger.info(f"First request format failed, trying alternative: {json.dumps(fallback_request)}")
+                            request_data = fallback_request
+                            continue
+                        elif attempt == 1:
+                            # Try an even simpler request with minimal parameters
+                            minimal_request = {
+                                "type": "candles",
+                                "coin": base_symbol,
+                                "interval": interval,
+                                "lookbackDays": 1  # Minimal lookback
+                            }
+                            logger.info(f"Second attempt failed, trying minimal format: {json.dumps(minimal_request)}")
+                            request_data = minimal_request
+                            continue
+                        else:
+                            # After all attempts fail, try to get current price as fallback
+                            break
 
                     # For other status codes, use raise_for_status
                     response.raise_for_status()
-                    data = response.json()
+
+                    # Attempt to parse the response
+                    try:
+                        data = response.json()
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse JSON response: {e}, response content: {response.text[:500]}")
+                        if attempt < max_retries - 1:
+                            continue
+                        return []
 
                     # Debug log the response format
-                    logger.debug(f"Candle data type: {type(data)}, content sample: {str(data)[:200] if data else 'empty'}...")
+                    logger.debug(f"Candle data type: {type(data)}, sample: {str(data)[:200] if data else 'empty'}...")
 
                     # Handle different response formats
                     candles = []
 
+                    # Per API docs, the response format can be an array with nested candle data
                     if isinstance(data, list):
-                        # Format could be list of candle objects or list of arrays
-                        for candle in data:
+                        # Handle flat array of candles or nested array format
+                        candle_data_to_process = data
+
+                        # Handle the nested array case
+                        if len(data) == 1 and isinstance(data[0], list):
+                            logger.debug("Detected nested array format")
+                            candle_data_to_process = data[0]
+
+                        # Process candles one by one
+                        for candle in candle_data_to_process:
                             if isinstance(candle, dict):
-                                # API returns objects with t, o, h, l, c, v keys
+                                # Extract fields with proper handling
                                 try:
+                                    # Get standard fields, handle both string and numeric values
+                                    # According to API docs, the fields are t (timestamp), o (open), h (high), etc.
+                                    timestamp = int(candle.get("t", candle.get("T", candle.get("timestamp", 0))))
+                                    open_price = float(candle.get("o", candle.get("open", 0)))
+                                    high_price = float(candle.get("h", candle.get("high", 0)))
+                                    low_price = float(candle.get("l", candle.get("low", 0)))
+                                    close_price = float(candle.get("c", candle.get("close", 0)))
+                                    volume = float(candle.get("v", candle.get("volume", 0)))
+
+                                    # Create the standardized candle object
                                     candle_data = {
-                                        "timestamp": int(candle.get("t", 0)),
-                                        "open": float(candle.get("o", 0)),
-                                        "high": float(candle.get("h", 0)),
-                                        "low": float(candle.get("l", 0)),
-                                        "close": float(candle.get("c", 0)),
-                                        "volume": float(candle.get("v", 0))
+                                        "timestamp": timestamp,
+                                        "open": open_price,
+                                        "high": high_price,
+                                        "low": low_price,
+                                        "close": close_price,
+                                        "volume": volume,
+                                        # Add other fields as metadata if available
+                                        "symbol": candle.get("s", base_symbol),
+                                        "interval": candle.get("i", interval),
+                                        "trades": candle.get("n", 0)
                                     }
                                     candles.append(candle_data)
+                                    logger.debug(f"Successfully parsed candle: {timestamp}")
                                 except (ValueError, TypeError) as e:
                                     logger.warning(f"Error parsing candle object: {e}, data: {candle}")
                             elif isinstance(candle, list) and len(candle) >= 6:
-                                # API returns arrays: [timestamp, open, high, low, close, volume]
+                                # Handle array format (less common)
                                 try:
                                     candle_data = {
                                         "timestamp": int(candle[0]),
@@ -1537,31 +1595,73 @@ class HyperliquidConnector(BaseConnector):
                                         "high": float(candle[2]),
                                         "low": float(candle[3]),
                                         "close": float(candle[4]),
-                                        "volume": float(candle[5])
+                                        "volume": float(candle[5]),
+                                        "symbol": base_symbol,
+                                        "interval": interval
                                     }
                                     candles.append(candle_data)
                                 except (ValueError, TypeError, IndexError) as e:
                                     logger.warning(f"Error parsing candle array: {e}, data: {candle}")
-                    elif isinstance(data, dict) and "candles" in data:
-                        # Some APIs nest the candles in a 'candles' key
-                        candle_list = data["candles"]
-                        for candle in candle_list:
-                            if isinstance(candle, dict):
-                                try:
-                                    candle_data = {
-                                        "timestamp": int(candle.get("t", 0)),
-                                        "open": float(candle.get("o", 0)),
-                                        "high": float(candle.get("h", 0)),
-                                        "low": float(candle.get("l", 0)),
-                                        "close": float(candle.get("c", 0)),
-                                        "volume": float(candle.get("v", 0))
-                                    }
-                                    candles.append(candle_data)
-                                except (ValueError, TypeError) as e:
-                                    logger.warning(f"Error parsing candle from 'candles' key: {e}, data: {candle}")
+                    elif isinstance(data, dict):
+                        # Handle dictionary format with nested candle data
+                        logger.debug(f"Detected dictionary format. Keys: {list(data.keys())}")
+                        # Some APIs might nest the response in a wrapper object
+                        # Try to find candles in various possible locations
+                        for key in ["candles", "data", "result", "results"]:
+                            if key in data and isinstance(data[key], list):
+                                for candle in data[key]:
+                                    try:
+                                        if not isinstance(candle, dict):
+                                            continue
+
+                                        timestamp = int(candle.get("t", candle.get("timestamp", 0)))
+                                        candle_data = {
+                                            "timestamp": timestamp,
+                                            "open": float(candle.get("o", candle.get("open", 0))),
+                                            "high": float(candle.get("h", candle.get("high", 0))),
+                                            "low": float(candle.get("l", candle.get("low", 0))),
+                                            "close": float(candle.get("c", candle.get("close", 0))),
+                                            "volume": float(candle.get("v", candle.get("volume", 0))),
+                                            "symbol": candle.get("s", base_symbol),
+                                            "interval": candle.get("i", interval)
+                                        }
+                                        candles.append(candle_data)
+                                    except (ValueError, TypeError) as e:
+                                        logger.warning(f"Error parsing nested candle: {e}, data: {candle}")
+                                break
+
+                    # If we still have no candles, try fetching a single current price point
+                    if not candles:
+                        logger.warning(f"No valid candles found in API response. Attempting to get current price.")
+                        try:
+                            # Get current price and create a minimal candle
+                            ticker = self.get_ticker(symbol)
+                            if ticker and "last_price" in ticker:
+                                price = ticker["last_price"]
+                                timestamp = ticker.get("timestamp", int(time.time() * 1000))
+
+                                # Create a minimal candle with the current price
+                                candle_data = {
+                                    "timestamp": timestamp,
+                                    "open": price,
+                                    "high": price,
+                                    "low": price,
+                                    "close": price,
+                                    "volume": 0,
+                                    "symbol": base_symbol,
+                                    "interval": interval
+                                }
+                                candles.append(candle_data)
+                                logger.info(f"Added single candle with current price {price}")
+                        except Exception as e:
+                            logger.error(f"Failed to get current price as fallback: {e}")
 
                     # Sort candles by timestamp
                     candles.sort(key=lambda x: x["timestamp"])
+
+                    # Limit to the requested number of candles
+                    if limit and len(candles) > limit:
+                        candles = candles[-limit:]  # Take most recent ones
 
                     # Log result summary
                     logger.info(f"Retrieved {len(candles)} candles for {symbol} ({base_symbol}), interval {interval}")

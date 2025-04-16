@@ -28,8 +28,9 @@ TIMEFRAME_4H = "4h"
 TIMEFRAME_1D = "1d"
 
 from .metrics import (active_positions, api_latency_seconds,
-                      api_requests_total, capital_utilization_percent,
-                      liquidation_price, margin_ratio, max_drawdown_percent,
+                      api_requests_total, capital_utilization_percent)
+from .metrics import custom_registry as REGISTRY
+from .metrics import (liquidation_price, margin_ratio, max_drawdown_percent,
                       observe_api_latency, order_execution_seconds,
                       pnl_percent, rate_limit_remaining, record_api_request,
                       record_mvp_signal_latency, record_mvp_trade,
@@ -38,7 +39,7 @@ from .metrics import (active_positions, api_latency_seconds,
                       update_mvp_pnl, update_mvp_position_size,
                       update_mvp_signal_state, update_position)
 from .prometheus_exporter import exporter, initialize_metrics
-from .registry import REGISTRY, start_metrics_server
+from .registry import start_metrics_server
 
 __all__ = [
     "start_metrics_server",

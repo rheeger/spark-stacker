@@ -271,9 +271,32 @@ def test_get_historical_candles(connected_connector):
             raise
     else:
         with requests_mock.Mocker() as m:
+            # Mock the correct API format with valid response structure
             m.post(f"{API_URL}/info", json=[
-                {'t': 1744548945000, 'o': '1603.35', 'h': '1603.40', 'l': '1603.30', 'c': '1603.38', 'v': '10.5'},
-                {'t': 1744548945060, 'o': '1603.38', 'h': '1603.45', 'l': '1603.35', 'c': '1603.40', 'v': '12.3'}
+                {
+                    "t": 1744548945000,  # timestamp
+                    "T": 1744549004999,  # end timestamp
+                    "s": "ETH",          # symbol
+                    "i": "1m",           # interval
+                    "o": "1603.35",      # open
+                    "c": "1603.38",      # close
+                    "h": "1603.40",      # high
+                    "l": "1603.30",      # low
+                    "v": "10.5",         # volume
+                    "n": 25              # number of trades
+                },
+                {
+                    "t": 1744549005000,
+                    "T": 1744549064999,
+                    "s": "ETH",
+                    "i": "1m",
+                    "o": "1603.38",
+                    "c": "1603.40",
+                    "h": "1603.45",
+                    "l": "1603.35",
+                    "v": "12.3",
+                    "n": 30
+                }
             ])
 
             # Need to patch connect() since it's called in get_historical_candles when info is None

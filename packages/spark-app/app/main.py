@@ -514,12 +514,19 @@ async def async_main():
 
         # Initialize risk manager with conservative settings for sandbox
         risk_manager = RiskManager(
-            max_account_risk_pct=1.0,  # Lower risk percentage
-            max_leverage=1.0,  # No leverage in sandbox
-            max_position_size_usd=10.0,  # Small position size
-            max_positions=1,
-            min_margin_buffer_pct=50.0,  # Higher margin buffer
+            max_account_risk_pct=config.get("max_account_risk_pct", 1.0),  # Use config value or default to 1.0%
+            max_leverage=config.get("max_leverage", 1.0),  # Use config value or default to 1.0x
+            max_position_size_usd=config.get("max_position_size_usd", 10.0),  # Use config value or default to $10.0
+            max_positions=config.get("max_positions", 1),  # Use config value or default to 1
+            min_margin_buffer_pct=config.get("min_margin_buffer_pct", 50.0),  # Use config value or default to 50.0%
         )
+
+        # Log the risk manager settings
+        logger.info(f"Risk Manager initialized with: max_account_risk_pct={config.get('max_account_risk_pct', 1.0)}%, "
+                    f"max_leverage={config.get('max_leverage', 1.0)}x, "
+                    f"max_position_size_usd=${config.get('max_position_size_usd', 10.0)}, "
+                    f"max_positions={config.get('max_positions', 1)}, "
+                    f"min_margin_buffer_pct={config.get('min_margin_buffer_pct', 50.0)}%")
 
         # Initialize trading engine with proper parameters
         engine = TradingEngine(

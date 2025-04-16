@@ -242,3 +242,51 @@ The following key improvements have been made to the Hyperliquid connector:
    - Implemented realistic mock responses based on production data
 
 All tests now pass successfully with the various response formats returned by the Hyperliquid API.
+
+## Additional Improvements (After 4/16 Test)
+
+The following additional issues were identified during the 4/16/2025 production test and require
+immediate attention:
+
+### Symbol Translation Enhancement
+
+- [ ] Create bidirectional symbol translation between internal format (ETH-USD) and API format (ETH)
+  - [ ] Implement consistent translation across all API endpoints
+  - [ ] Add validation steps to verify symbol format before API calls
+  - [ ] Create mapping table for all supported market symbols
+  - [ ] Add unit tests for symbol translation edge cases
+
+### Historical Data Retrieval Fixes
+
+- [ ] Debug and fix historical candle data retrieval (422 error)
+  - [ ] Capture working request format for historical candles API
+  - [ ] Document exact request parameters and format requirements
+  - [ ] Implement proper error handling for deserialization failures
+  - [ ] Add fallback strategies for temporary historical data failures
+
+### Position Data Extraction Improvements
+
+- [ ] Update position data parser to handle nested 'oneWay' format correctly
+  - [ ] Fix extraction of position details from complex nested structures
+  - [ ] Implement validation for extracted position data
+  - [ ] Add comprehensive logging for position parsing steps
+  - [ ] Create test cases with actual API response formats
+
+### Connection Stability Enhancements
+
+- [ ] Improve websocket connection stability and monitoring
+  - [ ] Implement proper connection health checking
+  - [ ] Add sophisticated reconnection logic with exponential backoff
+  - [ ] Create connection state monitoring and metrics
+  - [ ] Handle API rate limiting correctly
+
+### Trade Execution Verification
+
+- [ ] Add post-trade verification steps
+  - [ ] Implement verification of executed orders
+  - [ ] Add position reconciliation after trades
+  - [ ] Create alerts for partially filled or rejected orders
+  - [ ] Implement trade outcome verification through separate API calls
+
+Each of these improvements must include comprehensive testing with actual API response formats to
+ensure they handle the real-world scenarios encountered in production.

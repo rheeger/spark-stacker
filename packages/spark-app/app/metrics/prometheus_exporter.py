@@ -2,8 +2,11 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from prometheus_client import (REGISTRY, CollectorRegistry, Counter, Gauge,
-                               Histogram, Summary, start_http_server)
+from prometheus_client import (CollectorRegistry, Counter, Gauge, Histogram,
+                               Summary, start_http_server)
+
+# Import the custom registry
+from .metrics import custom_registry
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +22,7 @@ class PrometheusExporter:
             registry: Optional custom registry to use
         """
         self.port = port
-        self.registry = registry or CollectorRegistry()
+        self.registry = registry or custom_registry
 
         # API metrics
         self.api_requests = Counter(
@@ -229,8 +232,7 @@ def initialize_metrics(port: int = 9000):
     if exporter is not None:
         logger.warning("Metrics exporter already initialized, recreating with new instance")
 
-    # Create a new registry for this instance
-    registry = CollectorRegistry()
-    exporter = PrometheusExporter(port=port, registry=registry)
+    # Use our custom registry
+    exporter = PrometheusExporter(port=port, registry=custom_registry)
     exporter.start()
     return exporter

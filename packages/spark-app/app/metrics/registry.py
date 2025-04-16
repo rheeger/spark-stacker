@@ -3,7 +3,10 @@ import threading
 import time
 from typing import Optional
 
-from prometheus_client import REGISTRY, start_http_server
+from prometheus_client import start_http_server
+
+# Import the custom registry
+from .metrics import custom_registry
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,8 @@ def start_metrics_server(
         global _is_running
         try:
             logger.info(f"Starting metrics server on {host}:{port}")
-            start_http_server(port, addr=host)
+            # Use the custom registry instead of the default one
+            start_http_server(port, addr=host, registry=custom_registry)
             _is_running = True
             logger.info(f"Metrics server started on {host}:{port}")
 

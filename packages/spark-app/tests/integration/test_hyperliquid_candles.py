@@ -149,5 +149,52 @@ def test_real_hyperliquid_symbols():
         result = connector.translate_symbol(input_symbol)
         assert result == expected_output, f"Failed to translate {input_symbol} to {expected_output}, got {result}"
 
+def test_historical_candles_request_format(mock_universe_data, mock_candle_data):
+    """
+    Test that we're using the correct format for the historical candles API request.
+
+    This test verifies that the connector properly formats requests according to
+    the official Hyperliquid API documentation.
+    """
+    connector = HyperliquidConnector(
+        name="test_hyperliquid",
+        wallet_address="0x123",
+        private_key="0xabc",
+        testnet=True,
+        market_types=[MarketType.PERPETUAL]
+    )
+
+    # Mock the universe data to validate the symbol
+    with patch.object(connector, 'info') as mock_info:
+        mock_info.meta.return_value = mock_universe_data
+
+        # Mock the POST request to capture the actual request data sent
+        with patch('requests.post') as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_candle_data
+            mock_post.return_value = mock_response
+
+            # Call the function we want to test
+            connector.get_historical_candles("ETH-USD", "1m", start_time=1234567890000)
+
+            # Check that the POST call was made with the correct request structure
+            mock_post.assert_called()
+            args, kwargs = mock_post.call_args
+
+            # Extract and check the request data
+            request_data = kwargs.get('json', {})
+            assert "type" in request_data, "Missing 'type' in request data"
+            assert request_data["type"] == "candleSnapshot", f"Wrong request type: {request_data['type']}"
+            assert "req" in request_data, "Missing 'req' object in request data"
+
+            req = request_data["req"]
+            assert "coin" in req, "Missing 'coin' in req object"
+            assert req["coin"] == "ETH", f"Wrong coin name: {req['coin']}"
+            assert "interval" in req, "Missing 'interval' in req object"
+            assert req["interval"] == "1m", f"Wrong interval: {req['interval']}"
+            assert "startTime" in req, "Missing 'startTime' in req object"
+            assert req["startTime"] == 1234567890000, f"Wrong startTime: {req['startTime']}"
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
