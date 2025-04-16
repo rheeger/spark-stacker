@@ -88,11 +88,6 @@ test:
 	@cd $(CURDIR) && .venv/bin/python -m pytest -v
 	@echo "Tests complete"
 
-# Hyperliquid connector tests
-test-hyperliquid:
-	@echo "Running Hyperliquid connector tests..."
-	@cd $(CURDIR) && .venv/bin/python -m pytest tests/unit/test_hyperliquid_connector.py -v
-
 clean:
 	@echo "Cleaning up spark-app package..."
 	find . -type d -name __pycache__ -exec rm -rf {} +

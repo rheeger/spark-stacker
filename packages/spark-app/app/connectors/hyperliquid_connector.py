@@ -1389,7 +1389,7 @@ class HyperliquidConnector(BaseConnector):
         Get historical Klines (candlestick data) for a specific market.
 
         Args:
-            symbol: Market symbol (e.g., 'BTC')
+            symbol: Market symbol (e.g., 'BTC-USD' or 'BTC')
             interval: Kline interval (e.g., '1m', '5m', '1h')
             start_time: Start time in milliseconds since epoch
             end_time: End time in milliseconds since epoch
@@ -1405,7 +1405,24 @@ class HyperliquidConnector(BaseConnector):
                 raise HyperliquidConnectionError("Failed to connect.")
 
         # Translate symbol to base format for Hyperliquid
-        base_symbol = self.translate_symbol(symbol)
+        try:
+            # Get the base symbol (e.g., 'ETH' from 'ETH-USD')
+            base_symbol = self.translate_symbol(symbol)
+
+            # Verify the symbol exists in the Hyperliquid universe
+            meta = self.info.meta()
+            universe = meta.get("universe", [])
+
+            # Check if translated symbol exists in universe
+            if not any(coin.get("name") == base_symbol for coin in universe):
+                logger.error(f"Invalid coin index {base_symbol} (universe size: {len(universe)})")
+                return []
+
+            logger.debug(f"Validated symbol {base_symbol} exists in Hyperliquid universe")
+
+        except Exception as e:
+            logger.error(f"Error validating symbol {symbol}: {e}")
+            return []
 
         # Cache key
         cache_key = f"{base_symbol}_{interval}_{start_time}_{end_time}_{limit}"
@@ -1454,7 +1471,8 @@ class HyperliquidConnector(BaseConnector):
                     if limit:
                         request_data["limit"] = limit
 
-                    logger.debug(f"Requesting candles for {symbol} with data: {request_data}")
+                    # Add more detailed debugging for request
+                    logger.debug(f"Requesting candles for {symbol} with data: {json.dumps(request_data)}")
 
                     # Make the request
                     response = requests.post(
@@ -1470,6 +1488,20 @@ class HyperliquidConnector(BaseConnector):
                             time.sleep(retry_delay)
                             continue
 
+                    # Handle 422 Unprocessable Entity errors (likely invalid coin)
+                    if response.status_code == 422:
+                        logger.error(f"Received 422 error from Hyperliquid API: {response.text}")
+                        # Try to parse error response
+                        try:
+                            error_data = response.json()
+                            error_msg = error_data.get("error", "Unknown error")
+                            logger.error(f"Hyperliquid API error: {error_msg}")
+                        except:
+                            pass
+                        # Return empty list for this error case
+                        return []
+
+                    # For other status codes, use raise_for_status
                     response.raise_for_status()
                     data = response.json()
 
@@ -1530,6 +1562,9 @@ class HyperliquidConnector(BaseConnector):
 
                     # Sort candles by timestamp
                     candles.sort(key=lambda x: x["timestamp"])
+
+                    # Log result summary
+                    logger.info(f"Retrieved {len(candles)} candles for {symbol} ({base_symbol}), interval {interval}")
 
                     # Store in cache
                     self.candle_cache[cache_key] = {
