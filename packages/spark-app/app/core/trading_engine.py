@@ -263,6 +263,23 @@ class TradingEngine:
             logger.error("Invalid signal: Signal object is None or missing symbol")
             return False
 
+        # Ignore NEUTRAL signals
+        if signal.direction == SignalDirection.NEUTRAL:
+            logger.info(f"Ignoring NEUTRAL signal for {signal.symbol}")
+            return False
+
+        # Queue signal if engine is not in RUNNING state
+        if self.state != TradingState.RUNNING:
+            logger.info(f"Engine is {self.state}. Queueing signal for later processing.")
+            self.pending_signals.append(signal)
+            return False
+
+        # Queue signal if we've reached max parallel trades
+        if len(self.active_trades) >= self.max_parallel_trades:
+            logger.info(f"Maximum parallel trades reached ({self.max_parallel_trades}). Queueing signal for later processing.")
+            self.pending_signals.append(signal)
+            return False
+
         # Check if this is a retrigger of an already active trade
         symbol = signal.symbol
         is_active = symbol in self.active_trades

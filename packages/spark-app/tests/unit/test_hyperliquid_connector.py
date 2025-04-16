@@ -575,7 +575,7 @@ def test_get_positions_mocked(hyperliquid_connector, mock_info_client):
     assert len(positions) == 2  # We mocked 2 positions in mock_info_client fixture
 
     # Verify BTC position
-    btc_pos = next(p for p in positions if p["symbol"] == "BTC")
+    btc_pos = next(p for p in positions if p["symbol"] == "BTC-USD")
     assert btc_pos["size"] == 0.5
     assert btc_pos["side"] == "LONG"
     assert btc_pos["entry_price"] == 40000.0
@@ -586,7 +586,7 @@ def test_get_positions_mocked(hyperliquid_connector, mock_info_client):
     assert btc_pos["margin"] == 0.1  # |0.5| / 5.0
 
     # Verify ETH position
-    eth_pos = next(p for p in positions if p["symbol"] == "ETH")
+    eth_pos = next(p for p in positions if p["symbol"] == "ETH-USD")
     assert eth_pos["size"] == -2.0
     assert eth_pos["side"] == "SHORT"
     assert eth_pos["entry_price"] == 3000.0

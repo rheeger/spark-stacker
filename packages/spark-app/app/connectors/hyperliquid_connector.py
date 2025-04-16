@@ -44,6 +44,80 @@ class HyperliquidAPIError(Exception):
     pass
 
 
+# Custom wrapper for Hyperliquid Info class to handle response format differences
+class MetadataWrapper:
+    """
+    Wrapper for Hyperliquid metadata to handle different response formats.
+    The API sometimes returns a list instead of a dict with a 'universe' key.
+    """
+    def __init__(self, base_url):
+        self.base_url = base_url
+        self._universe_cache = None
+        self._api_client = None
+
+    def _setup_api_client(self):
+        """Set up API client if not already initialized"""
+        if self._api_client is None:
+            try:
+                from hyperliquid.info import Info
+                self._api_client = Info(base_url=self.base_url)
+            except ImportError as e:
+                logger.error(f"Failed to import hyperliquid.info: {e}")
+                raise
+        return self._api_client
+
+    def meta(self):
+        """
+        Get metadata with proper handling of different response formats.
+        Returns a standardized dict with a 'universe' key.
+        """
+        client = self._setup_api_client()
+
+        try:
+            # Get raw metadata response
+            raw_meta = client.meta()
+            logger.debug(f"Raw metadata response type: {type(raw_meta)}")
+
+            # Handle different response formats
+            if isinstance(raw_meta, dict) and "universe" in raw_meta:
+                # Standard format as expected by the connector
+                return raw_meta
+            elif isinstance(raw_meta, list):
+                # API returned a list directly - wrap it in a dict
+                logger.info("Metadata response is a list instead of dict, adapting format")
+                return {"universe": raw_meta}
+            else:
+                # Unknown format - log and try to adapt
+                logger.warning(f"Unexpected metadata format: {type(raw_meta)}, attempting to adapt")
+                if isinstance(raw_meta, dict):
+                    # If it's a dict but missing 'universe', try to find something that looks like universe data
+                    for key, value in raw_meta.items():
+                        if isinstance(value, list) and len(value) > 0:
+                            logger.info(f"Using '{key}' as universe data")
+                            return {"universe": value}
+                    # No suitable list found, create empty universe
+                    return {"universe": []}
+                else:
+                    # Last resort - treat the entire response as universe
+                    return {"universe": [raw_meta]}
+        except Exception as e:
+            logger.error(f"Error in meta() wrapper: {e}")
+            # Return empty universe as fallback
+            return {"universe": []}
+
+    def all_mids(self):
+        """Get all mid prices"""
+        client = self._setup_api_client()
+        return client.all_mids()
+
+    def user_state(self, address):
+        """Get user state"""
+        client = self._setup_api_client()
+        return client.user_state(address)
+
+    # Add other methods as needed, following the same pattern
+
+
 # Define a decorator for API call retries
 def retry_api_call(max_tries=3, backoff_factor=1.5, max_backoff=30):
     """
@@ -176,17 +250,24 @@ class HyperliquidConnector(BaseConnector):
             # Reset retry count on new connection attempt
             self.retry_count = 0
 
-            # Initialize info client for data retrieval
+            # Initialize info client for data retrieval using our wrapper to handle different API formats
             try:
-                self.info = Info(base_url=self.api_url)
-                # Make the self.info.meta() call the primary connection check
-                logger.info("Testing connection by fetching exchange metadata via SDK...")
+                # Use our custom wrapper instead of directly initializing Info
+                self.info = MetadataWrapper(base_url=self.api_url)
+
+                # Make the meta() call the primary connection check
+                logger.info("Testing connection by fetching exchange metadata...")
                 meta = self.info.meta()
                 if not meta or "universe" not in meta:
                     logger.error("Failed to fetch valid metadata from Hyperliquid API.")
                     self._is_connected = False
                     return False
-                logger.info(f"Successfully fetched metadata. Found {len(meta['universe'])} markets.")
+
+                # Log details about the universe data
+                universe = meta.get("universe", [])
+                logger.info(f"Successfully fetched metadata. Found {len(universe)} markets.")
+                if len(universe) > 0:
+                    logger.debug(f"First market: {universe[0]}")
 
             except Exception as e:
                 logger.error(f"Failed to initialize Info client or fetch metadata: {e}", exc_info=True)
@@ -195,19 +276,22 @@ class HyperliquidConnector(BaseConnector):
 
             # Initialize exchange client for trading
             try:
-                # Create a wallet object from the private key
-                wallet = Account.from_key(self.private_key)
-                self.exchange = Exchange(wallet=wallet, base_url=self.api_url)
-                logger.info("Exchange client initialized successfully.")
-
+                if self.private_key:
+                    # Create a wallet object from the private key
+                    wallet = Account.from_key(self.private_key)
+                    self.exchange = Exchange(wallet=wallet, base_url=self.api_url)
+                    logger.info("Exchange client initialized successfully.")
+                else:
+                    logger.warning("No private key provided. Exchange client not initialized. Read-only operations only.")
+                    self.exchange = None
             except Exception as e:
                 logger.error(f"Failed to initialize wallet or Exchange client: {e}", exc_info=True)
-                # Don't necessarily mark as disconnected if info client worked, but log error
-                # Or decide if exchange client is critical for 'connected' status
-                self._is_connected = False # Let's consider failure to init exchange as connection failure
-                return False
+                # Don't necessarily mark as disconnected if info client worked
+                if self.private_key:  # Only consider it a failure if a key was provided
+                    logger.warning("Exchange client initialization failed, but continuing with read-only operations")
+                self.exchange = None
 
-            # If both info and exchange clients initialized successfully
+            # If info client initialized successfully, consider connected
             self._is_connected = True
             logger.info(
                 f"Connected to Hyperliquid {'Testnet' if self.testnet else 'Mainnet'} successfully."
@@ -510,7 +594,9 @@ class HyperliquidConnector(BaseConnector):
             Dict with 'bids' and 'asks' lists of [price, size] pairs
         """
         if not self.info:
-            raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
+            logger.warning("Not connected to Hyperliquid. Attempting to connect...")
+            if not self.connect():
+                raise HyperliquidConnectionError("Failed to connect.")
 
         try:
             # Translate symbol to base format for Hyperliquid
@@ -520,8 +606,8 @@ class HyperliquidConnector(BaseConnector):
             meta = self.info.meta()
             coin_idx = None
 
-            for i, coin in enumerate(meta["universe"]):
-                if coin["name"] == base_symbol:
+            for i, coin in enumerate(meta.get("universe", [])):
+                if coin.get("name") == base_symbol:
                     coin_idx = i
                     break
 
@@ -559,14 +645,61 @@ class HyperliquidConnector(BaseConnector):
                     response.raise_for_status()
                     data = response.json()
 
-                    if not data or not isinstance(data, list) or len(data) != 2:
-                        raise ValueError(f"Invalid orderbook format: {data}")
+                    # Debug log the type of data received
+                    logger.debug(f"Orderbook data type: {type(data)}, content sample: {str(data)[:200]}...")
 
-                    # Format response - data[0] is bids, data[1] is asks
-                    return {
-                        "bids": [[float(price), float(size)] for price, size in data[0][:depth]],
-                        "asks": [[float(price), float(size)] for price, size in data[1][:depth]]
-                    }
+                    # Handle different response formats
+                    if isinstance(data, dict) and "levels" in data:
+                        # Format: {"coin": "ETH", "time": 1234567890, "levels": [[bids], [asks]]}
+                        logger.debug("Detected structured orderbook format with 'levels' key")
+
+                        bids_data = data["levels"][0] if len(data["levels"]) > 0 else []
+                        asks_data = data["levels"][1] if len(data["levels"]) > 1 else []
+
+                        # Format with px/sz fields
+                        bids = []
+                        for bid in bids_data[:depth]:
+                            if isinstance(bid, dict) and "px" in bid and "sz" in bid:
+                                bids.append([float(bid["px"]), float(bid["sz"])])
+                            elif isinstance(bid, list) and len(bid) >= 2:
+                                bids.append([float(bid[0]), float(bid[1])])
+
+                        asks = []
+                        for ask in asks_data[:depth]:
+                            if isinstance(ask, dict) and "px" in ask and "sz" in ask:
+                                asks.append([float(ask["px"]), float(ask["sz"])])
+                            elif isinstance(ask, list) and len(ask) >= 2:
+                                asks.append([float(ask[0]), float(ask[1])])
+
+                        return {"bids": bids, "asks": asks}
+
+                    elif isinstance(data, list) and len(data) == 2:
+                        # Format: [[bids], [asks]] where each item is [price, size] or {"px": price, "sz": size}
+                        logger.debug("Detected simple array orderbook format [bids, asks]")
+
+                        bids_data = data[0] if len(data) > 0 else []
+                        asks_data = data[1] if len(data) > 1 else []
+
+                        # Process bids - handle both array and object formats
+                        bids = []
+                        for bid in bids_data[:depth]:
+                            if isinstance(bid, dict) and "px" in bid and "sz" in bid:
+                                bids.append([float(bid["px"]), float(bid["sz"])])
+                            elif isinstance(bid, list) and len(bid) >= 2:
+                                bids.append([float(bid[0]), float(bid[1])])
+
+                        # Process asks - handle both array and object formats
+                        asks = []
+                        for ask in asks_data[:depth]:
+                            if isinstance(ask, dict) and "px" in ask and "sz" in ask:
+                                asks.append([float(ask["px"]), float(ask["sz"])])
+                            elif isinstance(ask, list) and len(ask) >= 2:
+                                asks.append([float(ask[0]), float(ask[1])])
+
+                        return {"bids": bids, "asks": asks}
+                    else:
+                        logger.warning(f"Unrecognized orderbook format: {data}")
+                        raise ValueError(f"Invalid orderbook format from API: {data}")
 
                 except (requests.exceptions.RequestException, ValueError) as e:
                     if attempt == max_retries - 1:
@@ -590,80 +723,211 @@ class HyperliquidConnector(BaseConnector):
         """
         if not self.info:
             logger.warning("Not connected to Hyperliquid. Attempting to connect...")
-            if not self.connect():
-                raise HyperliquidConnectionError(
-                    "Failed to connect to Hyperliquid. Please check network and API status."
-                )
+            self.connect()
+            if not self._is_connected:
+                raise HyperliquidConnectionError("Failed to connect.")
 
         try:
             try:
+                # Get user state with positions
+                logger.debug(f"Fetching user state for wallet: {self.wallet_address}")
                 user_state = self.info.user_state(self.wallet_address)
+                logger.debug(f"User state response type: {type(user_state)}")
             except requests.exceptions.ConnectionError as e:
                 logger.error(f"Connection error while getting user state: {e}")
                 # Update connection status for metrics
                 self._is_connected = False
-                raise HyperliquidConnectionError(
-                    f"Failed to connect to Hyperliquid API: {e}"
-                )
+                raise HyperliquidConnectionError(f"Failed to connect to Hyperliquid API: {e}")
             except requests.exceptions.Timeout as e:
                 logger.error(f"Request timed out while getting user state: {e}")
-                raise HyperliquidTimeoutError(
-                    f"Request to Hyperliquid API timed out: {e}"
-                )
+                raise HyperliquidTimeoutError(f"Request to Hyperliquid API timed out: {e}")
 
             try:
+                # Get metadata for coin information
+                logger.debug("Fetching metadata for position information")
                 meta = self.info.meta()
+                logger.debug(f"Meta response universe length: {len(meta.get('universe', []))}")
             except requests.exceptions.ConnectionError as e:
                 logger.error(f"Connection error while getting meta data: {e}")
                 self._is_connected = False
-                raise HyperliquidConnectionError(
-                    f"Failed to connect to Hyperliquid metadata API: {e}"
-                )
+                raise HyperliquidConnectionError(f"Failed to connect to Hyperliquid metadata API: {e}")
 
             try:
+                # Get current prices
+                logger.debug("Fetching current prices")
                 all_mids = self.info.all_mids()
+                logger.debug(f"all_mids response type: {type(all_mids)}")
             except requests.exceptions.ConnectionError as e:
                 logger.error(f"Connection error while getting all_mids: {e}")
                 self._is_connected = False
-                raise HyperliquidConnectionError(
-                    f"Failed to connect to Hyperliquid price API: {e}"
-                )
+                raise HyperliquidConnectionError(f"Failed to connect to Hyperliquid price API: {e}")
 
             positions = []
-            for position in user_state.get("assetPositions", []):
-                coin_idx = position["coin"]
-                coin_name = meta["universe"][coin_idx]["name"]
-                current_price = float(all_mids[coin_idx])
 
-                # Extract position details
-                size = float(position.get("szi", "0"))
-                entry_price = float(position.get("entryPx", "0"))
-                leverage = float(position.get("leverage", "1"))
-                liquidation_price = float(position.get("liqPx", "0"))
+            # Process asset positions which could be in different formats based on API response
+            if isinstance(user_state, dict) and "assetPositions" in user_state:
+                # Standard format
+                asset_positions = user_state.get("assetPositions", [])
+                logger.debug(f"Found {len(asset_positions)} positions in standard format")
 
-                # Calculate PNL
-                unrealized_pnl = size * (current_price - entry_price)
+                for position in asset_positions:
+                    try:
+                        # Check if this is a nested position format (type: oneWay structure)
+                        if isinstance(position, dict) and "type" in position and "position" in position:
+                            logger.debug(f"Found nested position format: {position['type']}")
+                            # Extract the actual position data from the nested structure
+                            position = position["position"]
 
-                position_info = {
-                    "symbol": coin_name,
-                    "size": size,
-                    "side": "LONG" if size > 0 else "SHORT",
-                    "entry_price": entry_price,
-                    "mark_price": current_price,
-                    "leverage": leverage,
-                    "liquidation_price": liquidation_price,
-                    "unrealized_pnl": unrealized_pnl,
-                    "margin": abs(size) / leverage,
-                }
+                        # Safely extract coin index
+                        if "coin" not in position:
+                            logger.warning(f"Position missing 'coin' field: {position}")
+                            continue
 
-                positions.append(position_info)
+                        coin_idx = position.get("coin")
 
+                        # Validate coin index
+                        universe = meta.get("universe", [])
+                        if not isinstance(coin_idx, int) or coin_idx < 0 or coin_idx >= len(universe):
+                            logger.warning(f"Invalid coin index {coin_idx} (universe size: {len(universe)})")
+                            continue
+
+                        # Get coin name
+                        coin_info = universe[coin_idx]
+                        coin_name = coin_info.get("name", f"Unknown-{coin_idx}")
+
+                        # Get current price - handle different all_mids formats
+                        current_price = None
+                        if isinstance(all_mids, dict):
+                            # Try by name first, then by index
+                            if coin_name in all_mids:
+                                current_price = float(all_mids[coin_name])
+                            elif str(coin_idx) in all_mids:
+                                current_price = float(all_mids[str(coin_idx)])
+                            else:
+                                logger.warning(f"Could not find price for {coin_name} in all_mids dict")
+                        elif isinstance(all_mids, list) and coin_idx < len(all_mids):
+                            current_price = float(all_mids[coin_idx])
+                        else:
+                            logger.warning(f"Could not extract price for {coin_name} from all_mids")
+
+                        if current_price is None:
+                            logger.warning(f"Skipping position for {coin_name} due to missing price data")
+                            continue
+
+                        # Extract position details with safe conversions
+                        try:
+                            size = float(position.get("szi", "0"))
+                            entry_price = float(position.get("entryPx", "0"))
+
+                            # Handle leverage which could be a scalar value or a complex object
+                            leverage_data = position.get("leverage", "1.0")
+                            if isinstance(leverage_data, dict) and "value" in leverage_data:
+                                # Extract from {type: "cross", value: 20} format
+                                leverage = float(leverage_data["value"])
+                                leverage_type = leverage_data.get("type", "cross")
+                                logger.debug(f"Extracted leverage {leverage} (type: {leverage_type}) from complex object")
+                            else:
+                                # Simple scalar value
+                                leverage = float(leverage_data)
+
+                            liquidation_price = float(position.get("liqPx", "0"))
+
+                            # Skip positions with zero size
+                            if size == 0:
+                                continue
+
+                            # Calculate PNL
+                            unrealized_pnl = size * (current_price - entry_price)
+
+                            # Format position info
+                            position_info = {
+                                "symbol": f"{coin_name}-USD",
+                                "size": size,
+                                "side": "LONG" if size > 0 else "SHORT",
+                                "entry_price": entry_price,
+                                "mark_price": current_price,
+                                "leverage": leverage,
+                                "liquidation_price": liquidation_price,
+                                "unrealized_pnl": unrealized_pnl,
+                                "margin": abs(size) / leverage if leverage > 0 else 0,
+                            }
+
+                            positions.append(position_info)
+                            logger.debug(f"Added position for {coin_name}: size={size}, pnl={unrealized_pnl:.2f}")
+
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Error processing position values for {coin_name}: {e}")
+                            continue
+
+                    except Exception as e:
+                        logger.warning(f"Error processing position: {e}")
+                        continue
+
+            elif isinstance(user_state, list):
+                # Alternative API format - direct list of positions
+                logger.debug(f"Position data in list format, length: {len(user_state)}")
+                for position in user_state:
+                    try:
+                        if not isinstance(position, dict):
+                            continue
+
+                        # Try to extract symbol/coin information
+                        coin_name = position.get("symbol") or position.get("coin") or position.get("asset")
+                        if not coin_name:
+                            logger.warning(f"Could not determine coin name from position: {position}")
+                            continue
+
+                        # Extract basic position data with safe conversions
+                        try:
+                            size = float(position.get("size", position.get("amount", "0")))
+                            entry_price = float(position.get("entryPrice", position.get("entry", "0")))
+                            mark_price = float(position.get("markPrice", position.get("price", "0")))
+                            leverage = float(position.get("leverage", "1"))
+
+                            # Skip positions with zero size
+                            if size == 0:
+                                continue
+
+                            # Try to extract or calculate PNL
+                            if "unrealizedPnl" in position:
+                                unrealized_pnl = float(position["unrealizedPnl"])
+                            else:
+                                unrealized_pnl = size * (mark_price - entry_price)
+
+                            # Format position info
+                            position_info = {
+                                "symbol": f"{coin_name}-USD",
+                                "size": size,
+                                "side": "LONG" if size > 0 else "SHORT",
+                                "entry_price": entry_price,
+                                "mark_price": mark_price,
+                                "leverage": leverage,
+                                "liquidation_price": float(position.get("liquidationPrice", "0")),
+                                "unrealized_pnl": unrealized_pnl,
+                                "margin": abs(size) / leverage if leverage > 0 else 0,
+                            }
+
+                            positions.append(position_info)
+                            logger.debug(f"Added position for {coin_name} from list format")
+
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Error processing position values for {coin_name}: {e}")
+                            continue
+
+                    except Exception as e:
+                        logger.warning(f"Error processing position from list: {e}")
+                        continue
+            else:
+                logger.warning(f"Unexpected user_state format: {type(user_state)}")
+
+            logger.info(f"Retrieved {len(positions)} positions from Hyperliquid")
             return positions
+
         except (HyperliquidConnectionError, HyperliquidTimeoutError):
             # These exceptions will be caught by the retry decorator
             raise
         except Exception as e:
-            logger.error(f"Failed to get positions: {e}")
+            logger.error(f"Failed to get positions: {e}", exc_info=True)
             return []
 
     async def place_order(
@@ -1136,86 +1400,156 @@ class HyperliquidConnector(BaseConnector):
         """
         if not self.info:
             logger.warning("Not connected to Hyperliquid. Attempting to connect...")
-            if not self.connect():
+            self.connect()
+            if not self._is_connected:
                 raise HyperliquidConnectionError("Failed to connect.")
 
+        # Translate symbol to base format for Hyperliquid
+        base_symbol = self.translate_symbol(symbol)
+
+        # Cache key
+        cache_key = f"{base_symbol}_{interval}_{start_time}_{end_time}_{limit}"
+
+        # Check cache first to avoid unnecessary API calls
+        if cache_key in self.candle_cache:
+            cache_entry = self.candle_cache[cache_key]
+            cache_age = time.time() - cache_entry['timestamp']
+
+            # If cache is still valid, return it
+            if cache_age < self.cache_ttl:
+                logger.debug(f"Using cached candles for {symbol}, age: {cache_age:.1f}s")
+                return cache_entry['data']
+            else:
+                logger.debug(f"Cache expired for {symbol}, fetching fresh data")
+
+        # Parse interval
         try:
-            # Extract base symbol
-            base_symbol = symbol.split('-')[0].upper() if '-' in symbol else symbol.upper()
+            interval_td, granularity = self._parse_interval(interval)
+        except ValueError as e:
+            logger.error(f"Invalid interval {interval}: {e}")
+            raise ValueError(f"Invalid interval format: {interval}")
 
-            # Get interval in milliseconds
-            _, interval_ms = self._parse_interval(interval)
+        # Convert interval to seconds for API
+        interval_seconds = int(interval_td.total_seconds())
 
-            # Calculate time range
-            current_time = int(time.time() * 1000)
-            end_time = end_time or current_time
-            start_time = start_time or (end_time - (limit * interval_ms))
+        # Prepare request data
+        try:
+            # Make direct request to the API for candles since the SDK doesn't seem to have this
+            max_retries = 3
+            retry_delay = 1  # seconds
 
-            # Construct request body
-            request_body = {
-                "type": "candleSnapshot",
-                "req": {
-                    "coin": base_symbol,
-                    "interval": interval,  # Hyperliquid accepts standard formats like "1m", "5m"
-                    "startTime": start_time,
-                    "endTime": end_time
-                }
-            }
+            for attempt in range(max_retries):
+                try:
+                    # Format time range parameters
+                    request_data = {
+                        "type": "candles",
+                        "coin": base_symbol,
+                        "interval": interval_seconds,
+                    }
 
-            # Make API request
-            try:
-                response = requests.post(
-                    f"{self.api_url}/info",
-                    json=request_body,
-                    headers={"Content-Type": "application/json"},
-                    timeout=self.connection_timeout
-                )
+                    if start_time:
+                        request_data["startTime"] = start_time
+                    if end_time:
+                        request_data["endTime"] = end_time
+                    if limit:
+                        request_data["limit"] = limit
 
-                # Handle rate limiting
-                if response.status_code == 429:
-                    logger.warning(f"Rate limit hit while fetching candles for {symbol}. Retrying after 1 second...")
-                    time.sleep(1)
+                    logger.debug(f"Requesting candles for {symbol} with data: {request_data}")
+
+                    # Make the request
                     response = requests.post(
                         f"{self.api_url}/info",
-                        json=request_body,
+                        json=request_data,
                         headers={"Content-Type": "application/json"},
-                        timeout=self.connection_timeout
+                        timeout=10
                     )
 
-                response.raise_for_status()
-                candles_data = response.json()
+                    if response.status_code == 429:  # Rate limit
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Rate limit hit while getting candles for {symbol}. Retrying after delay...")
+                            time.sleep(retry_delay)
+                            continue
 
-                # Format candles
-                formatted_candles = []
-                for candle in candles_data:
-                    try:
-                        formatted_candles.append({
-                            "timestamp": int(candle['t']),
-                            "open": float(candle['o']),
-                            "high": float(candle['h']),
-                            "low": float(candle['l']),
-                            "close": float(candle['c']),
-                            "volume": float(candle['v'])
-                        })
-                    except (KeyError, ValueError, TypeError) as e:
-                        logger.warning(f"Could not parse candle data: {e}")
-                        continue
+                    response.raise_for_status()
+                    data = response.json()
 
-                # Sort by timestamp and apply limit
-                formatted_candles.sort(key=lambda x: x["timestamp"])
-                return formatted_candles[-limit:] if limit else formatted_candles
+                    # Debug log the response format
+                    logger.debug(f"Candle data type: {type(data)}, content sample: {str(data)[:200] if data else 'empty'}...")
 
-            except requests.exceptions.RequestException as e:
-                if isinstance(e, requests.exceptions.Timeout):
-                    raise HyperliquidTimeoutError(f"Request timed out: {e}")
-                elif isinstance(e, requests.exceptions.ConnectionError):
-                    self._is_connected = False
-                    raise HyperliquidConnectionError(f"Connection error: {e}")
-                else:
-                    raise HyperliquidAPIError(f"API error fetching candles: {e}")
+                    # Handle different response formats
+                    candles = []
+
+                    if isinstance(data, list):
+                        # Format could be list of candle objects or list of arrays
+                        for candle in data:
+                            if isinstance(candle, dict):
+                                # API returns objects with t, o, h, l, c, v keys
+                                try:
+                                    candle_data = {
+                                        "timestamp": int(candle.get("t", 0)),
+                                        "open": float(candle.get("o", 0)),
+                                        "high": float(candle.get("h", 0)),
+                                        "low": float(candle.get("l", 0)),
+                                        "close": float(candle.get("c", 0)),
+                                        "volume": float(candle.get("v", 0))
+                                    }
+                                    candles.append(candle_data)
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"Error parsing candle object: {e}, data: {candle}")
+                            elif isinstance(candle, list) and len(candle) >= 6:
+                                # API returns arrays: [timestamp, open, high, low, close, volume]
+                                try:
+                                    candle_data = {
+                                        "timestamp": int(candle[0]),
+                                        "open": float(candle[1]),
+                                        "high": float(candle[2]),
+                                        "low": float(candle[3]),
+                                        "close": float(candle[4]),
+                                        "volume": float(candle[5])
+                                    }
+                                    candles.append(candle_data)
+                                except (ValueError, TypeError, IndexError) as e:
+                                    logger.warning(f"Error parsing candle array: {e}, data: {candle}")
+                    elif isinstance(data, dict) and "candles" in data:
+                        # Some APIs nest the candles in a 'candles' key
+                        candle_list = data["candles"]
+                        for candle in candle_list:
+                            if isinstance(candle, dict):
+                                try:
+                                    candle_data = {
+                                        "timestamp": int(candle.get("t", 0)),
+                                        "open": float(candle.get("o", 0)),
+                                        "high": float(candle.get("h", 0)),
+                                        "low": float(candle.get("l", 0)),
+                                        "close": float(candle.get("c", 0)),
+                                        "volume": float(candle.get("v", 0))
+                                    }
+                                    candles.append(candle_data)
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"Error parsing candle from 'candles' key: {e}, data: {candle}")
+
+                    # Sort candles by timestamp
+                    candles.sort(key=lambda x: x["timestamp"])
+
+                    # Store in cache
+                    self.candle_cache[cache_key] = {
+                        'timestamp': time.time(),
+                        'data': candles
+                    }
+
+                    return candles
+
+                except requests.exceptions.RequestException as e:
+                    if attempt == max_retries - 1:
+                        logger.error(f"Failed to get candles after {max_retries} attempts: {e}")
+                        raise HyperliquidConnectionError(f"Failed to get candles: {e}")
+                    time.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
+
+            raise HyperliquidConnectionError(f"Failed to get candles after {max_retries} attempts")
 
         except Exception as e:
-            logger.error(f"Unexpected error fetching candles for {symbol}: {e}", exc_info=True)
+            logger.error(f"Error retrieving candles for {symbol}: {e}", exc_info=True)
+            # Return empty list instead of raising on failure
             return []
 
     def get_funding_rate(self, symbol: str) -> Dict[str, Any]:

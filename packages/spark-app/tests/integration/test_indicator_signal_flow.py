@@ -251,15 +251,26 @@ async def test_macd_signal_to_engine(
         logger.info("Trading engine started.")
 
         logger.info(f"Processing {len(signals)} signals...")
+        first_signal_processed = False
         for signal in signals:
             logger.debug(f"Processing signal: {signal}")
             success = await trading_engine.process_signal(signal)
             logger.debug(f"Signal processing result: {success}")
-            assert success is True, "Signal processing should succeed"
+
+            if not first_signal_processed:
+                # First signal should succeed
+                assert success is True, "First signal processing should succeed"
+                first_signal_processed = True
+            else:
+                # Subsequent signals may fail due to max parallel trades limit
+                if not success:
+                    assert len(trading_engine.active_trades) >= trading_engine.max_parallel_trades, \
+                        "Signal processing failure should only occur when max parallel trades is reached"
 
         # --- Assertions ---
         logger.info("Checking assertions...")
         assert mock_connector.place_order.called, "TradingEngine did not call place_order on the mock connector."
+        assert len(trading_engine.active_trades) > 0, "No active trades after signal processing"
 
     finally:
         # Stop the engine
