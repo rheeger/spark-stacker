@@ -12,14 +12,16 @@
   "webhook_host": "0.0.0.0",
   "metrics_port": 9000,
   "metrics_host": "0.0.0.0",
+  "metrics_publish_historical": true,
   "max_parallel_trades": 1,
   "polling_interval": 30,
   "dry_run": false,
-  "max_account_risk_pct": 0.0001,
+  "max_account_risk_pct": 0.1,
   "max_leverage": 1.0,
-  "max_position_size_usd": 0.01,
+  "max_position_size_usd": 0.1,
   "max_positions": 1,
   "min_margin_buffer_pct": 50.0,
+  "enable_hedging": false,
   "exchanges": [
     {
       "name": "hyperliquid",
@@ -29,7 +31,7 @@
       "testnet": "${HYPERLIQUID_TESTNET}",
       "enabled": true,
       "use_as_main": true,
-      "use_as_hedge": true
+      "use_as_hedge": false
     },
     {
       "name": "coinbase",
@@ -59,11 +61,11 @@
       "enabled": false,
       "main_leverage": 1.0,
       "hedge_leverage": 1.0,
-      "hedge_ratio": 0.2,
+      "hedge_ratio": 0,
       "stop_loss_pct": 5.0,
       "take_profit_pct": 10.0,
-      "max_position_size": 0.001,
-      "risk_per_trade_pct": 0.0001
+      "max_position_size": 0.1,
+      "risk_per_trade_pct": 0.01
     }
   ],
   "indicators": [
@@ -85,7 +87,7 @@
       "parameters": {
         "fast_period": 8,
         "slow_period": 21,
-        "signal_period": 5
+        "signal_period": 7
       }
     }
   ]

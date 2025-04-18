@@ -960,7 +960,7 @@ class HyperliquidConnector(BaseConnector):
             Dict[str, Any]: Order response containing status and potentially order ID
         """
         if not self.exchange or not self.info:
-            logger.error("Not connected to Hyperliquid. Cannot place order.")
+            self.orders_logger.error("Not connected to Hyperliquid. Cannot place order.")
             raise HyperliquidConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
@@ -970,40 +970,40 @@ class HyperliquidConnector(BaseConnector):
             # Convert amount to Decimal for consistent comparison
             amount_decimal = Decimal(str(amount))
             if amount_decimal <= Decimal('0'):
-                logger.error(f"Order amount must be positive, got {amount}")
+                self.orders_logger.error(f"Order amount must be positive, got {amount}")
                 raise ValueError("Order amount must be positive")
 
             min_order_size = Decimal(str(self.get_min_order_size(symbol)))
             if amount_decimal < min_order_size:
-                logger.error(f"Order amount {amount} is below minimum size {min_order_size} for {symbol}")
+                self.orders_logger.error(f"Order amount {amount} is below minimum size {min_order_size} for {symbol}")
                 raise ValueError(f"Order amount {amount} is below minimum size {min_order_size} for {symbol}")
 
             if order_type == OrderType.LIMIT:
                 if price is None or price <= 0:
-                    logger.error(f"Limit order requires a positive price, got {price}")
+                    self.orders_logger.error(f"Limit order requires a positive price, got {price}")
                     raise ValueError("Limit order price must be positive and provided")
             elif order_type == OrderType.MARKET:
                 # For market orders, get optimal price from orderbook analysis
                 try:
                     optimal_price_data = self.get_optimal_limit_price(symbol, side, amount)
                     if not optimal_price_data["enough_liquidity"]:
-                        logger.warning(f"Limited liquidity for {symbol} order of size {amount}. Slippage may be high.")
+                        self.orders_logger.warning(f"Limited liquidity for {symbol} order of size {amount}. Slippage may be high.")
 
                     price = optimal_price_data["price"]
                     if price <= 0:
                         raise ValueError(f"Could not determine valid market price from orderbook for {symbol}")
 
-                    logger.info(
+                    self.orders_logger.info(
                         f"Using optimal price {price} for {side.value} order of {amount} {symbol}. "
                         f"Expected slippage: {optimal_price_data['slippage']}%, "
                         f"Enough liquidity: {optimal_price_data['enough_liquidity']}"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to get optimal price for {symbol}: {e}")
+                    self.orders_logger.error(f"Failed to get optimal price for {symbol}: {e}")
                     raise ValueError(f"Could not determine optimal market price for {symbol}: {e}")
 
             if leverage is not None and leverage <= 0:
-                 logger.error(f"Leverage must be positive, got {leverage}")
+                 self.orders_logger.error(f"Leverage must be positive, got {leverage}")
                  raise ValueError("Leverage must be positive")
 
             # --- Fetch Market Metadata for Precision and Limits ---
@@ -1017,7 +1017,7 @@ class HyperliquidConnector(BaseConnector):
                     break
 
             if market_info is None or coin_idx is None:
-                logger.error(f"Market {symbol} (base: {base_symbol}) not found in Hyperliquid metadata.")
+                self.orders_logger.error(f"Market {symbol} (base: {base_symbol}) not found in Hyperliquid metadata.")
                 raise ValueError(f"Market {symbol} not found")
 
             size_decimals = market_info.get("szDecimals", 8) # Default to 8 if not found
@@ -1031,11 +1031,11 @@ class HyperliquidConnector(BaseConnector):
                 else:
                     price_decimals = 0 # Handle whole numbers
             except (ValueError, IndexError):
-                logger.warning(f"Could not parse tickSize '{tick_size_str}' for {symbol}, defaulting price precision.")
+                self.orders_logger.warning(f"Could not parse tickSize '{tick_size_str}' for {symbol}, defaulting price precision.")
                 tick_size = 0.1  # Default tick size
                 price_decimals = 2 # Default price precision
 
-            logger.debug(f"Market {symbol}: szDecimals={size_decimals}, minSize={min_order_size}, priceDecimals={price_decimals}, tickSize={tick_size}")
+            self.orders_logger.debug(f"Market {symbol}: szDecimals={size_decimals}, minSize={min_order_size}, priceDecimals={price_decimals}, tickSize={tick_size}")
             # --- End Fetch Market Metadata ---
 
             # --- Format Order Parameters for API ---
@@ -1052,7 +1052,7 @@ class HyperliquidConnector(BaseConnector):
             elif order_type == OrderType.MARKET:
                 order_params["order_type"] = {"limit": {"tif": "Ioc"}}
                 if post_only:
-                    logger.warning("post_only is ignored for MARKET (Ioc) orders")
+                    self.orders_logger.warning("post_only is ignored for MARKET (Ioc) orders")
             else:
                 raise ValueError(f"Unsupported order type: {order_type}")
 
@@ -1069,7 +1069,7 @@ class HyperliquidConnector(BaseConnector):
                 try:
                     sdk_limit_price = float(formatted_price)
                 except (ValueError, TypeError):
-                    logger.error(f"Invalid formatted price: {formatted_price}")
+                    self.orders_logger.error(f"Invalid formatted price: {formatted_price}")
                     raise ValueError(f"Invalid price: {price}")
 
             # Record the order parameters for SDK call
@@ -1084,13 +1084,12 @@ class HyperliquidConnector(BaseConnector):
              }
             if order_data_for_sdk["cloid"] is None: del order_data_for_sdk["cloid"]
 
-            logger.info(f"Prepared order data for SDK: {order_data_for_sdk}")
+            self.orders_logger.info(f"Placing order: {json.dumps(order_data_for_sdk)}")
             # --- End Format Order Parameters ---
-
 
             # --- Place the Order via SDK/API ---
             try:
-                logger.debug(f"Calling exchange.order with data: {order_data_for_sdk}")
+                self.orders_logger.debug(f"Calling exchange.order with data: {order_data_for_sdk}")
                 response = self.exchange.order(
                     order_data_for_sdk["coin"],
                     order_data_for_sdk["is_buy"],
@@ -1100,7 +1099,7 @@ class HyperliquidConnector(BaseConnector):
                     reduce_only=order_data_for_sdk["reduce_only"],
                     cloid=order_data_for_sdk.get("cloid")
                 )
-                logger.info(f"Order placement response: {response}")
+                self.orders_logger.info(f"Order placement response: {response}")
 
                 # --- Process Response ---
                 processed_response = {
@@ -1124,6 +1123,7 @@ class HyperliquidConnector(BaseConnector):
                             processed_response["order_id"] = order_info["resting"].get("oid")
                             if "px" in order_info["resting"]:
                                 processed_response["entry_price"] = float(order_info["resting"]["px"])
+                            self.orders_logger.info(f"Order {processed_response['order_id']} placed and is resting")
                         elif "filled" in order_info:
                             processed_response["status"] = OrderStatus.FILLED.value
                             processed_response["order_id"] = order_info["filled"].get("oid")
@@ -1131,26 +1131,27 @@ class HyperliquidConnector(BaseConnector):
                             avg_price = order_info["filled"].get("avgPx")
                             processed_response["average_price"] = avg_price
                             processed_response["entry_price"] = float(avg_price) if avg_price is not None else price
+                            self.orders_logger.info(f"Order {processed_response['order_id']} filled immediately at {avg_price}")
                         elif "error" in order_info:
                             processed_response["status"] = OrderStatus.REJECTED.value
                             processed_response["error_message"] = order_info.get("error")
-                            logger.error(f"Order placement failed (API Error): {order_info.get('error')}")
+                            self.orders_logger.error(f"Order placement failed (API Error): {order_info.get('error')}")
                         else:
-                            logger.warning(f"Order placed but status unclear: {order_info}")
+                            self.orders_logger.warning(f"Order placed but status unclear: {order_info}")
                             processed_response["status"] = "ACCEPTED_UNKNOWN_STATUS"
                 elif isinstance(response, dict) and response.get("status") == "error":
                     processed_response["status"] = OrderStatus.REJECTED.value
                     processed_response["error_message"] = response.get("error")
-                    logger.error(f"Order placement failed (API Error): {response.get('error')}")
+                    self.orders_logger.error(f"Order placement failed (API Error): {response.get('error')}")
                 else:
-                    logger.warning(f"Unrecognized order response format: {response}")
+                    self.orders_logger.warning(f"Unrecognized order response format: {response}")
                 # --- End Process Response ---
 
                 return processed_response
 
             # --- Exception Handling for SDK/Network Call ---
             except requests.exceptions.RequestException as e:
-                 logger.error(f"HTTP request failed during order placement for {symbol}: {e}")
+                 self.orders_logger.error(f"HTTP request failed during order placement for {symbol}: {e}")
                  if isinstance(e, requests.exceptions.Timeout):
                      raise HyperliquidTimeoutError(f"Request timed out: {e}")
                  elif isinstance(e, requests.exceptions.ConnectionError):
@@ -1159,10 +1160,10 @@ class HyperliquidConnector(BaseConnector):
                  else:
                      err_response = getattr(e, 'response', None)
                      if err_response is not None:
-                         logger.error(f"API Error Response: Status={err_response.status_code}, Body={err_response.text}")
+                         self.orders_logger.error(f"API Error Response: Status={err_response.status_code}, Body={err_response.text}")
                      raise HyperliquidAPIError(f"API error placing order: {e}")
             except Exception as sdk_e: # Catch other SDK errors
-                 logger.error(f"Hyperliquid SDK error placing order for {symbol}: {sdk_e}", exc_info=True)
+                 self.orders_logger.error(f"Hyperliquid SDK error placing order for {symbol}: {sdk_e}", exc_info=True)
                  return {
                      "status": OrderStatus.REJECTED.value,
                      "symbol": symbol,
@@ -1174,10 +1175,10 @@ class HyperliquidConnector(BaseConnector):
 
         # Catch errors from validation or connection steps *before* the SDK call attempt
         except (ValueError, HyperliquidConnectionError, HyperliquidTimeoutError, HyperliquidAPIError) as e:
-            logger.error(f"Order placement validation or connection error for {symbol}: {e}")
+            self.orders_logger.error(f"Order placement validation or connection error for {symbol}: {e}")
             raise # Re-raise specific known errors
         except Exception as e: # Catch any other unexpected errors during preparation
-            logger.error(f"Unexpected error during order preparation for {symbol}: {e}", exc_info=True)
+            self.orders_logger.error(f"Unexpected error during order preparation for {symbol}: {e}", exc_info=True)
             return {
                  "status": OrderStatus.REJECTED.value,
                  "symbol": symbol,
@@ -1197,43 +1198,45 @@ class HyperliquidConnector(BaseConnector):
             Dict[str, Any] indicating success or failure.
         """
         if not self.exchange:
-            logger.error("Not connected to Hyperliquid. Cannot cancel order.")
+            self.orders_logger.error("Not connected to Hyperliquid. Cannot cancel order.")
             raise HyperliquidConnectionError("Not connected to Hyperliquid.")
 
         if not symbol:
-             logger.error("Symbol is required to cancel orders on Hyperliquid.")
+             self.orders_logger.error("Symbol is required to cancel orders on Hyperliquid.")
              raise ValueError("Symbol is required for cancel_order on Hyperliquid")
 
-        logger.info(f"Attempting to cancel order {order_id} for symbol {symbol}")
+        self.orders_logger.info(f"Attempting to cancel order {order_id} for symbol {symbol}")
         try:
             # Hyperliquid API requires symbol (coin) and order ID (oid)
             response = self.exchange.cancel(self.translate_symbol(symbol), int(order_id))
-            logger.info(f"Cancel order response for {order_id}: {response}")
+            self.orders_logger.info(f"Cancel order response for {order_id}: {response}")
 
             # Process response
             if isinstance(response, dict) and response.get("status") == "ok":
-                 logger.info(f"Successfully initiated cancellation for order {order_id}")
+                 self.orders_logger.info(f"Successfully initiated cancellation for order {order_id}")
                  # Check nested status if needed
                  statuses = response.get("response", {}).get("data", {}).get("statuses", [])
                  if statuses and statuses[0] == "cancelled":
+                      self.orders_logger.info(f"Order {order_id} cancelled successfully")
                       return {"status": "success", "order_id": order_id, "message": "Order cancelled successfully."}
                  else:
                       # Might be pending cancellation or another state
+                      self.orders_logger.info(f"Order {order_id} cancellation request accepted, awaiting confirmation")
                       return {"status": "pending", "order_id": order_id, "message": "Cancellation request accepted.", "raw_response": response}
             elif isinstance(response, dict) and response.get("status") == "error":
                  error_msg = response.get("error", "Unknown API error")
-                 logger.error(f"Failed to cancel order {order_id}: {error_msg}")
+                 self.orders_logger.error(f"Failed to cancel order {order_id}: {error_msg}")
                  return {"status": "error", "order_id": order_id, "error": error_msg}
             else:
-                 logger.warning(f"Unrecognized cancel response format for order {order_id}: {response}")
+                 self.orders_logger.warning(f"Unrecognized cancel response format for order {order_id}: {response}")
                  return {"status": "unknown", "order_id": order_id, "raw_response": response}
 
         except ValueError as e:
             # Handle cases like invalid order_id format
-            logger.error(f"Invalid input for cancelling order {order_id}: {e}")
+            self.orders_logger.error(f"Invalid input for cancelling order {order_id}: {e}")
             return {"status": "error", "order_id": order_id, "error": f"Invalid input: {e}"}
         except Exception as e:
-            logger.error(f"Unexpected error cancelling order {order_id}: {e}", exc_info=True)
+            self.orders_logger.error(f"Unexpected error cancelling order {order_id}: {e}", exc_info=True)
             return {"status": "error", "order_id": order_id, "error": f"Unexpected error: {str(e)}"}
 
     def get_order_status(self, order_id: str) -> Dict[str, Any]:
@@ -1247,10 +1250,12 @@ class HyperliquidConnector(BaseConnector):
             Dict[str, Any]: Order status and details
         """
         if not self.info:
+            self.orders_logger.error("Not connected to Hyperliquid. Cannot get order status.")
             raise ConnectionError("Not connected to Hyperliquid. Call connect() first.")
 
         try:
             # Check open orders
+            self.orders_logger.debug(f"Checking status of order {order_id}")
             open_orders = self.exchange.open_orders()
 
             for order in open_orders:
@@ -1258,7 +1263,7 @@ class HyperliquidConnector(BaseConnector):
                     meta = self.info.meta()
                     coin_name = meta["universe"][order["coin"]]["name"]
 
-                    return {
+                    order_details = {
                         "order_id": order_id,
                         "symbol": coin_name,
                         "side": "BUY" if order.get("is_buy") else "SELL",
@@ -1269,9 +1274,11 @@ class HyperliquidConnector(BaseConnector):
                         "status": OrderStatus.OPEN.value,
                         "timestamp": int(time.time() * 1000),
                     }
+                    self.orders_logger.info(f"Found open order {order_id}: {json.dumps(order_details)}")
+                    return order_details
 
             # Order not found in open orders, could be filled or canceled
-            # In a real implementation, you might check order history here
+            self.orders_logger.info(f"Order {order_id} not found in open orders, assuming filled")
             return {
                 "order_id": order_id,
                 "status": OrderStatus.FILLED.value,  # Assumption, should check history
@@ -1279,7 +1286,7 @@ class HyperliquidConnector(BaseConnector):
             }
 
         except Exception as e:
-            logger.error(f"Failed to get order status for {order_id}: {e}")
+            self.orders_logger.error(f"Failed to get order status for {order_id}: {e}")
             return {"order_id": order_id, "status": "UNKNOWN", "error": str(e)}
 
     def close_position(

@@ -154,6 +154,14 @@ def _register_metrics():
         registry=custom_registry
     )
 
+    # Historical candle data metrics with timestamps
+    historical_candle_data = Gauge(
+        "spark_stacker_historical_candle",
+        "Historical candle data with timestamps",
+        ["market", "timeframe", "field", "timestamp"],
+        registry=custom_registry
+    )
+
     # MACD indicator metrics
     macd_values = Gauge(
         "spark_stacker_macd_values",
@@ -364,7 +372,7 @@ def update_mvp_pnl(position_type: str, pnl: float) -> None:
         pass  # Metric likely not registered
     _update_uptime()
 
-def update_candle_data(market: str, timeframe: str, field: str, value: float) -> None:
+def update_candle_data(market: str, timeframe: str, field: str, value: float, timestamp: int = None) -> None:
     """
     Update candle data metrics.
 
@@ -373,21 +381,34 @@ def update_candle_data(market: str, timeframe: str, field: str, value: float) ->
         timeframe: Time interval (e.g., '1m', '5m', '1h')
         field: Candle field ('open', 'high', 'low', 'close', 'volume')
         value: Field value
+        timestamp: Optional timestamp for historical data (milliseconds since epoch)
     """
     logger = logging.getLogger(__name__)
-    logger.info(f"Setting candle data metric: market={market}, timeframe={timeframe}, field={field}, value={value}")
+    # Timestamps are used for logging but not stored differently in Prometheus
+    # Prometheus will use its own scrape time
+    actual_ts = timestamp if timestamp else int(time.time() * 1000)
+
+    logger.debug(f"Setting candle data metric: market={market}, timeframe={timeframe}, field={field}, value={value}, timestamp={actual_ts}")
 
     try:
-        candle_data.labels(market=market, timeframe=timeframe, field=field).set(value)
-        logger.info(f"Successfully set candle data metric for {market}/{timeframe}/{field}")
-    except NameError:
-        logger.error(f"Failed to set candle data: NameError (metric not registered)")
-        pass  # Metric likely not registered
+        # Set the same metric regardless of whether it's historical or real-time
+        # Prometheus treats all updates the same - it will use its own scrape time
+        labels = {"market": market, "timeframe": timeframe, "field": field}
+        candle_data.labels(**labels).set(value)
+
+        # Log based on whether this is historical or real-time data
+        if timestamp:
+            logger.debug(f"Published historical candle data for {market}/{timeframe}/{field}: {value} @ {actual_ts}")
+        else:
+            logger.debug(f"Published real-time candle data for {market}/{timeframe}/{field}: {value}")
+    except NameError as ne:
+        logger.error(f"Failed to set candle data: NameError - {ne}")
     except Exception as e:
-        logger.error(f"Failed to set candle data: {e}")
+        logger.error(f"Failed to set candle data: {e}", exc_info=True)
+
     _update_uptime()
 
-def update_macd_indicator(market: str, timeframe: str, component: str, value: float) -> None:
+def update_macd_indicator(market: str, timeframe: str, component: str, value: float, timestamp: int = None) -> None:
     """
     Update MACD indicator metrics.
 
@@ -396,11 +417,31 @@ def update_macd_indicator(market: str, timeframe: str, component: str, value: fl
         timeframe: Time interval (e.g., '1m', '5m', '1h')
         component: Component name ('macd_line', 'signal_line', 'histogram')
         value: Component value
+        timestamp: Optional timestamp for historical data (milliseconds since epoch)
     """
+    logger = logging.getLogger(__name__)
+    # Timestamps are used for logging but not stored differently in Prometheus
+    # Prometheus will use its own scrape time
+    actual_ts = timestamp if timestamp else int(time.time() * 1000)
+
+    logger.debug(f"Setting MACD metric: market={market}, timeframe={timeframe}, component={component}, value={value}, timestamp={actual_ts}")
+
     try:
-        macd_values.labels(market=market, timeframe=timeframe, component=component).set(value)
-    except NameError:
-        pass  # Metric likely not registered
+        # Set the same metric regardless of whether it's historical or real-time
+        # Prometheus treats all updates the same - it will use its own scrape time
+        labels = {"market": market, "timeframe": timeframe, "component": component}
+        macd_values.labels(**labels).set(value)
+
+        # Log based on whether this is historical or real-time data
+        if timestamp:
+            logger.debug(f"Published historical MACD data for {market}/{timeframe}/{component}: {value} @ {actual_ts}")
+        else:
+            logger.debug(f"Published real-time MACD data for {market}/{timeframe}/{component}: {value}")
+    except NameError as ne:
+        logger.error(f"Failed to update MACD indicator: NameError - {ne}")
+    except Exception as e:
+        logger.error(f"Failed to update MACD indicator: {e}", exc_info=True)
+
     _update_uptime()
 
 def update_mvp_signal_state(market: str, timeframe: str, state: int) -> None:
@@ -417,3 +458,51 @@ def update_mvp_signal_state(market: str, timeframe: str, state: int) -> None:
     except NameError:
         pass  # Metric likely not registered
     _update_uptime()
+
+# Historical metrics track function for Prometheus
+def _create_historical_metrics_tracker():
+    """Create a function to track historical metrics with timestamps for Prometheus"""
+    import time
+
+    from prometheus_client import Info
+
+    # Store last timestamp for each metric type to avoid duplicates
+    last_timestamps = {}
+
+    def _set_metric_with_timestamp(metric, labels, value, timestamp=None):
+        """Set a metric value with optional timestamp"""
+        logger = logging.getLogger(__name__)
+
+        try:
+            if timestamp is None:
+                # Use current time if no timestamp provided
+                metric.labels(**labels).set(value)
+                logger.debug(f"Set real-time metric {metric._name} with labels {labels}")
+            else:
+                # Create key for this specific metric + labels
+                ts_key = f"{metric._name}:{str(labels)}"
+
+                # Ensure we don't publish duplicate timestamps which can cause issues
+                if ts_key in last_timestamps and timestamp <= last_timestamps[ts_key]:
+                    timestamp = last_timestamps[ts_key] + 1000  # Add 1 second
+
+                # Store the timestamp
+                last_timestamps[ts_key] = timestamp
+
+                # Use the same metric for historical data
+                # Just set the metric like normal - don't create specialized historical gauges
+                metric.labels(**labels).set(value)
+
+                logger.info(f"Set historical {metric._name} with labels {labels} for timestamp {timestamp}")
+        except Exception as e:
+            logger.error(f"Error setting metric with timestamp: {e}")
+            # Fallback: just set the value without timestamp
+            try:
+                metric.labels(**labels).set(value)
+            except Exception as fallback_e:
+                logger.error(f"Error in fallback metric setting: {fallback_e}")
+
+    return _set_metric_with_timestamp
+
+# Create the historical metrics tracker
+set_metric_with_timestamp = _create_historical_metrics_tracker()

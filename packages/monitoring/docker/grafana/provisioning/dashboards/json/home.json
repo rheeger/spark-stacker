@@ -22,6 +22,111 @@
   "liveNow": false,
   "panels": [
     {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [ { "options": { "0": { "color": "red", "index": 0, "text": "Down" }, "1": { "color": "green", "index": 1, "text": "Up" } }, "type": "value" } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }, "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 3, "x": 0, "y": 0 }, "id": 100,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "10.1.0",
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "up{job=\"spark-stacker\"}", "instant": true, "legendFormat": "_hidden_", "refId": "A" } ],
+      "title": "Spark Stacker", "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [ { "options": { "0": { "color": "red", "index": 0, "text": "Down" }, "1": { "color": "green", "index": 1, "text": "Up" } }, "type": "value" } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }, "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 3, "x": 3, "y": 0 }, "id": 101,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "10.1.0",
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "up{job=\"log-metrics\"}", "instant": true, "legendFormat": "_hidden_", "refId": "A" } ],
+      "title": "Log Metrics", "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [ { "options": { "0": { "color": "red", "index": 0, "text": "Down" }, "1": { "color": "green", "index": 1, "text": "Up" } }, "type": "value" } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }, "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 3, "x": 6, "y": 0 }, "id": 102,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "10.1.0",
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "up{job=\"cadvisor\"}", "instant": true, "legendFormat": "_hidden_", "refId": "A" } ],
+      "title": "Cadvisor", "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [ { "options": { "0": { "color": "red", "index": 0, "text": "Down" }, "1": { "color": "green", "index": 1, "text": "Up" } }, "type": "value" } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }, "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 3, "x": 9, "y": 0 }, "id": 103,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "10.1.0",
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "up{job=\"prometheus\"}", "instant": true, "legendFormat": "_hidden_", "refId": "A" } ],
+      "title": "Prometheus", "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [ { "options": { "0": { "color": "red", "index": 0, "text": "Down" }, "1": { "color": "green", "index": 1, "text": "Up" } }, "type": "value" } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }, "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 3, "x": 12, "y": 0 }, "id": 104,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "10.1.0",
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "up{job=\"node\"}", "instant": true, "legendFormat": "_hidden_", "refId": "A" } ],
+      "title": "Node Exporter", "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [ { "options": { "0": { "color": "red", "index": 0, "text": "Down" }, "1": { "color": "green", "index": 1, "text": "Up" } }, "type": "value" } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }, "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 3, "x": 15, "y": 0 }, "id": 105,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "10.1.0",
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "up{job=\"loki\"}", "instant": true, "legendFormat": "_hidden_", "refId": "A" } ],
+      "title": "Loki", "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [ { "options": { "0": { "color": "red", "index": 0, "text": "Down" }, "1": { "color": "green", "index": 1, "text": "Up" } }, "type": "value" } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }, "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 3, "x": 18, "y": 0 }, "id": 106,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "10.1.0",
+      "targets": [ { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "up{job=\"promtail\"}", "instant": true, "legendFormat": "_hidden_", "refId": "A" } ],
+      "title": "Promtail", "type": "stat"
+    },
+    {
       "datasource": {
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
@@ -44,6 +149,12 @@
           }
         },
         "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 8
       },
       "id": 17,
       "options": {
@@ -104,7 +215,7 @@
         "h": 3,
         "w": 6,
         "x": 6,
-        "y": 0
+        "y": 8
       },
       "id": 18,
       "options": {
@@ -166,7 +277,7 @@
         "h": 3,
         "w": 4,
         "x": 12,
-        "y": 0
+        "y": 8
       },
       "id": 21,
       "options": {
@@ -233,11 +344,11 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 6,
-        "y": 3
+        "w": 4,
+        "x": 16,
+        "y": 8
       },
-      "id": 18,
+      "id": 22,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -260,7 +371,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "spark_stacker_market_count{exchange=\\\"coinbase\\\"}",
+          "expr": "spark_stacker_market_count{exchange=\"coinbase\"}",
           "instant": true,
           "legendFormat": "__auto",
           "range": true,
@@ -299,7 +410,7 @@
         "h": 3,
         "w": 4,
         "x": 20,
-        "y": 0
+        "y": 8
       },
       "id": 23,
       "options": {
@@ -368,7 +479,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 3
+        "y": 9
       },
       "id": 6,
       "options": {
@@ -438,7 +549,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 3
+        "y": 9
       },
       "id": 7,
       "options": {
@@ -504,7 +615,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 15
       },
       "id": 14,
       "options": {
@@ -642,7 +753,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 15
       },
       "id": 5,
       "options": {
@@ -680,633 +791,6 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "description": "Memory usage by container in GB",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 8,
-        "x": 0,
-        "y": 19
-      },
-      "id": 3,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "container_memory_working_set_bytes{id=~\"/docker/.*\"}",
-          "legendFormat": "{{id}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Memory Usage by Container",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 8,
-        "x": 8,
-        "y": 19
-      },
-      "id": 4,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "sum by(container_name) (rate(container_cpu_usage_seconds_total[1m])) * 100",
-          "legendFormat": "{{container_name}}",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total[1m])) * 100",
-          "hide": false,
-          "legendFormat": "{{name}}",
-          "refId": "B"
-        }
-      ],
-      "title": "CPU Usage by Container",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "API Latency from all connectors - NOTE: No API calls have been recorded yet. Panel will populate once API calls are made.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 8,
-        "x": 16,
-        "y": 19
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "spark_stacker_api_latency_seconds_sum",
-          "legendFormat": "Sum: {{exchange}}/{{endpoint}}",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "spark_stacker_api_latency_seconds_count",
-          "hide": false,
-          "legendFormat": "Count: {{exchange}}/{{endpoint}}",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "container_cpu_usage_seconds_total{id=~\"/docker/.*\"} * 0",
-          "hide": true,
-          "legendFormat": "Placeholder data - API not called yet",
-          "refId": "C"
-        }
-      ],
-      "title": "API Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Websocket ping/pong latency",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 29
-      },
-      "id": 12,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "spark_stacker_websocket_ping_latency_ms",
-          "legendFormat": "{{exchange}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Websocket Ping Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Connection errors by type",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 29
-      },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": [
-            "sum"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "increase(spark_stacker_connection_errors_total[5m])",
-          "legendFormat": "{{error_type}} ({{exchange}})",
-          "refId": "A"
-        }
-      ],
-      "title": "Connection Errors (5m)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Last successful or failed exchange connection",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Status"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "FAILURE": {
-                        "color": "red",
-                        "index": 1
-                      },
-                      "SUCCESS": {
-                        "color": "green",
-                        "index": 0
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 24,
-        "x": 0,
-        "y": 39
-      },
-      "id": 16,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "spark_stacker_last_connection_status",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "{{exchange}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Last Connection Status",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": false
-            },
-            "indexByName": {},
-            "renameByName": {
-              "Value": "Status"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Status of exchange connections",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1346,10 +830,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 0,
-        "y": 44
+        "h": 2,
+        "w": 3,
+        "x": 21,
+        "y": 0
       },
       "id": 10,
       "options": {
@@ -1387,90 +871,10 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "Down"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "Up"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 54
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "up",
-          "instant": true,
-          "legendFormat": "{{job}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Container Status",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
       "title": "MACD (8/21/5) - ETH-USD 1m (Hyperliquid)",
       "type": "timeseries",
       "id": 24,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 62 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 68 },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -1483,58 +887,142 @@
           "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
         },
         "overrides": [
-           {
-            "matcher": { "id": "byName", "options": "Histogram" },
+          {
+            "matcher": { "id": "byName", "options": "Positive Histogram" },
             "properties": [
               { "id": "custom.drawStyle", "value": "bars" },
               { "id": "custom.lineWidth", "value": 1 },
-              { "id": "custom.fillOpacity", "value": 30 },
-              { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed"} }
+              { "id": "custom.fillOpacity", "value": 50 },
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed"} },
+              { "id": "custom.axisPlacement", "value": "right" }
             ]
           },
           {
-             "matcher": { "id": "byName", "options": "MACD Line" },
-             "properties": [ { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed"} } ]
+            "matcher": { "id": "byName", "options": "Negative Histogram" },
+            "properties": [
+              { "id": "custom.drawStyle", "value": "bars" },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.fillOpacity", "value": 50 },
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed"} },
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
           },
           {
-             "matcher": { "id": "byName", "options": "Signal Line" },
-             "properties": [ { "id": "color", "value": { "fixedColor": "purple", "mode": "fixed"} } ]
+            "matcher": { "id": "byName", "options": "MACD" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed"} },
+              { "id": "custom.axisPlacement", "value": "left" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Signal" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "purple", "mode": "fixed"} },
+              { "id": "custom.axisPlacement", "value": "left" }
+            ]
           }
         ]
       },
-      "options": { "tooltip": { "mode": "multi", "sort": "none" }, "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "minStep": 1
+      },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_indicator_value{indicator=\"MACD\", component=\"main\", market=\"ETH-USD\", timeframe=\"1m\", exchange=\"hyperliquid\"}", "legendFormat": "MACD Line", "refId": "A" },
-        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_indicator_value{indicator=\"MACD\", component=\"signal\", market=\"ETH-USD\", timeframe=\"1m\", exchange=\"hyperliquid\"}", "legendFormat": "Signal Line", "refId": "B" },
-        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_indicator_value{indicator=\"MACD\", component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\", exchange=\"hyperliquid\"}", "legendFormat": "Histogram", "refId": "C" }
-      ]
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "spark_stacker_macd_values{component=\"macd_line\", market=\"ETH-USD\", timeframe=\"1m\"}",
+          "legendFormat": "MACD",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "spark_stacker_macd_values{component=\"signal_line\", market=\"ETH-USD\", timeframe=\"1m\"}",
+          "legendFormat": "Signal",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} > 0",
+          "legendFormat": "Positive Histogram",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} <= 0",
+          "legendFormat": "Negative Histogram",
+          "refId": "D"
+        }
+      ],
+      "description": "This panel will show MACD indicator data when available. The spark_stacker_macd_values metric needs to be implemented."
     },
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
         "title": "ETH-USD Price 1m (Hyperliquid)",
-        "type": "timeseries",
+        "type": "candlestick",
         "id": 25,
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 62 },
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 68 },
         "fieldConfig": {
           "defaults": {
             "color": { "mode": "palette-classic" },
-            "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "gradientMode": "opacity" },
-            "unit": "currencyUSD",
+            "mappings": [],
+            "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+            "unit": "none",
             "decimals": 2
           },
           "overrides": []
         },
-        "options": { "tooltip": { "mode": "single", "sort": "none" }, "legend": { "displayMode": "hidden" } },
+        "options": {
+          "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+          "open": { "field": "Open" },
+          "high": { "field": "High" },
+          "low": { "field": "Low" },
+          "close": { "field": "Close" },
+          "includeAllFields": false,
+          "candleStyle": "candles",
+          "mode": "changes",
+          "colorStrategy": "open-close",
+          "minStep": 1,
+          "colors": {
+            "up": "green",
+            "down": "red",
+            "flat": "gray"
+          }
+        },
         "targets": [
-            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_candle_data{exchange=\"hyperliquid\", market=\"ETH-USD\", timeframe=\"1m\", type=\"close\"}", "legendFormat": "Close Price", "refId": "A" }
-        ]
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"close\"}",
+              "legendFormat": "Close",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"open\"}",
+              "legendFormat": "Open",
+              "refId": "B"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"high\"}",
+              "legendFormat": "High",
+              "refId": "C"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"low\"}",
+              "legendFormat": "Low",
+              "refId": "D"
+            }
+        ],
+        "description": "Candlestick chart showing ETH-USD price movement"
     },
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
         "title": "MVP Signal (MACD 1m)",
         "type": "stat",
         "id": 26,
-        "gridPos": { "h": 4, "w": 4, "x": 0, "y": 70 },
+        "gridPos": { "h": 4, "w": 4, "x": 0, "y": 76 },
         "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "auto" },
         "pluginVersion": "10.1.0",
         "fieldConfig": {
@@ -1550,85 +1038,76 @@
             "overrides": []
         },
         "targets": [
-            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "last_over_time(spark_stacker_signal_count{indicator=\"MACD\", market=\"ETH-USD\", timeframe=\"1m\", exchange=\"hyperliquid\"}[1m])", "instant": true, "refId": "A" }
-        ]
+            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "max(spark_stacker_macd_signal_state{market=\"ETH-USD\", timeframe=\"1m\"}) or vector(0)", "instant": true, "legendFormat": "MACD Signal", "refId": "A" }
+        ],
+        "description": "This panel will show MACD signals when available. The spark_stacker_macd_signal_state metric needs to be implemented."
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "title": "MVP Strategy P&L (%)",
-      "type": "gauge",
-      "id": 27,
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 70 },
-       "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 0 }, { "color": "green", "value": 0.0001 } ]
-          },
-          "unit": "percent",
-           "decimals": 2
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "title": "MVP Strategy P&L %",
+        "type": "gauge",
+        "id": 31,
+        "gridPos": { "h": 4, "w": 4, "x": 4, "y": 76 },
+        "fieldConfig": {
+            "defaults": {
+                "color": { "mode": "thresholds" },
+                "mappings": [],
+                "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                        { "color": "red", "value": null },
+                        { "color": "orange", "value": 0 },
+                        { "color": "green", "value": 0.0001 }
+                    ]
+                },
+                "unit": "percent",
+                "decimals": 2
+            },
+            "overrides": []
         },
-        "overrides": []
-      },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true },
-      "targets": [
-        { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_pnl_percent{strategy=\"macd_mvp\", market=\"ETH-USD\", exchange=\"hyperliquid\"}", "legendFormat": "MVP P&L", "refId": "A" }
-      ]
+        "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true },
+        "targets": [
+            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_pnl_percent{position_type=\"main\"} or vector(0)", "legendFormat": "P&L %", "refId": "A" }
+        ],
+        "description": "This panel will show P&L percentage data when available. The spark_stacker_pnl_percent metric needs to be implemented."
     },
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
         "title": "MVP Trades (5m rate)",
         "type": "stat",
-        "id": 28,
-        "gridPos": { "h": 4, "w": 4, "x": 8, "y": 70 },
+        "id": 32,
+        "gridPos": { "h": 4, "w": 4, "x": 8, "y": 76 },
         "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "value", "colorMode": "value", "graphMode": "none", "justifyMode": "auto" },
          "fieldConfig": {
             "defaults": { "unit": "short", "color": { "mode":"thresholds", "fixedColor": "blue" } },
             "overrides": []
         },
         "targets": [
-            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "sum(rate(spark_stacker_trades_total{strategy=\"macd_mvp\", market=\"ETH-USD\", exchange=\"hyperliquid\"}[5m]))", "instant": true, "refId": "A" }
-        ]
-    },
-    {
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-        "title": "MVP Signal Latency",
-        "type": "stat",
-        "id": 29,
-        "gridPos": { "h": 4, "w": 4, "x": 12, "y": 70 },
-        "options": { "reduceOptions": { "calcs": ["mean"], "fields": "", "values": false }, "orientation": "auto", "textMode": "value", "colorMode": "value", "graphMode": "area", "justifyMode": "auto" },
-        "fieldConfig": {
-            "defaults": { "unit": "ms", "color": { "mode":"thresholds", "fixedColor": "blue" }, "decimals": 0 },
-            "overrides": []
-        },
-        "targets": [
-            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "avg_over_time(spark_stacker_signal_latency_ms{strategy=\"macd_mvp\", market=\"ETH-USD\", exchange=\"hyperliquid\"}[5m])", "refId": "A" }
-        ]
+            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "sum(rate(spark_stacker_mvp_trades_total{position_type=\"main\"}[5m])) or vector(0)", "instant": true, "refId": "A" }
+        ],
+        "description": "This panel will show MVP trade rate data when available. The spark_stacker_mvp_trades_total metric needs to be implemented."
     },
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
         "title": "MVP Active Positions (Hyperliquid ETH-USD)",
         "type": "table",
         "id": 30,
-        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 70 },
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 76 },
         "options": { "cellHeight": "sm", "showHeader": true, "footer": { "show": false } },
         "pluginVersion": "10.1.0",
         "fieldConfig": {
             "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
             "overrides": [
-              { "matcher": { "id": "byName", "options": "size" }, "properties": [{ "id": "unit", "value": "short" }, {"id": "decimals", "value": 4 }] },
-              { "matcher": { "id": "byName", "options": "side" }, "properties": [{ "id": "mappings", "value": [ { "options": { "long": { "color": "green", "index": 0 }, "short": { "color": "red", "index": 1 } }, "type": "value" } ]}, {"id": "custom.cellOptions", "value": { "type": "color-text"} }]}
+              { "matcher": { "id": "byName", "options": "Size" }, "properties": [{ "id": "unit", "value": "short" }, {"id": "decimals", "value": 4 }] },
+              { "matcher": { "id": "byName", "options": "Side" }, "properties": [{ "id": "mappings", "value": [ { "options": { "buy": { "color": "green", "index": 0 }, "sell": { "color": "red", "index": 1 } }, "type": "value" } ]}, {"id": "custom.cellOptions", "value": { "type": "color-text"} }]}
             ]
         },
         "targets": [
-            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_active_positions{strategy=\"macd_mvp\", market=\"ETH-USD\", exchange=\"hyperliquid\"}", "format": "table", "instant": true, "refId": "A" }
+            { "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "expr": "spark_stacker_mvp_position_size or vector(0)", "format": "table", "instant": true, "refId": "A" }
         ],
+        "description": "This panel will show MVP position data when available. The spark_stacker_mvp_position_size metric needs to be implemented.",
         "transformations": [
-          { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "exchange": true, "market": true, "strategy": true, "indicator": true, "timeframe": true, "Value": true }, "indexByName": { "position_type": 0, "side": 1, "size": 2 }, "renameByName": { "Value": "RawValue", "position_type": "Type", "side": "Side", "size": "Size"} } }
+          { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true }, "indexByName": { "position_type": 0, "side": 1, "Value": 2 }, "renameByName": { "Value": "Size", "position_type": "Type", "side": "Side"} } }
         ]
     }
   ],
@@ -1640,7 +1119,7 @@
     "list": []
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},

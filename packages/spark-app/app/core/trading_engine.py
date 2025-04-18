@@ -1,17 +1,24 @@
+import asyncio
 import logging
+import re
+import signal as signal_module
+import sys
 import threading
 import time
+from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+import requests
 from connectors.base_connector import (BaseConnector, MarketType, OrderSide,
                                        OrderStatus, OrderType)
 from indicators.base_indicator import Signal, SignalDirection
 from metrics import (EXCHANGE_HYPERLIQUID, MARKET_ETH_USD, STRATEGY_MVP,
-                     record_mvp_signal_latency, record_mvp_trade,
+                     record_mvp_signal_latency, record_mvp_trade, record_trade,
                      update_mvp_pnl, update_mvp_position_size)
 from risk_management.risk_manager import RiskManager
+from utils.config import AppConfig as Config
 
 # --- End Metrics Import ---
 
@@ -196,15 +203,24 @@ class TradingEngine:
             self.state = TradingState.SHUTTING_DOWN
             logger.info("Shutting down trading engine...")
 
+            # Close all positions
+            try:
+                if self.active_trades:
+                    logger.info(f"Closing all positions before shutdown ({len(self.active_trades)} active trades)")
+                    close_success = self.close_all_positions()
+                    if close_success:
+                        logger.info("Successfully closed all positions during shutdown")
+                    else:
+                        logger.warning("Some positions may not have been closed properly during shutdown")
+            except Exception as e:
+                logger.error(f"Error closing positions during shutdown: {e}")
+
             # Signal monitor thread to stop
             self.stop_event.set()
 
             # Wait for monitor thread to finish
             if self.monitor_thread and self.monitor_thread.is_alive():
                 self.monitor_thread.join(timeout=10)
-
-            # Close all positions if requested
-            # (This could be made optional based on a parameter)
 
             self.state = TradingState.IDLE
             logger.info("Trading engine stopped")
@@ -285,27 +301,75 @@ class TradingEngine:
         is_active = symbol in self.active_trades
 
         if is_active:
-            # Don't reprocess active signals in the same direction
+            # First check if there's a position from the exchange
+            try:
+                main_positions = self.main_connector.get_positions()
+                exchange_position = None
+
+                for pos in main_positions:
+                    if pos.get("symbol") == symbol:
+                        exchange_position = pos
+                        break
+
+                if exchange_position:
+                    exchange_size = abs(exchange_position.get("size", 0))
+                    exchange_side = exchange_position.get("side", "").upper()
+
+                    # If exchange position exists, use that for our check
+                    if exchange_size > 0:
+                        # Convert exchange side format to match signal direction format
+                        if exchange_side == "LONG" or exchange_side == "BUY":
+                            exchange_side = "BUY"
+                        elif exchange_side == "SHORT" or exchange_side == "SELL":
+                            exchange_side = "SELL"
+
+                        logger.info(f"Found exchange position: {symbol}, size={exchange_size}, side={exchange_side}")
+
+                        # If signal is in same direction as exchange position, log but continue
+                        if exchange_side == signal.direction.value:
+                            logger.info(f"Received signal in same direction as existing position for {symbol}, continuing with processing")
+                            # We'll handle this case in the next section - we'll close and reopen
+                        else:
+                            # Signal is in opposite direction - close existing position first
+                            logger.info(f"Signal direction ({signal.direction.value}) is opposite to current exchange position ({exchange_side})")
+                            logger.info(f"Closing existing position for {symbol} to reverse direction")
+
+                            # Close position but don't remove from active_trades so we can immediately flip it
+                            close_result = await self._close_position_without_removal(symbol, "Signal Direction Changed")
+
+                            if not close_result:
+                                logger.warning(f"Failed to close position for {symbol}, proceeding with new signal anyway")
+                                # Continue processing to force close/reopen
+
+                # At this point either:
+                # 1. We found no exchange position
+                # 2. We tried to close and failed
+                # 3. We have a signal in the same direction as current position
+                # In all cases, we proceed with closing any tracked positions and opening a new one
+            except Exception as e:
+                logger.error(f"Error checking exchange position: {e}")
+                # Continue with local records
+
+            # When a position is tracked in active_trades, but signal direction matches
             active_side = self.active_trades[symbol].get("main_position", {}).get("side")
             if active_side and active_side == signal.direction.value:
-                logger.info(
-                    f"Ignoring signal for {symbol} - already have active {active_side} position"
-                )
-                return False
+                logger.info(f"Received duplicate signal for {symbol} - closing and reopening position")
+                # Force close current position to handle "stuck" scenarios or multiple signals
+                close_result = await self._close_position_without_removal(symbol, "Multiple Signals - Resetting Position")
+                if not close_result:
+                    logger.warning(f"Failed to close existing position for {symbol}, but proceeding with new position")
+                # Continue processing to open a new position
             else:
-                # This is a reverse signal - should close existing position first
-                logger.info(
-                    f"Signal direction ({signal.direction.value}) is opposite to current position ({active_side})"
-                )
-                # Close existing position if it's in opposite direction
+                # This is a reverse signal - close existing position first
+                logger.info(f"Signal direction ({signal.direction.value}) is opposite to tracked position ({active_side})")
                 logger.info(f"Closing existing position for {symbol} to reverse direction")
-                if await self.close_position(symbol, "Signal Direction Changed"):
-                    logger.debug(f"Closed position for {symbol} successfully, waiting for next cycle to open new position")
-                    # Return here, let the next signal cycle open a new position after this one is closed
-                    return True
-                else:
-                    logger.warning(f"Failed to close position for {symbol}, aborting signal processing")
-                    return False
+
+                # Close position but don't remove from active_trades so we can immediately flip it
+                close_result = await self._close_position_without_removal(symbol, "Signal Direction Changed")
+
+                if not close_result:
+                    logger.warning(f"Failed to close position for {symbol}, proceeding with new signal anyway")
+                    # Continue processing to force a new position
 
         # Check if we're simulating or real trading, and if we have valid signal
         logger.info(f"Processing signal: {signal}")
@@ -406,6 +470,17 @@ class TradingEngine:
 
         if not is_valid:
             logger.warning(f"Trade validation failed: {reason}")
+
+            # Record failed trade in metrics
+            try:
+                record_trade(
+                    result="failure",
+                    exchange=self.main_connector.name,
+                    side=main_order_side.value.lower()
+                )
+            except Exception as e:
+                logger.error(f"Failed to record failed trade in metrics: {e}", exc_info=True)
+
             return False
 
         # Calculate hedge position parameters if hedging is enabled and possible
@@ -420,7 +495,7 @@ class TradingEngine:
                 ) = self.risk_manager.calculate_hedge_parameters(
                     main_position_size=main_position_size,
                     main_leverage=adjusted_main_leverage,
-                    hedge_ratio=0.2,
+                    hedge_ratio=0.0 if not self.enable_hedging else 0.2,
                     max_hedge_leverage=5.0
                     if self.hedge_connector.supports_derivatives
                     else 1.0,
@@ -513,7 +588,27 @@ class TradingEngine:
 
                 logger.debug(f"Final trade record: {trade_record}")
                 self.active_trades[processed_symbol] = trade_record
-                return True # Mark success for dry run
+
+                # Record dry run trade in metrics
+                try:
+                    # Record main position trade
+                    record_trade(
+                        result="success",
+                        exchange=self.main_connector.name,
+                        side=main_order_side.value.lower()
+                    )
+
+                    # Record hedge position trade if applicable
+                    if self._can_hedge and hedge_position_size > 0:
+                        record_trade(
+                            result="success",
+                            exchange=self.hedge_connector.name,
+                            side=hedge_order_side.value.lower()
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to record dry run trade in metrics: {e}", exc_info=True)
+
+                return True
             except Exception as e:
                 logger.error(
                     f"Error creating simulation trade record: {e}", exc_info=True
@@ -599,6 +694,17 @@ class TradingEngine:
 
             if main_order_result.get("error"):
                 logger.error(f"Failed to place main order: {main_order_result.get('error')}")
+
+                # Record failed order in metrics
+                try:
+                    record_trade(
+                        result="failure",
+                        exchange=self.main_connector.name,
+                        side=main_order_side.value.lower()
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to record failed order in metrics: {e}", exc_info=True)
+
                 return False
 
             logger.info(f"Main order placed: {main_order_result}")
@@ -656,6 +762,26 @@ class TradingEngine:
                 }
 
             self.active_trades[processed_symbol] = trade_record
+
+            # Record trade in standard metrics (for dashboard visibility)
+            try:
+                # Record main position trade
+                record_trade(
+                    result="success",
+                    exchange=self.main_connector.name,
+                    side=main_order_side.value.lower()
+                )
+
+                # Record hedge position trade if applicable
+                if self._can_hedge and hedge_order_result and not hedge_order_result.get("error"):
+                    record_trade(
+                        result="success",
+                        exchange=self.hedge_connector.name,
+                        side=hedge_order_side.value.lower()
+                    )
+            except Exception as e:
+                logger.error(f"Failed to record trade in metrics: {e}", exc_info=True)
+
             return True
         else:
             # In dry run mode, we've already created the trade record above
@@ -842,7 +968,7 @@ class TradingEngine:
             logger.info(
                 f"  Main position: {main_side.value} {main_size:.2f} @ {adjusted_main_leverage:.1f}x"
             )
-            if self._can_hedge and hedge_size > 0:
+            if self._can_hedge:
                 logger.info(
                     f"  Hedge position: {hedge_side.value} {hedge_size:.2f} @ {adjusted_hedge_leverage:.1f}x"
                 )
@@ -887,6 +1013,26 @@ class TradingEngine:
                     }
 
                 self.active_trades[symbol] = trade_record
+
+                # Record dry run trade in metrics
+                try:
+                    # Record main position trade
+                    record_trade(
+                        result="success",
+                        exchange=self.main_connector.name,
+                        side=main_side.value.lower()
+                    )
+
+                    # Record hedge position trade if applicable
+                    if self._can_hedge and hedge_size > 0:
+                        record_trade(
+                            result="success",
+                            exchange=self.hedge_connector.name,
+                            side=hedge_side.value.lower()
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to record dry run trade in metrics: {e}", exc_info=True)
+
                 return True
 
             # Execute main position
@@ -954,19 +1100,15 @@ class TradingEngine:
             else:
                 order_type = OrderType.MARKET
 
-            # Only pass leverage parameter if derivatives are supported
-            order_params = {
+            # Place main position order
+            main_order = self.main_connector.place_order(**{
                 "symbol": symbol,
                 "side": main_side,
                 "order_type": order_type,
                 "amount": main_size,
                 "price": price,
-            }
-
-            if self.main_connector.supports_derivatives:
-                order_params["leverage"] = adjusted_main_leverage
-
-            main_order = self.main_connector.place_order(**order_params)
+                "leverage": adjusted_main_leverage,
+            })
 
             if main_order.get("error"):
                 logger.error(f"Failed to place main order: {main_order.get('error')}")
@@ -980,81 +1122,15 @@ class TradingEngine:
             # Execute hedge position if hedge connector is available and hedging is enabled
             hedge_order = None
             if self._can_hedge and hedge_size > 0:
-                # Check if this is a Coinbase connector
-                is_coinbase_hedge = (
-                    "coinbase" in self.hedge_connector.__class__.__name__.lower()
-                )
-
-                # For Coinbase, must use LIMIT orders (they enforce limit-only mode)
-                if is_coinbase_hedge:
-                    # Always need a valid price for Coinbase limit orders
-                    if not price or price <= 0:
-                        try:
-                            # Get optimal limit price that should fill immediately
-                            optimal_price_data = (
-                                self.hedge_connector.get_optimal_limit_price(
-                                    symbol=symbol, side=hedge_side, amount=hedge_size
-                                )
-                            )
-
-                            price = optimal_price_data["price"]
-
-                            if not optimal_price_data["enough_liquidity"]:
-                                logger.warning(
-                                    f"Limited liquidity for hedge {symbol}, order may not fill completely"
-                                )
-
-                            logger.info(
-                                f"Using optimal limit price for immediate hedge fill: {price}"
-                            )
-
-                        except Exception as e:
-                            logger.warning(
-                                f"Error getting optimal limit price for hedge: {e}, falling back to ticker price"
-                            )
-                            # Fallback to getting current price from ticker
-                            ticker_data = self.hedge_connector.get_ticker(symbol)
-                            if (
-                                ticker_data
-                                and "last_price" in ticker_data
-                                and ticker_data["last_price"] > 0
-                            ):
-                                # For BUY orders: add a small buffer to ensure immediate fill (0.1%)
-                                # For SELL orders: subtract a small buffer to ensure immediate fill (0.1%)
-                                price = float(ticker_data["last_price"])
-                                if hedge_side == OrderSide.BUY:
-                                    price *= 1.001  # 0.1% higher than market for immediate fill
-                                else:
-                                    price *= 0.999  # 0.1% lower than market for immediate fill
-                                logger.info(
-                                    f"Using current market price with buffer for hedge limit order: {price}"
-                                )
-                            else:
-                                logger.error(
-                                    f"Cannot place hedge order: No valid price for {symbol} LIMIT order"
-                                )
-                                return False
-
-                    logger.info(
-                        f"Using LIMIT order for Coinbase hedge with price {price} (required by Coinbase)"
-                    )
-                    hedge_order_type = OrderType.LIMIT
-                else:
-                    hedge_order_type = OrderType.MARKET
-
-                # Only pass leverage parameter if derivatives are supported
-                hedge_order_params = {
+                # Place hedge position order
+                hedge_order = self.hedge_connector.place_order(**{
                     "symbol": symbol,
                     "side": hedge_side,
-                    "order_type": hedge_order_type,
+                    "order_type": order_type,
                     "amount": hedge_size,
                     "price": price,
-                }
-
-                if self.hedge_connector.supports_derivatives:
-                    hedge_order_params["leverage"] = adjusted_hedge_leverage
-
-                hedge_order = self.hedge_connector.place_order(**hedge_order_params)
+                    "leverage": adjusted_hedge_leverage,
+                })
 
                 if hedge_order and hedge_order.get("error"):
                     logger.error(
@@ -1192,6 +1268,50 @@ class TradingEngine:
         main_pos_dict = {pos["symbol"]: pos for pos in main_positions}
         hedge_pos_dict = {pos["symbol"]: pos for pos in hedge_positions}
 
+        # Publish position data to metrics for dashboard (if any positions exist)
+        try:
+            for symbol, pos in main_pos_dict.items():
+                # Only publish metrics for ETH-USD as the main symbol we're tracking
+                if symbol == "ETH-USD":
+                    size = pos.get("size", 0)
+                    side = pos.get("side", "").lower()
+                    if side == "long" or side == "buy":
+                        update_mvp_position_size(position_type="main", side="buy", size=abs(size))
+                    elif side == "short" or side == "sell":
+                        update_mvp_position_size(position_type="main", side="sell", size=abs(size))
+
+                    # Update PNL metrics if available
+                    if "unrealized_pnl" in pos:
+                        update_mvp_pnl(pos.get("unrealized_pnl", 0))
+
+                    logger.info(f"Published position metrics for {symbol}: size={size}, side={side}")
+        except Exception as e:
+            logger.error(f"Failed to publish position metrics: {e}")
+
+        # Track any positions from exchange that aren't in our active_trades
+        for symbol, pos in main_pos_dict.items():
+            if symbol not in self.active_trades and abs(pos.get("size", 0)) > 0:
+                logger.warning(f"Found exchange position not in active_trades: {symbol}, size={pos.get('size')}")
+                # Add it to our active trades to ensure we can track and manage it
+                side = pos.get("side", "LONG")
+                entry_price = pos.get("entry_price", 0)
+
+                self.active_trades[symbol] = {
+                    "symbol": symbol,
+                    "timestamp": int(time.time() * 1000),
+                    "main_position": {
+                        "exchange": "main",
+                        "side": side,
+                        "size": abs(pos.get("size", 0)),
+                        "leverage": pos.get("leverage", 1.0),
+                        "entry_price": entry_price,
+                        "mark_price": pos.get("mark_price", entry_price),
+                        "status": "open",
+                    },
+                    "status": "open",
+                    "market_type": pos.get("market_type", "PERPETUAL"),
+                }
+
         # Iterate through active trades
         for symbol, trade in self.active_trades.items():
             try:
@@ -1247,6 +1367,16 @@ class TradingEngine:
                             main_pos["unrealized_pnl"] = price_diff * main_pos["size"]
                     except Exception as e:
                         logger.error(f"Error fetching spot position for {symbol}: {e}")
+
+                # Check if position sizes from exchange match our records and adjust if needed
+                if main_pos:
+                    exchange_size = abs(main_pos.get("size", 0))
+                    record_size = abs(trade["main_position"].get("size", 0))
+
+                    # If sizes don't match by more than a small tolerance (0.001), update our records
+                    if abs(exchange_size - record_size) > 0.001:
+                        logger.info(f"Updating position size for {symbol} from {record_size} to {exchange_size} based on exchange data")
+                        trade["main_position"]["size"] = exchange_size
 
                 # Check if positions still exist
                 if market_type != "SPOT" and not main_pos and not hedge_pos:
@@ -1455,33 +1585,70 @@ class TradingEngine:
         try:
             trade = self.active_trades[symbol]
 
+            # Get current position sizes from exchange to ensure we close the entire position
+            current_main_position = None
+            current_hedge_position = None
+
+            try:
+                # Get current position details from exchange
+                main_positions = self.main_connector.get_positions()
+                for pos in main_positions:
+                    if pos["symbol"] == symbol:
+                        current_main_position = pos
+                        logger.info(f"Found current main position for {symbol}: size={pos.get('size', 0)}")
+                        break
+
+                if self._can_hedge and self.hedge_connector != self.main_connector:
+                    hedge_positions = self.hedge_connector.get_positions()
+                    for pos in hedge_positions:
+                        if pos["symbol"] == symbol:
+                            current_hedge_position = pos
+                            logger.info(f"Found current hedge position for {symbol}: size={pos.get('size', 0)}")
+                            break
+            except Exception as e:
+                logger.error(f"Error getting current positions from exchange: {e}")
+                # Continue with position sizes from our records if we can't get current data
+
             # Close main position
             if not self.dry_run:
-                main_result = await self.main_connector.place_order(
-                    symbol=symbol,
-                    side=OrderSide.SELL if trade["main_position"]["side"] == "BUY" else OrderSide.BUY,
-                    order_type=OrderType.MARKET,
-                    amount=trade["main_position"]["size"],
-                    price=None
-                )
-                if not main_result:
-                    logger.error(f"Failed to close main position for {symbol}")
-                    return False
-                logger.info(f"Closed main position for {symbol}")
+                # Use actual position size from exchange if available, otherwise use our records
+                main_side = OrderSide.SELL if trade["main_position"]["side"] == "BUY" else OrderSide.BUY
+                main_size = abs(current_main_position.get("size", 0)) if current_main_position else trade["main_position"]["size"]
+
+                if main_size > 0:
+                    logger.info(f"Closing main position for {symbol}: {main_size} units with {main_side.value}")
+                    main_result = await self.main_connector.place_order(
+                        symbol=symbol,
+                        side=main_side,
+                        order_type=OrderType.MARKET,
+                        amount=main_size,
+                        price=None
+                    )
+                    if not main_result:
+                        logger.error(f"Failed to close main position for {symbol}")
+                        return False
+                    logger.info(f"Closed main position for {symbol}")
+                else:
+                    logger.info(f"No main position to close for {symbol}")
 
                 # Close hedge position if it exists
                 if "hedge_position" in trade and self._can_hedge:
-                    hedge_result = await self.hedge_connector.place_order(
-                        symbol=symbol,
-                        side=OrderSide.SELL if trade["hedge_position"]["side"] == "BUY" else OrderSide.BUY,
-                        order_type=OrderType.MARKET,
-                        amount=trade["hedge_position"]["size"],
-                        price=None
-                    )
-                    if not hedge_result:
-                        logger.warning(f"Failed to close hedge position for {symbol}")
-                    else:
-                        logger.info(f"Closed hedge position for {symbol}")
+                    hedge_side = OrderSide.SELL if trade["hedge_position"]["side"] == "BUY" else OrderSide.BUY
+                    hedge_size = abs(current_hedge_position.get("size", 0)) if current_hedge_position else trade["hedge_position"]["size"]
+
+                    if hedge_size > 0:
+                        logger.info(f"Closing hedge position for {symbol}: {hedge_size} units with {hedge_side.value}")
+                        hedge_result = await self.hedge_connector.place_order(
+                            symbol=symbol,
+                            side=hedge_side,
+                            order_type=OrderType.MARKET,
+                            amount=hedge_size,
+                            price=None
+                        )
+                        if not hedge_result:
+                            logger.warning(f"Failed to close hedge position for {symbol}")
+                        else:
+                            logger.info(f"Closed hedge position for {symbol}")
 
             # Update trade record
             trade["status"] = "closed"
@@ -1491,6 +1658,103 @@ class TradingEngine:
             # Remove from active trades
             del self.active_trades[symbol]
             logger.info(f"Position closed for {symbol}: {reason}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error closing position for {symbol}: {e}")
+            return False
+
+    async def _close_position_without_removal(self, symbol: str, reason: str = "Direction Change") -> bool:
+        """
+        Close a position for a given symbol without removing it from active_trades.
+        This is used when we want to immediately open a position in the opposite direction.
+
+        Args:
+            symbol: The symbol to close position for
+            reason: The reason for closing the position
+
+        Returns:
+            bool: True if position was closed successfully, False otherwise
+        """
+        if symbol not in self.active_trades:
+            logger.warning(f"No active trade found for {symbol}")
+            return False
+
+        try:
+            trade = self.active_trades[symbol]
+
+            # Get current position sizes from exchange to ensure we close the entire position
+            current_main_position = None
+            current_hedge_position = None
+
+            try:
+                # Get current position details from exchange
+                main_positions = self.main_connector.get_positions()
+                for pos in main_positions:
+                    if pos["symbol"] == symbol:
+                        current_main_position = pos
+                        logger.info(f"Found current main position for {symbol}: size={pos.get('size', 0)}")
+                        break
+
+                if self._can_hedge and self.hedge_connector != self.main_connector:
+                    hedge_positions = self.hedge_connector.get_positions()
+                    for pos in hedge_positions:
+                        if pos["symbol"] == symbol:
+                            current_hedge_position = pos
+                            logger.info(f"Found current hedge position for {symbol}: size={pos.get('size', 0)}")
+                            break
+            except Exception as e:
+                logger.error(f"Error getting current positions from exchange: {e}")
+                # Continue with position sizes from our records if we can't get current data
+
+            # Close main position
+            if not self.dry_run:
+                # Use actual position size from exchange if available, otherwise use our records
+                main_side = OrderSide.SELL if trade["main_position"]["side"] == "BUY" else OrderSide.BUY
+                main_size = abs(current_main_position.get("size", 0)) if current_main_position else trade["main_position"]["size"]
+
+                if main_size > 0:
+                    logger.info(f"Closing main position for {symbol}: {main_size} units with {main_side.value}")
+                    main_result = await self.main_connector.place_order(
+                        symbol=symbol,
+                        side=main_side,
+                        order_type=OrderType.MARKET,
+                        amount=main_size,
+                        price=None
+                    )
+                    if not main_result:
+                        logger.error(f"Failed to close main position for {symbol}")
+                        return False
+                    logger.info(f"Closed main position for {symbol}")
+                else:
+                    logger.info(f"No main position to close for {symbol}")
+
+                # Close hedge position if it exists
+                if "hedge_position" in trade and self._can_hedge:
+                    hedge_side = OrderSide.SELL if trade["hedge_position"]["side"] == "BUY" else OrderSide.BUY
+                    hedge_size = abs(current_hedge_position.get("size", 0)) if current_hedge_position else trade["hedge_position"]["size"]
+
+                    if hedge_size > 0:
+                        logger.info(f"Closing hedge position for {symbol}: {hedge_size} units with {hedge_side.value}")
+                        hedge_result = await self.hedge_connector.place_order(
+                            symbol=symbol,
+                            side=hedge_side,
+                            order_type=OrderType.MARKET,
+                            amount=hedge_size,
+                            price=None
+                        )
+                        if not hedge_result:
+                            logger.warning(f"Failed to close hedge position for {symbol}")
+                        else:
+                            logger.info(f"Closed hedge position for {symbol}")
+
+            # Unlike regular close_position, we don't remove the trade from active_trades
+            # We just mark it as closing so we can replace it
+            trade["status"] = "closing"
+            trade["close_reason"] = reason
+            trade["close_timestamp"] = int(time.time() * 1000)
+
+            logger.info(f"Position closed for {symbol} without removal: {reason}")
             return True
 
         except Exception as e:
@@ -1514,11 +1778,53 @@ class TradingEngine:
         success = True
 
         try:
-            # Get all active symbols from our trade records
-            active_symbols = list(self.active_trades.keys())
+            # Get all positions directly from the exchanges to ensure we close everything
+            try:
+                main_positions = self.main_connector.get_positions()
+                logger.info(f"Found {len(main_positions)} positions from main connector")
+
+                # Handle positions from separate hedge connector if needed
+                if self.hedge_connector != self.main_connector:
+                    hedge_positions = self.hedge_connector.get_positions()
+                    logger.info(f"Found {len(hedge_positions)} positions from hedge connector")
+                else:
+                    hedge_positions = []
+            except Exception as e:
+                logger.error(f"Error getting positions from exchanges: {e}")
+                main_positions = []
+                hedge_positions = []
+
+            # Get all active symbols from exchange positions plus our trade records
+            active_symbols = set()
+
+            # Add symbols from our trade records
+            for symbol in self.active_trades.keys():
+                active_symbols.add(symbol)
+
+            # Add symbols from main positions
+            for position in main_positions:
+                symbol = position.get("symbol")
+                if symbol:
+                    active_symbols.add(symbol)
+
+            # Add symbols from hedge positions
+            for position in hedge_positions:
+                symbol = position.get("symbol")
+                if symbol:
+                    active_symbols.add(symbol)
+
+            logger.info(f"Closing positions for {len(active_symbols)} symbols")
 
             # Close main positions
             for symbol in active_symbols:
+                # Find position in exchange data
+                main_position = None
+                for pos in main_positions:
+                    if pos.get("symbol") == symbol:
+                        main_position = pos
+                        break
+
+                # Get position info from our records as fallback
                 trade = self.active_trades.get(symbol, {})
                 market_type = trade.get("market_type", "SPOT")
 
@@ -1528,9 +1834,13 @@ class TradingEngine:
                         market_type == "SPOT"
                         and not self.main_connector.supports_derivatives
                     ):
-                        main_side = trade.get("main_position", {}).get("side")
+                        # Determine side from exchange data if available, otherwise from our records
+                        if main_position:
+                            main_side = main_position.get("side", "")
+                        else:
+                            main_side = trade.get("main_position", {}).get("side", "")
 
-                        if main_side == "BUY":
+                        if main_side == "BUY" or main_side == "LONG":
                             # For spot BUY positions, we sell the asset to close
                             logger.info(
                                 f"Closing spot position for {symbol} (selling asset)"
@@ -1542,6 +1852,7 @@ class TradingEngine:
                             base_balance = balances.get(base_asset, 0)
 
                             if base_balance > 0:
+                                logger.info(f"Selling {base_balance} {base_asset} to close spot position")
                                 self.main_connector.place_order(
                                     symbol=symbol,
                                     side=OrderSide.SELL,
@@ -1557,9 +1868,25 @@ class TradingEngine:
                                 f"No action needed for spot SELL position for {symbol}"
                             )
                     else:
-                        # For derivatives markets, use close_position
-                        logger.info(f"Closing position for {symbol}")
-                        self.main_connector.close_position(symbol)
+                        # For derivatives markets
+                        if main_position and abs(main_position.get("size", 0)) > 0:
+                            # Get position size and side from exchange data
+                            size = abs(main_position.get("size", 0))
+                            side = main_position.get("side", "")
+                            logger.info(f"Closing position for {symbol}: {size} units ({side})")
+
+                            # Execute opposite side order to close
+                            close_side = OrderSide.SELL if side == "LONG" or side == "BUY" else OrderSide.BUY
+                            self.main_connector.place_order(
+                                symbol=symbol,
+                                side=close_side,
+                                order_type=OrderType.MARKET,
+                                amount=size,
+                            )
+                        else:
+                            # Fallback to using close_position method
+                            logger.info(f"Closing position for {symbol} using close_position method")
+                            self.main_connector.close_position(symbol)
                 except Exception as e:
                     logger.error(f"Failed to close main position for {symbol}: {e}")
                     success = False
@@ -1567,10 +1894,18 @@ class TradingEngine:
             # Close hedge positions if using a separate connector
             if self.hedge_connector != self.main_connector:
                 for symbol in active_symbols:
+                    # Find position in exchange data
+                    hedge_position = None
+                    for pos in hedge_positions:
+                        if pos.get("symbol") == symbol:
+                            hedge_position = pos
+                            break
+
+                    # Get position info from our records as fallback
                     trade = self.active_trades.get(symbol, {})
 
                     # Skip if no hedge position
-                    if "hedge_position" not in trade:
+                    if not hedge_position and "hedge_position" not in trade:
                         continue
 
                     market_type = trade.get("market_type", "SPOT")
@@ -1581,9 +1916,13 @@ class TradingEngine:
                             market_type == "SPOT"
                             and not self.hedge_connector.supports_derivatives
                         ):
-                            hedge_side = trade.get("hedge_position", {}).get("side")
+                            # Determine side from exchange data if available, otherwise from our records
+                            if hedge_position:
+                                hedge_side = hedge_position.get("side", "")
+                            else:
+                                hedge_side = trade.get("hedge_position", {}).get("side", "")
 
-                            if hedge_side == "BUY":
+                            if hedge_side == "BUY" or hedge_side == "LONG":
                                 # For spot BUY positions, we sell the asset to close
                                 logger.info(
                                     f"Closing spot hedge position for {symbol} (selling asset)"
@@ -1595,6 +1934,7 @@ class TradingEngine:
                                 base_balance = balances.get(base_asset, 0)
 
                                 if base_balance > 0:
+                                    logger.info(f"Selling {base_balance} {base_asset} to close hedge spot position")
                                     self.hedge_connector.place_order(
                                         symbol=symbol,
                                         side=OrderSide.SELL,
@@ -1610,9 +1950,25 @@ class TradingEngine:
                                     f"No action needed for spot SELL hedge position for {symbol}"
                                 )
                         else:
-                            # For derivatives markets, use close_position
-                            logger.info(f"Closing hedge position for {symbol}")
-                            self.hedge_connector.close_position(symbol)
+                            # For derivatives markets
+                            if hedge_position and abs(hedge_position.get("size", 0)) > 0:
+                                # Get position size and side from exchange data
+                                size = abs(hedge_position.get("size", 0))
+                                side = hedge_position.get("side", "")
+                                logger.info(f"Closing hedge position for {symbol}: {size} units ({side})")
+
+                                # Execute opposite side order to close
+                                close_side = OrderSide.SELL if side == "LONG" or side == "BUY" else OrderSide.BUY
+                                self.hedge_connector.place_order(
+                                    symbol=symbol,
+                                    side=close_side,
+                                    order_type=OrderType.MARKET,
+                                    amount=size,
+                                )
+                            else:
+                                # Fallback to using close_position method
+                                logger.info(f"Closing hedge position for {symbol} using close_position method")
+                                self.hedge_connector.close_position(symbol)
                     except Exception as e:
                         logger.error(
                             f"Failed to close hedge position for {symbol}: {e}"

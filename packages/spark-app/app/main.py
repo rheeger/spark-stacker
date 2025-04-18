@@ -27,6 +27,7 @@ from core.strategy_manager import StrategyManager
 from core.trading_engine import TradingEngine
 from indicators.indicator_factory import IndicatorFactory
 from metrics import start_metrics_server, update_mvp_signal_state
+from metrics.registry import start_historical_data_api
 from risk_management.risk_manager import RiskManager
 from utils.config import AppConfig, ConfigManager
 from utils.logging_setup import setup_logging
@@ -189,6 +190,7 @@ def create_trading_engine(
         dry_run=config.dry_run,
         polling_interval=config.polling_interval,
         max_parallel_trades=config.max_parallel_trades,
+        enable_hedging=config.get("enable_hedging", True),
     )
 
     return engine
@@ -406,6 +408,12 @@ async def async_main():
             f"Metrics server started at http://{metrics_host}:{metrics_port}/metrics"
         )
 
+        # Start historical data API server on a different port
+        historical_api_port = config.get("historical_api_port", 9001)
+        logger.info(f"Starting historical data API server on port {historical_api_port}")
+        start_historical_data_api(port=historical_api_port)
+        logger.info(f"Historical data API server started at http://{metrics_host}:{historical_api_port}/metrics/list")
+
         # Initialize exchange connectors
         connector_factory = ConnectorFactory()
         exchange_connectors = {}
@@ -536,6 +544,7 @@ async def async_main():
             dry_run=config.get("dry_run", True),
             polling_interval=config.get("polling_interval", 60),
             max_parallel_trades=1,  # Limit to 1 trade at a time for testing
+            enable_hedging=config.get("enable_hedging", True),  # Use config setting for hedging
         )
 
         # Initialize strategy manager with indicators
@@ -573,7 +582,11 @@ async def async_main():
                     )
             # --- End Add Symbol ---
 
-        strategy_manager = StrategyManager(trading_engine=engine, indicators=indicators)
+        strategy_manager = StrategyManager(
+            trading_engine=engine,
+            indicators=indicators,
+            config=config
+        )
 
         # Start the trading engine
         if not engine.start():

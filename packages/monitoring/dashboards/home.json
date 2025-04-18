@@ -925,30 +925,31 @@
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "none" },
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "minStep": 1
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"macd_line\", market=\"ETH-USD\", timeframe=\"1m\"}",
+          "expr": "spark_stacker_macd_values{component=\"macd_line\", market=\"ETH-USD\", timeframe=\"1m\"} or spark_stacker_historical_macd_ETH_USD_1m_macd_line{timestamp=~\".*\"}",
           "legendFormat": "MACD",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"signal_line\", market=\"ETH-USD\", timeframe=\"1m\"}",
+          "expr": "spark_stacker_macd_values{component=\"signal_line\", market=\"ETH-USD\", timeframe=\"1m\"} or spark_stacker_historical_macd_ETH_USD_1m_signal_line{timestamp=~\".*\"}",
           "legendFormat": "Signal",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} > 0",
+          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} > 0) or (spark_stacker_historical_macd_ETH_USD_1m_histogram{timestamp=~\".*\"} > 0)",
           "legendFormat": "Positive Histogram",
           "refId": "C"
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} <= 0",
+          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} <= 0) or (spark_stacker_historical_macd_ETH_USD_1m_histogram{timestamp=~\".*\"} <= 0)",
           "legendFormat": "Negative Histogram",
           "refId": "D"
         }
@@ -958,45 +959,63 @@
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
         "title": "ETH-USD Price 1m (Hyperliquid)",
-        "type": "timeseries",
+        "type": "candlestick",
         "id": 25,
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 68 },
         "fieldConfig": {
           "defaults": {
             "color": { "mode": "palette-classic" },
-            "custom": {
-              "drawStyle": "line",
-              "lineWidth": 2,
-              "fillOpacity": 10,
-              "gradientMode": "opacity",
-              "axisPlacement": "auto",
-              "axisLabel": "",
-              "scaleDistribution": { "type": "linear" },
-              "showPoints": "never",
-              "spanNulls": false,
-              "stacking": { "mode": "none" },
-              "lineInterpolation": "smooth"
-            },
             "mappings": [],
             "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-            "unit": "currencyUSD",
+            "unit": "none",
             "decimals": 2
           },
           "overrides": []
         },
         "options": {
-          "tooltip": { "mode": "single", "sort": "none" },
-          "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }
+          "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+          "open": { "field": "Open" },
+          "high": { "field": "High" },
+          "low": { "field": "Low" },
+          "close": { "field": "Close" },
+          "includeAllFields": false,
+          "candleStyle": "candles",
+          "mode": "changes",
+          "colorStrategy": "open-close",
+          "minStep": 1,
+          "colors": {
+            "up": "green",
+            "down": "red",
+            "flat": "gray"
+          }
         },
         "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"close\"}",
-              "legendFormat": "ETH-USD",
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"close\"} or spark_stacker_historical_candle_ETH_USD_1m_close{timestamp=~\".*\"}",
+              "legendFormat": "Close",
               "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"open\"} or spark_stacker_historical_candle_ETH_USD_1m_open{timestamp=~\".*\"}",
+              "legendFormat": "Open",
+              "refId": "B"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"high\"} or spark_stacker_historical_candle_ETH_USD_1m_high{timestamp=~\".*\"}",
+              "legendFormat": "High",
+              "refId": "C"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"low\"} or spark_stacker_historical_candle_ETH_USD_1m_low{timestamp=~\".*\"}",
+              "legendFormat": "Low",
+              "refId": "D"
             }
         ],
-        "description": "This panel will show price data when available. The spark_stacker_candle_data metric needs to be implemented."
+        "description": "Candlestick chart showing ETH-USD price movement"
     },
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
@@ -1100,7 +1119,7 @@
     "list": []
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},

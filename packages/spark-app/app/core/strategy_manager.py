@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -11,8 +11,10 @@ from core.trading_engine import TradingEngine
 from indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 from indicators.macd_indicator import MACDIndicator
 from metrics import (INDICATOR_MACD, MARKET_ETH_USD, TIMEFRAME_1M,
-                     update_candle_data, update_macd_indicator,
-                     update_mvp_signal_state)
+                     record_mvp_signal_latency, update_candle_data,
+                     update_macd_indicator, update_mvp_signal_state)
+from metrics.registry import (publish_historical_time_series,
+                              set_historical_data_mode, verify_historical_data)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ class StrategyManager:
         trading_engine: TradingEngine,
         indicators: Dict[str, BaseIndicator] = None,
         data_window_size: int = 100,
+        config: Dict[str, Any] = None,
     ):
         """
         Initialize the strategy manager.
@@ -40,12 +43,20 @@ class StrategyManager:
             trading_engine: Trading engine instance to forward signals to
             indicators: Dictionary of indicator instances
             data_window_size: Size of the price data window to maintain
+            config: Application configuration dictionary
         """
         self.trading_engine = trading_engine
         self.indicators = indicators or {}
         self.data_window_size = data_window_size
         self.price_data: Dict[str, pd.DataFrame] = {}
         self.historical_data_fetched: Dict[Tuple[str, str], bool] = {}
+        self.config = config or {}
+
+        # Check if publishing historical data to metrics is enabled
+        self.publish_historical = self.config.get("metrics_publish_historical", False)
+        if self.publish_historical:
+            logger.info("Historical metrics publishing is enabled - will publish all candles to metrics")
+
         logger.info(
             f"Strategy manager initialized with {len(self.indicators)} indicators"
         )
@@ -210,63 +221,55 @@ class StrategyManager:
 
     def _fetch_historical_data(self, symbol: str, interval: str, limit: int, periods: Optional[int] = None) -> pd.DataFrame:
         """
-        Fetch historical candle data from the main connector.
+        Fetch historical candle data for a symbol.
 
         Args:
-            symbol: Market symbol
-            interval: Candle interval (e.g., '1m', '5m')
+            symbol: Symbol to fetch data for
+            interval: Time interval (e.g., '1m', '5m', '1h')
             limit: Number of candles to fetch
-            periods: Optional number of periods for indicator calculation
+            periods: Minimum number of periods needed for indicators
 
         Returns:
-            DataFrame with historical data, or empty DataFrame on failure.
+            DataFrame with historical price data
         """
-        connector: Optional[BaseConnector] = self.trading_engine.main_connector
-        if not connector:
-            logger.error("No main connector available to fetch historical data")
-            return pd.DataFrame()
-
         try:
-            # If periods is provided, use it to determine how many candles we need
-            required_candles = max(limit, periods) if periods else limit
-
+            required_candles = max(limit, periods if periods else 50)
             logger.info(f"Fetching {required_candles} historical candles for {symbol} ({interval})...")
-            # Fetch slightly more to be safe
-            candles_raw: List[Dict[str, Any]] = connector.get_historical_candles(
+
+            # Get historical data from connector
+            connector = self.trading_engine.main_connector
+            candles = connector.get_historical_candles(
                 symbol=symbol,
                 interval=interval,
-                limit=required_candles + 5 # Fetch a few extra candles
+                limit=required_candles
             )
 
-            if not candles_raw:
-                logger.warning(f"Connector returned no historical data for {symbol} ({interval}).")
+            if not candles:
+                logger.warning(f"No historical data received for {symbol}")
                 return pd.DataFrame()
 
-            # Convert list of dicts to DataFrame
-            df = pd.DataFrame(candles_raw)
+            # Sort candles by timestamp (ascending)
+            sorted_candles = sorted(candles, key=lambda x: x['timestamp'])
 
-            # Define both possible column mappings (raw and formatted)
-            raw_rename_map = {'t': 'timestamp', 'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume'}
-            formatted_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            # Publish historical data to metrics if enabled
+            self._publish_historical_data_to_metrics(symbol, interval, sorted_candles)
 
-            # Check if we have raw column names that need renaming
-            if all(col in df.columns for col in raw_rename_map.keys()):
-                df = df[list(raw_rename_map.keys())].rename(columns=raw_rename_map)
-            # Check if we already have formatted column names
-            elif all(col in df.columns for col in formatted_cols):
-                df = df[formatted_cols]
-            else:
-                logger.error(f"Historical data for {symbol} missing required columns. Columns found: {df.columns.tolist()}")
-                return pd.DataFrame()
+            # Convert to DataFrame
+            df = pd.DataFrame(candles)
 
-            # Ensure numeric types for OHLCV columns
+            # Convert all relevant columns to numeric
             for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # Sort by timestamp and remove duplicates
-            df = df.sort_values('timestamp').drop_duplicates(subset=['timestamp'])
+            # Ensure required columns exist
+            if 'timestamp' not in df.columns:
+                if 'time' in df.columns:
+                    df['timestamp'] = df['time']
+                else:
+                    logger.error(f"Missing timestamp column in candle data for {symbol}")
+                    return pd.DataFrame()
 
-            # Add symbol column if not present
             if 'symbol' not in df.columns:
                 df['symbol'] = symbol
 
@@ -275,6 +278,159 @@ class StrategyManager:
         except Exception as e:
             logger.error(f"Error fetching historical data for {symbol}: {e}", exc_info=True)
             return pd.DataFrame()
+
+    def _publish_historical_data_to_metrics(self, symbol: str, interval: str, candles: List[Dict]) -> None:
+        """
+        Publish historical data to metrics for visualization.
+        This is essential for data persistence across container restarts.
+
+        Args:
+            symbol: Market symbol
+            interval: Time interval
+            candles: List of candle dictionaries
+        """
+        if not self.publish_historical:
+            logger.info(f"Historical data publishing is disabled. Not publishing {len(candles)} candles for {symbol}")
+            return
+
+        try:
+            # Sort candles by timestamp (ascending) to ensure correct order
+            sorted_candles = sorted(candles, key=lambda x: x['timestamp'])
+
+            logger.info(f"Publishing {len(sorted_candles)} historical candles to metrics for {symbol} ({interval})")
+
+            # NEW APPROACH: Use our time series publishing system that properly handles historical data
+
+            # First handle the candle data (OHLC)
+            for field in ['open', 'high', 'low', 'close']:
+                # Format data into the required structure for the time series publisher
+                data_points = [
+                    {"timestamp": int(candle['timestamp']), "value": float(candle[field])}
+                    for candle in sorted_candles
+                ]
+
+                # Publish the time series data
+                success = publish_historical_time_series(
+                    market=symbol,
+                    timeframe=interval,
+                    field=field,
+                    data_points=data_points,
+                    gauge_name="spark_stacker_historical_candle",
+                    gauge_description=f"Historical {field} price data"
+                )
+
+                if success:
+                    logger.info(f"Successfully published historical {field} data for {symbol}/{interval}")
+                else:
+                    logger.warning(f"Failed to publish historical {field} data for {symbol}/{interval}")
+
+            # Now handle MACD indicators if available
+            macd_indicators = [
+                (name, indicator) for name, indicator in self.indicators.items()
+                if isinstance(indicator, MACDIndicator) and
+                getattr(indicator, 'symbol', None) == symbol
+            ]
+
+            if macd_indicators:
+                logger.info(f"Found {len(macd_indicators)} MACD indicators for {symbol}, calculating historical values")
+
+                # Convert to DataFrame for MACD calculation
+                df = pd.DataFrame(sorted_candles)
+
+                # Convert all relevant columns to numeric
+                for col in ['open', 'high', 'low', 'close', 'volume']:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                # Ensure timestamp column exists
+                if 'timestamp' not in df.columns and 'time' in df.columns:
+                    df['timestamp'] = df['time']
+
+                try:
+                    # Calculate MACD for each indicator and publish
+                    for name, indicator in macd_indicators:
+                        processed_df = indicator.calculate(df)
+
+                        if 'macd' in processed_df.columns and 'macd_signal' in processed_df.columns:
+                            # Publish MACD line
+                            macd_points = [
+                                {"timestamp": int(row['timestamp']), "value": float(row['macd'])}
+                                for _, row in processed_df.iterrows() if not pd.isna(row['macd'])
+                            ]
+                            publish_historical_time_series(
+                                market=symbol,
+                                timeframe=interval,
+                                field="macd_line",
+                                data_points=macd_points,
+                                gauge_name="spark_stacker_historical_macd",
+                                gauge_description="Historical MACD line values"
+                            )
+
+                            # Publish MACD signal line
+                            signal_points = [
+                                {"timestamp": int(row['timestamp']), "value": float(row['macd_signal'])}
+                                for _, row in processed_df.iterrows() if not pd.isna(row['macd_signal'])
+                            ]
+                            publish_historical_time_series(
+                                market=symbol,
+                                timeframe=interval,
+                                field="signal_line",
+                                data_points=signal_points,
+                                gauge_name="spark_stacker_historical_macd",
+                                gauge_description="Historical MACD signal line values"
+                            )
+
+                            # Publish MACD histogram
+                            histogram_points = [
+                                {"timestamp": int(row['timestamp']), "value": float(row['macd_histogram'])}
+                                for _, row in processed_df.iterrows() if not pd.isna(row['macd_histogram'])
+                            ]
+                            publish_historical_time_series(
+                                market=symbol,
+                                timeframe=interval,
+                                field="histogram",
+                                data_points=histogram_points,
+                                gauge_name="spark_stacker_historical_macd",
+                                gauge_description="Historical MACD histogram values"
+                            )
+
+                            logger.info(f"Successfully published historical MACD data for {symbol}/{interval}")
+                except Exception as e:
+                    logger.error(f"Failed to calculate or publish historical MACD: {e}", exc_info=True)
+
+            # Also publish the most recent values to the standard metrics for real-time display
+            try:
+                # Get the most recent candle
+                latest_candle = sorted_candles[-1]
+
+                # Update standard metrics with the latest candle data
+                update_candle_data(market=symbol, timeframe=interval, field="open", value=float(latest_candle['open']))
+                update_candle_data(market=symbol, timeframe=interval, field="high", value=float(latest_candle['high']))
+                update_candle_data(market=symbol, timeframe=interval, field="low", value=float(latest_candle['low']))
+                update_candle_data(market=symbol, timeframe=interval, field="close", value=float(latest_candle['close']))
+
+                # If we have MACD data, update those metrics too
+                if macd_indicators and 'macd' in processed_df.columns:
+                    latest_macd = processed_df.iloc[-1]
+                    update_macd_indicator(market=symbol, timeframe=interval, component="macd_line", value=float(latest_macd['macd']))
+                    update_macd_indicator(market=symbol, timeframe=interval, component="signal_line", value=float(latest_macd['macd_signal']))
+                    update_macd_indicator(market=symbol, timeframe=interval, component="histogram", value=float(latest_macd['macd_histogram']))
+
+                logger.info(f"Updated standard metrics with latest data for {symbol}/{interval}")
+            except Exception as e:
+                logger.error(f"Failed to update standard metrics with latest data: {e}", exc_info=True)
+
+            # Verify historical data was properly published
+            try:
+                if verify_historical_data(market=symbol, timeframe=interval):
+                    logger.info(f"✅ VERIFIED: Historical data for {symbol}/{interval} is properly available in Prometheus")
+                else:
+                    logger.warning(f"❌ WARNING: Could not verify historical data for {symbol}/{interval} in Prometheus")
+            except Exception as e:
+                logger.error(f"Error verifying historical data: {e}", exc_info=True)
+
+        except Exception as e:
+            logger.error(f"Error while publishing historical data to metrics: {e}", exc_info=True)
 
     def run_indicators(self, symbol: str) -> List[Signal]:
         """

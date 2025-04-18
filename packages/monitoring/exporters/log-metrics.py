@@ -125,6 +125,25 @@ class SparkStackerLogMetrics:
             ["dry_run", "hedging_enabled"]
         )
 
+        # Add new metrics for order history tracking
+        self.order_count = Counter(
+            "spark_stacker_orders_total",
+            "Total number of orders by type and side",
+            ["exchange", "side", "type", "status"],
+        )
+
+        self.order_value = Gauge(
+            "spark_stacker_order_value",
+            "Value of orders in USD equivalent",
+            ["exchange", "side"],
+        )
+
+        self.last_order_price = Gauge(
+            "spark_stacker_last_order_price",
+            "Price of the last order executed",
+            ["exchange", "symbol"],
+        )
+
         # Initialize exchange status as unknown (0.5) for enabled exchanges
         for exchange in self.enabled_exchanges:
             self.exchange_status.labels(exchange=exchange).set(0.5)
@@ -466,9 +485,7 @@ class SparkStackerLogMetrics:
         # Process orders logs
         orders_log = os.path.join(connector_dir, "orders.log")
         if os.path.exists(orders_log):
-            new_lines = self._read_new_lines(orders_log)
-            logger.debug(f"Read {len(new_lines)} new lines from {orders_log}")
-            # Processing would be added here
+            self._process_orders_log(connector, orders_log)
 
         # Process markets logs
         markets_log = os.path.join(connector_dir, "markets.log")
@@ -478,6 +495,110 @@ class SparkStackerLogMetrics:
             if new_lines:
                 # Mark exchange as up if we have market data
                 self.exchange_status.labels(exchange=connector).set(1)
+
+    def _process_orders_log(self, connector: str, orders_log: str):
+        """Process the orders log file for a connector."""
+        new_lines = self._read_new_lines(orders_log)
+        if not new_lines:
+            return
+
+        logger.debug(f"Processing {len(new_lines)} new lines from {orders_log}")
+
+        # Patterns to match in orders.log
+        order_placed_pattern = r"Placing order: ({.*})"
+        order_response_pattern = r"Order placement response: ({.*})"
+        order_filled_pattern = r"Order (\d+) filled immediately at ([\d.]+)"
+        order_status_pattern = r"Found open order (\d+): ({.*})"
+
+        for line in new_lines:
+            try:
+                # Match order placement
+                order_placed_match = re.search(order_placed_pattern, line)
+                if order_placed_match:
+                    order_data_str = order_placed_match.group(1)
+                    try:
+                        order_data = json.loads(order_data_str)
+                        symbol = order_data.get("coin", "unknown")
+                        side = "buy" if order_data.get("is_buy", False) else "sell"
+                        size = float(order_data.get("sz", 0))
+                        price = float(order_data.get("limit_px", 0))
+                        order_type = "limit" if "limit" in str(order_data.get("order_type", {})) else "market"
+
+                        # Record order metrics
+                        self.order_count.labels(
+                            exchange=connector,
+                            side=side,
+                            type=order_type,
+                            status="placed"
+                        ).inc()
+
+                        # Record order value (size * price)
+                        if price > 0 and size > 0:
+                            self.order_value.labels(
+                                exchange=connector,
+                                side=side
+                            ).set(size * price)
+
+                        logger.info(f"Recorded order placement: {connector}/{symbol} {side} {size} @ {price}")
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.error(f"Error parsing order data: {e}, data: {order_data_str}")
+
+                # Match order filled
+                order_filled_match = re.search(order_filled_pattern, line)
+                if order_filled_match:
+                    order_id = order_filled_match.group(1)
+                    fill_price = float(order_filled_match.group(2))
+
+                    # Extract symbol from context if possible
+                    symbol_match = re.search(r"([\w-]+)-USD", line)
+                    symbol = symbol_match.group(1) if symbol_match else "unknown"
+
+                    # Record fill price
+                    self.last_order_price.labels(
+                        exchange=connector,
+                        symbol=symbol
+                    ).set(fill_price)
+
+                    # Determine side from context
+                    side = "buy" if "BUY order" in line else "sell" if "SELL order" in line else "unknown"
+                    if side == "unknown":
+                        side = "buy" if "buy" in line.lower() else "sell" if "sell" in line.lower() else "unknown"
+
+                    # Update order count for filled orders
+                    self.order_count.labels(
+                        exchange=connector,
+                        side=side,
+                        type="any",  # Type is unknown at this point
+                        status="filled"
+                    ).inc()
+
+                    logger.info(f"Recorded order fill: {connector}/{symbol} order {order_id} filled at {fill_price}")
+
+                # Match order status updates
+                order_status_match = re.search(order_status_pattern, line)
+                if order_status_match:
+                    order_id = order_status_match.group(1)
+                    order_details_str = order_status_match.group(2)
+                    try:
+                        order_details = json.loads(order_details_str)
+                        symbol = order_details.get("symbol", "unknown")
+                        side = order_details.get("side", "unknown").lower()
+                        status = order_details.get("status", "unknown").lower()
+
+                        # Record order status update
+                        self.order_count.labels(
+                            exchange=connector,
+                            side=side,
+                            type=order_details.get("type", "unknown").lower(),
+                            status=status
+                        ).inc()
+
+                        logger.info(f"Recorded order status: {connector}/{symbol} order {order_id} is {status}")
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.error(f"Error parsing order details: {e}, data: {order_details_str}")
+
+            except Exception as e:
+                logger.error(f"Error processing order log line: {e}, line: {line}")
 
     def _read_new_lines(self, file_path: str) -> List[str]:
         """Read new lines from a file since last check."""
