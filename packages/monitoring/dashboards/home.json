@@ -931,25 +931,25 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"macd_line\", market=\"ETH-USD\", timeframe=\"1m\"} or spark_stacker_historical_macd_ETH_USD_1m_macd_line{timestamp=~\".*\"}",
+          "expr": "spark_stacker_macd_values{component=\"macd_line\", market=\"ETH-USD\", timeframe=\"1m\"}",
           "legendFormat": "MACD",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"signal_line\", market=\"ETH-USD\", timeframe=\"1m\"} or spark_stacker_historical_macd_ETH_USD_1m_signal_line{timestamp=~\".*\"}",
+          "expr": "spark_stacker_macd_values{component=\"signal_line\", market=\"ETH-USD\", timeframe=\"1m\"}",
           "legendFormat": "Signal",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} > 0) or (spark_stacker_historical_macd_ETH_USD_1m_histogram{timestamp=~\".*\"} > 0)",
+          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} > 0)",
           "legendFormat": "Positive Histogram",
           "refId": "C"
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} <= 0) or (spark_stacker_historical_macd_ETH_USD_1m_histogram{timestamp=~\".*\"} <= 0)",
+          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} <= 0)",
           "legendFormat": "Negative Histogram",
           "refId": "D"
         }
@@ -992,30 +992,49 @@
         "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"close\"} or spark_stacker_historical_candle_ETH_USD_1m_close{timestamp=~\".*\"}",
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"close\"}",
               "legendFormat": "Close",
               "refId": "A"
             },
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"open\"} or spark_stacker_historical_candle_ETH_USD_1m_open{timestamp=~\".*\"}",
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"open\"}",
               "legendFormat": "Open",
               "refId": "B"
             },
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"high\"} or spark_stacker_historical_candle_ETH_USD_1m_high{timestamp=~\".*\"}",
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"high\"}",
               "legendFormat": "High",
               "refId": "C"
             },
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"low\"} or spark_stacker_historical_candle_ETH_USD_1m_low{timestamp=~\".*\"}",
+              "expr": "spark_stacker_candle_data{market=\"ETH-USD\", timeframe=\"1m\", field=\"low\"}",
               "legendFormat": "Low",
               "refId": "D"
             }
         ],
-        "description": "Candlestick chart showing ETH-USD price movement"
+        "description": "Candlestick chart showing ETH-USD price movement",
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {},
+              "renameByName": {
+                "Value #A": "Close",
+                "Value #B": "Open",
+                "Value #C": "High",
+                "Value #D": "Low"
+              }
+            }
+          }
+        ]
     },
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
