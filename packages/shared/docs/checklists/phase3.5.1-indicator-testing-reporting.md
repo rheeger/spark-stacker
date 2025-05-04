@@ -37,8 +37,11 @@ optimize strategy selection, and create a foundation for continuous performance 
 
   - [x] Create standard datasets for bull, bear, and sideways markets
   - [x] Implement data normalization and preprocessing pipeline
-  - [ ] Add support for different timeframes and resolution switching
-  - [ ] Create market regime labeling for performance segmentation
+  - [x] Add support for different timeframes and resolution switching
+  - [ ] **[IN PROGRESS]** Create market regime labeling for performance segmentation
+    - [ ] Implement trend detection algorithms (ADX, Supertrend, etc.)
+    - [ ] Create volatility classification methods
+    - [ ] Develop automated regime detection and labeling framework
 
 - [ ] **Implement realistic trading simulation**
   - [ ] Add proper slippage modeling based on market liquidity
@@ -151,16 +154,17 @@ optimize strategy selection, and create a foundation for continuous performance 
 3. ✅ Created a data normalization pipeline with multiple normalization methods
 4. ✅ Added command-line script for generating and managing datasets
 5. ✅ Implemented comprehensive test suite for both components
-6. 📝 Documentation added in `packages/spark-app/docs/market_data_implementation.md`
+6. ✅ Added support for different timeframes with resolution switching capabilities
+7. 📝 Documentation added in `packages/spark-app/docs/market_data_implementation.md`
 
 ## Next Steps
 
-After completing this phase, proceed to:
+After completing all Phase 3.5.1 tasks, proceed to:
 
-- Implement support for different timeframes and resolution switching
-- Create market regime labeling for performance segmentation
-- Implement realistic trading simulation with slippage, fees, and proper timing
-- Implement the best-performing indicators and strategies in live testing
-- Create an automated strategy rotation based on changing market conditions
-- Build continuous backtesting pipeline integrated with CI/CD
-- Expand the indicator library with more advanced technical indicators
+1. 🔜 **Implement market regime labeling** using trend and volatility detection algorithms
+2. 🔜 **Develop comprehensive trade performance analytics** with detailed metrics
+3. 🔜 **Create realistic trading simulation** with slippage, fees, and execution timing
+4. 🔜 Implement best-performing indicators and strategies in live testing
+5. 🔜 Create automated strategy rotation based on changing market conditions
+6. 🔜 Build continuous backtesting pipeline integrated with CI/CD
+7. 🔜 Expand the indicator library with more advanced technical indicators

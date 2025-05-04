@@ -64,7 +64,7 @@ MARKET_REGIMES = {
 }
 
 # Standard intervals to collect
-INTERVALS = ["1h", "4h", "1d"]
+INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 
 class MarketDatasetGenerator:
     """
@@ -195,16 +195,41 @@ class MarketDatasetGenerator:
             logger.error(f"Error creating {exchange_type} connector: {e}")
             return False
 
-    def generate_standard_datasets(self, symbols: List[str] = None, exchange_type: str = "kraken"):
+    def generate_standard_datasets(
+        self,
+        symbols: List[str] = None,
+        exchange_type: str = "kraken",
+        intervals: List[str] = None,
+        use_resampling: bool = True
+    ):
         """
         Generate standard datasets for each market regime.
 
         Args:
             symbols: List of symbols to generate data for (default: ["BTC", "ETH"])
             exchange_type: Exchange to use for data (default: "kraken")
+            intervals: List of timeframe intervals to collect (default: None, uses INTERVALS)
+            use_resampling: Whether to use resampling for higher timeframes (default: True)
         """
         if symbols is None:
             symbols = ["BTC", "ETH"]
+
+        if intervals is None:
+            intervals = INTERVALS
+
+        # Validate intervals
+        valid_intervals = []
+        for interval in intervals:
+            if interval in INTERVALS:
+                valid_intervals.append(interval)
+            else:
+                logger.warning(f"Ignoring unsupported interval: {interval}")
+
+        if not valid_intervals:
+            logger.error("No valid intervals specified")
+            return
+
+        intervals = valid_intervals
 
         # Load environment and create connector
         if not self.load_environment():
@@ -227,46 +252,80 @@ class MarketDatasetGenerator:
 
                 # Process each date range for this symbol and regime
                 for i, (start_date, end_date) in enumerate(symbols_data[symbol]):
-                    for interval in INTERVALS:
-                        # Create descriptive filename
-                        filename = f"{symbol}_{interval}_{regime}_{i+1}.csv"
-                        file_path = os.path.join(regime_dir, filename)
-
-                        # Skip if file already exists
-                        if os.path.exists(file_path):
-                            logger.info(f"Dataset already exists: {file_path}")
-                            continue
-
-                        # Download data
-                        logger.info(f"Downloading {symbol} {interval} data for {regime} market "
-                                   f"({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})")
-
+                    # Determine if we can use resampling
+                    if use_resampling and len(intervals) > 1:
+                        logger.info(f"Using resampling to generate multiple timeframes for {symbol}")
                         try:
-                            df = self.data_manager.download_data(
+                            # Get multi-timeframe data
+                            timeframe_data = self.data_manager.get_multiple_timeframes(
                                 source_name=exchange_type,
                                 symbol=symbol,
-                                interval=interval,
+                                intervals=intervals,
                                 start_time=start_date,
-                                end_time=end_date,
-                                save=False
+                                end_time=end_date
                             )
 
-                            # Clean and save data
-                            if not df.empty:
-                                df = self.data_manager.clean_data(df)
+                            # Save each timeframe
+                            for interval, df in timeframe_data.items():
+                                if not df.empty:
+                                    # Create descriptive filename
+                                    filename = f"{symbol}_{interval}_{regime}_{i+1}.csv"
+                                    file_path = os.path.join(regime_dir, filename)
 
-                                # Add market regime label
-                                df["market_regime"] = regime
+                                    # Add market regime label
+                                    df["market_regime"] = regime
 
-                                # Save to CSV
-                                df.to_csv(file_path, index=False)
-                                logger.info(f"Saved {len(df)} records to {file_path}")
-                            else:
-                                logger.warning(f"No data retrieved for {symbol} {interval} during "
-                                              f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+                                    # Save to CSV
+                                    df.to_csv(file_path, index=False)
+                                    logger.info(f"Saved {len(df)} records to {file_path}")
 
                         except Exception as e:
-                            logger.error(f"Error downloading data for {symbol} {interval}: {e}")
+                            logger.error(f"Error generating multiple timeframes for {symbol}: {e}")
+                            # Fall back to individual downloads
+                            use_resampling = False
+
+                    # If not using resampling, download each interval individually
+                    if not use_resampling:
+                        for interval in intervals:
+                            # Create descriptive filename
+                            filename = f"{symbol}_{interval}_{regime}_{i+1}.csv"
+                            file_path = os.path.join(regime_dir, filename)
+
+                            # Skip if file already exists
+                            if os.path.exists(file_path):
+                                logger.info(f"Dataset already exists: {file_path}")
+                                continue
+
+                            # Download data
+                            logger.info(f"Downloading {symbol} {interval} data for {regime} market "
+                                    f"({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})")
+
+                            try:
+                                df = self.data_manager.download_data(
+                                    source_name=exchange_type,
+                                    symbol=symbol,
+                                    interval=interval,
+                                    start_time=start_date,
+                                    end_time=end_date,
+                                    save=False
+                                )
+
+                                # Clean and save data
+                                if not df.empty:
+                                    df = self.data_manager.clean_data(df)
+
+                                    # Add market regime label
+                                    df["market_regime"] = regime
+
+                                    # Save to CSV
+                                    df.to_csv(file_path, index=False)
+                                    logger.info(f"Saved {len(df)} records to {file_path}")
+                                else:
+                                    logger.warning(f"No data retrieved for {symbol} {interval} during "
+                                                  f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+
+                            except Exception as e:
+                                logger.error(f"Error downloading data for {symbol} {interval}: {e}")
 
     def list_available_datasets(self) -> Dict[str, List[str]]:
         """

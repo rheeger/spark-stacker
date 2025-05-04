@@ -28,6 +28,19 @@ This document describes the implementation of the historical market data capabil
   - Close-to-high ratio
   - Close-to-low ratio
 
+### 3. Timeframe Support and Resolution Switching
+
+- **Enhanced DataManager**: Supports resampling data to different timeframes
+- **TimeframeManager**: A dedicated class for managing multiple timeframes during backtesting
+- Multiple timeframe support:
+  - Minute-level resolution (1m, 3m, 5m, 15m, 30m)
+  - Hour-level resolution (1h, 2h, 4h, 6h, 12h)
+  - Day-level resolution (1d, 3d, 1w)
+- Intelligent resampling to generate higher timeframes from lower timeframes
+- On-the-fly resolution switching during backtesting
+- Multi-timeframe alignment capabilities for strategy development
+- Timeframe-aware data loading and caching
+
 ## Usage
 
 ### Generating Market Datasets
@@ -38,10 +51,12 @@ from app.backtesting.market_dataset_generator import MarketDatasetGenerator
 # Initialize generator
 generator = MarketDatasetGenerator(data_dir="data/market_datasets")
 
-# Generate datasets for specific symbols
+# Generate datasets for specific symbols with multiple timeframes
 generator.generate_standard_datasets(
     symbols=["BTC", "ETH"],
-    exchange_type="kraken"
+    exchange_type="kraken",
+    intervals=["1m", "5m", "15m", "1h", "4h", "1d"],
+    use_resampling=True
 )
 
 # List available datasets
@@ -69,6 +84,39 @@ normalizer.normalize_all_datasets(
 )
 ```
 
+### Working with Multiple Timeframes
+
+```python
+from app.backtesting.timeframe_manager import TimeframeManager
+
+# Initialize timeframe manager
+manager = TimeframeManager(data_dir="data/market_datasets")
+
+# Get available timeframes for a symbol
+timeframes = manager.get_available_timeframes("BTC", market_regime="bull")
+
+# Load data for multiple timeframes
+timeframe_data = manager.load_multi_timeframe_data(
+    symbol="BTC",
+    timeframes=["1m", "5m", "1h", "4h"],
+    market_regime="bull"
+)
+
+# Align timeframes to a common timeline
+aligned_data = manager.align_timeframes(timeframe_data, base_timeframe="1h")
+
+# Get the current candle at a specific point in time for a specific timeframe
+current_time = pd.Timestamp("2023-01-01 12:30:00")
+current_candle = manager.get_current_candle(timeframe_data, "1h", current_time)
+
+# Resample data on-the-fly to a different timeframe
+resampled_data = manager.resample_on_the_fly(
+    timeframe_data["1m"],
+    source_timeframe="1m",
+    target_timeframe="15m"
+)
+```
+
 ### Command-Line Interface
 
 The `create_market_datasets.py` script provides a convenient interface for generating and normalizing datasets:
@@ -77,14 +125,20 @@ The `create_market_datasets.py` script provides a convenient interface for gener
 # List existing datasets
 python scripts/create_market_datasets.py --list-only
 
-# Generate datasets for specific symbols
-python scripts/create_market_datasets.py --symbols BTC ETH --exchange kraken
+# List available timeframes by symbol
+python scripts/create_market_datasets.py --list-timeframes
+
+# Generate datasets for specific symbols with custom timeframes
+python scripts/create_market_datasets.py --symbols BTC ETH --exchange kraken --timeframes 1m 5m 1h 4h 1d
+
+# Generate datasets with resampling disabled
+python scripts/create_market_datasets.py --symbols BTC --no-resampling
 
 # Normalize existing datasets
 python scripts/create_market_datasets.py --skip-download --normalization-methods z_score min_max
 
-# Generate and normalize in one go
-python scripts/create_market_datasets.py
+# Generate and normalize in one go with all options
+python scripts/create_market_datasets.py --symbols BTC ETH --timeframes 1m 5m 15m 1h 4h 1d --normalization-methods z_score min_max percent_change rolling_z_score
 ```
 
 ## Directory Structure
@@ -93,8 +147,10 @@ python scripts/create_market_datasets.py
 data/
 └── market_datasets/
     ├── bull/              # Bull market datasets
+    │   ├── BTC_1m_bull_1.csv
+    │   ├── BTC_5m_bull_1.csv
     │   ├── BTC_1h_bull_1.csv
-    │   ├── ETH_1h_bull_1.csv
+    │   ├── ETH_1m_bull_1.csv
     │   └── ...
     ├── bear/              # Bear market datasets
     │   ├── BTC_1h_bear_1.csv
@@ -110,9 +166,10 @@ data/
 
 ## Next Steps
 
-1. **Timeframe Support**: Implement support for different timeframes and resolution switching
-2. **Market Regime Labeling**: Create market regime labeling for performance segmentation
-3. **Realistic Trading Simulation**: Implement slippage modeling, fee structure, position sizing, and execution timing simulation
+1. **Market Regime Labeling**: Create market regime labeling for performance segmentation
+2. **Realistic Trading Simulation**: Implement slippage modeling, fee structure, position sizing, and execution timing simulation
+3. **Advanced Backtesting Capabilities**: Build comprehensive trade analytics and performance metrics
+4. **Multi-Timeframe Strategy Optimization**: Create frameworks for developing and testing strategies across multiple timeframes
 
 ## Testing
 
@@ -120,10 +177,14 @@ The implementation includes comprehensive unit tests:
 
 - `tests/unit/test_market_dataset_generator.py`: Tests for the MarketDatasetGenerator class
 - `tests/unit/test_data_normalizer.py`: Tests for the DataNormalizer class
+- `tests/unit/test_timeframe_manager.py`: Tests for the TimeframeManager class
+- `tests/unit/test_data_manager.py`: Tests for the DataManager class with focus on timeframe conversion
 
 Run tests using:
 
 ```bash
 python -m pytest tests/unit/test_market_dataset_generator.py
 python -m pytest tests/unit/test_data_normalizer.py
+python -m pytest tests/unit/test_timeframe_manager.py
+python -m pytest tests/unit/test_data_manager.py
 ```
