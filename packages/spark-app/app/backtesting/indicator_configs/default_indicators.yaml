@@ -1,0 +1,83 @@
+# Default indicator configurations
+# This file contains configurations for common indicators used in backtesting
+
+indicators:
+  - name: macd_standard
+    type: macd
+    enabled: true
+    parameters:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+      trigger_threshold: 0
+
+  - name: macd_aggressive
+    type: macd
+    enabled: true
+    parameters:
+      fast_period: 8
+      slow_period: 21
+      signal_period: 5
+      trigger_threshold: 0
+
+  - name: rsi_standard
+    type: rsi
+    enabled: true
+    parameters:
+      period: 14
+      overbought: 70
+      oversold: 30
+
+  - name: rsi_sensitive
+    type: rsi
+    enabled: true
+    parameters:
+      period: 9
+      overbought: 65
+      oversold: 35
+
+  - name: bollinger_standard
+    type: bollinger
+    enabled: true
+    parameters:
+      period: 20
+      std_dev: 2.0
+
+  - name: bollinger_wide
+    type: bollinger
+    enabled: true
+    parameters:
+      period: 20
+      std_dev: 2.5
+
+  - name: ma_crossover
+    type: ma
+    enabled: true
+    parameters:
+      short_period: 10
+      long_period: 50
+      ma_type: sma
+
+  - name: adaptive_supertrend
+    type: adaptive_supertrend
+    enabled: true
+    parameters:
+      atr_period: 10
+      multiplier: 3.0
+      adapt_period: 50
+
+  - name: adaptive_trend_finder
+    type: adaptive_trend_finder
+    enabled: true
+    parameters:
+      fast_period: 10
+      slow_period: 21
+      signal_period: 9
+
+  - name: ultimate_ma
+    type: ultimate_ma
+    enabled: true
+    parameters:
+      fast_ema: 8
+      slow_ema: 21
+      signal_ema: 5
