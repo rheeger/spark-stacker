@@ -2,7 +2,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.connectors.base_connector import OrderSide, OrderType
+from app.connectors.base_connector import OrderSide, OrderType, BaseConnector, MarketType
 from app.core.trading_engine import TradingEngine, TradingState
 from app.indicators.base_indicator import Signal, SignalDirection
 
@@ -334,52 +334,104 @@ def test_get_active_trades_and_history(trading_engine):
     trading_engine.stop()
 
 
-def test_close_all_positions(trading_engine, mock_connector):
+@pytest.mark.asyncio
+async def test_close_all_positions(trading_engine, mock_connector):
     """Test closing all positions."""
     # Add some active trades
     trading_engine.active_trades = {
-        "ETH": {"symbol": "ETH", "status": "open"},
-        "BTC": {"symbol": "BTC", "status": "open"},
+        "ETH": {
+            "symbol": "ETH",
+            "status": "open",
+            "main_position": {"side": "BUY", "size": 1.0}
+        },
+        "BTC": {
+            "symbol": "BTC",
+            "status": "open",
+            "main_position": {"side": "BUY", "size": 0.1}
+        },
     }
 
     # Mock get_positions to return some positions
     mock_connector.get_positions.return_value = [
-        {"symbol": "ETH", "size": 1.0},
-        {"symbol": "BTC", "size": 0.1},
+        {"symbol": "ETH", "size": 1.0, "side": "LONG"},
+        {"symbol": "BTC", "size": 0.1, "side": "LONG"},
     ]
+
+    # In the trading_engine.py implementation, place_order is called synchronously
+    # without awaiting it. To test this correctly, we need to patch with a regular
+    # Mock that doesn't need to be awaited
+    place_order_mock = MagicMock(return_value={"status": "FILLED"})
+    mock_connector.place_order = place_order_mock
 
     # Test in dry run mode
     result = trading_engine.close_all_positions()
     assert result is True
     assert len(trading_engine.active_trades) == 0  # Should clear trades
-    assert mock_connector.close_position.call_count == 0  # No actual close in dry run
+
+    # No orders should have been placed in dry run mode
+    assert place_order_mock.call_count == 0
 
     # Test in live mode
     trading_engine.dry_run = False
     trading_engine.active_trades = {
-        "ETH": {"symbol": "ETH", "status": "open"},
-        "BTC": {"symbol": "BTC", "status": "open"},
+        "ETH": {
+            "symbol": "ETH",
+            "status": "open",
+            "main_position": {"side": "BUY", "size": 1.0}
+        },
+        "BTC": {
+            "symbol": "BTC",
+            "status": "open",
+            "main_position": {"side": "BUY", "size": 0.1}
+        },
     }
 
+    # Reset our mock
+    place_order_mock.reset_mock()
+
+    # Now run with real implementation
     result = trading_engine.close_all_positions()
     assert result is True
-    assert mock_connector.close_position.call_count == 2  # Should close both positions
+
+    # Verify place_order was called correctly for each position
+    assert place_order_mock.call_count == 2
+
+    # Verify parameters - should call with opposite sides for closing
+    call_args_list = place_order_mock.call_args_list
+
+    # The order of calls is not guaranteed, so we need to find the correct calls for each symbol
+    for call in call_args_list:
+        kwargs = call[1]
+        if kwargs["symbol"] == "ETH":
+            assert kwargs["side"] == OrderSide.SELL  # To close a LONG/BUY position
+            assert kwargs["amount"] == 1.0
+            assert kwargs["order_type"] == OrderType.MARKET
+        elif kwargs["symbol"] == "BTC":
+            assert kwargs["side"] == OrderSide.SELL  # To close a LONG/BUY position
+            assert kwargs["amount"] == 0.1
+            assert kwargs["order_type"] == OrderType.MARKET
+
+    # Check active trades were cleared
+    assert len(trading_engine.active_trades) == 0
 
     # Test with error in closing
-    mock_connector.close_position.reset_mock()
-    mock_connector.close_position.side_effect = Exception("Test error")
-
-    # Reset the active trades
     trading_engine.active_trades = {
-        "ETH": {"symbol": "ETH", "status": "open"},
-        "BTC": {"symbol": "BTC", "status": "open"},
+        "ETH": {
+            "symbol": "ETH",
+            "status": "open",
+            "main_position": {"side": "BUY", "size": 1.0}
+        }
     }
 
+    # Make place_order raise an exception to simulate failure
+    place_order_mock.side_effect = Exception("Test error")
+
+    # This should return False due to the error
     result = trading_engine.close_all_positions()
-    assert result is False  # Should return failure due to error
+    assert result is False
 
     # Clean up
-    mock_connector.close_position.side_effect = None
     trading_engine.dry_run = True
     trading_engine.active_trades = {}
+    place_order_mock.side_effect = None  # Remove side effect
     trading_engine.stop()

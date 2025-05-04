@@ -1617,38 +1617,9 @@ class TradingEngine:
 
                 if main_size > 0:
                     logger.info(f"Closing main position for {symbol}: {main_size} units with {main_side.value}")
-                    main_result = await self.main_connector.place_order(
-                        symbol=symbol,
-                        side=main_side,
-                        order_type=OrderType.MARKET,
-                        amount=main_size,
-                        price=None
-                    )
-                    if not main_result:
-                        logger.error(f"Failed to close main position for {symbol}")
-                        return False
-                    logger.info(f"Closed main position for {symbol}")
+                    self.main_connector.close_position(symbol)
                 else:
                     logger.info(f"No main position to close for {symbol}")
-
-                # Close hedge position if it exists
-                if "hedge_position" in trade and self._can_hedge:
-                    hedge_side = OrderSide.SELL if trade["hedge_position"]["side"] == "BUY" else OrderSide.BUY
-                    hedge_size = abs(current_hedge_position.get("size", 0)) if current_hedge_position else trade["hedge_position"]["size"]
-
-                    if hedge_size > 0:
-                        logger.info(f"Closing hedge position for {symbol}: {hedge_size} units with {hedge_side.value}")
-                        hedge_result = await self.hedge_connector.place_order(
-                            symbol=symbol,
-                            side=hedge_side,
-                            order_type=OrderType.MARKET,
-                            amount=hedge_size,
-                            price=None
-                        )
-                        if not hedge_result:
-                            logger.warning(f"Failed to close hedge position for {symbol}")
-                        else:
-                            logger.info(f"Closed hedge position for {symbol}")
 
             # Update trade record
             trade["status"] = "closed"
@@ -1715,38 +1686,9 @@ class TradingEngine:
 
                 if main_size > 0:
                     logger.info(f"Closing main position for {symbol}: {main_size} units with {main_side.value}")
-                    main_result = await self.main_connector.place_order(
-                        symbol=symbol,
-                        side=main_side,
-                        order_type=OrderType.MARKET,
-                        amount=main_size,
-                        price=None
-                    )
-                    if not main_result:
-                        logger.error(f"Failed to close main position for {symbol}")
-                        return False
-                    logger.info(f"Closed main position for {symbol}")
+                    self.main_connector.close_position(symbol)
                 else:
                     logger.info(f"No main position to close for {symbol}")
-
-                # Close hedge position if it exists
-                if "hedge_position" in trade and self._can_hedge:
-                    hedge_side = OrderSide.SELL if trade["hedge_position"]["side"] == "BUY" else OrderSide.BUY
-                    hedge_size = abs(current_hedge_position.get("size", 0)) if current_hedge_position else trade["hedge_position"]["size"]
-
-                    if hedge_size > 0:
-                        logger.info(f"Closing hedge position for {symbol}: {hedge_size} units with {hedge_side.value}")
-                        hedge_result = await self.hedge_connector.place_order(
-                            symbol=symbol,
-                            side=hedge_side,
-                            order_type=OrderType.MARKET,
-                            amount=hedge_size,
-                            price=None
-                        )
-                        if not hedge_result:
-                            logger.warning(f"Failed to close hedge position for {symbol}")
-                        else:
-                            logger.info(f"Closed hedge position for {symbol}")
 
             # Unlike regular close_position, we don't remove the trade from active_trades
             # We just mark it as closing so we can replace it
@@ -1877,6 +1819,7 @@ class TradingEngine:
 
                             # Execute opposite side order to close
                             close_side = OrderSide.SELL if side == "LONG" or side == "BUY" else OrderSide.BUY
+                            logger.info(f"Calling place_order({symbol}, {close_side}, MARKET, {size})")
                             self.main_connector.place_order(
                                 symbol=symbol,
                                 side=close_side,

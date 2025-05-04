@@ -279,6 +279,7 @@ def mock_connector():
     }
     connector.get_account_balance.return_value = {"USD": 10000.0}
     connector.get_positions.return_value = []
+    connector.close_position = MagicMock(return_value={"status": "success"})
 
     # Create an async mock for place_order
     async def mock_place_order(*args, **kwargs):

@@ -127,6 +127,11 @@ def connected_connector(connector):
         connector.exchange = MagicMock()
         connector._is_connected = True
 
+    # Initialize loggers for tests
+    connector.balance_logger = logging.getLogger("test.hyperliquid.balance")
+    connector.markets_logger = logging.getLogger("test.hyperliquid.markets")
+    connector.orders_logger = logging.getLogger("test.hyperliquid.orders")
+
     return connector
 
 # =============================================================================

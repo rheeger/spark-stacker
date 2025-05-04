@@ -290,6 +290,11 @@ def hyperliquid_connector():
     connector.exchange = mock_exchange
     connector._is_connected = True
 
+    # Initialize loggers
+    connector.balance_logger = logging.getLogger("test.hyperliquid.balance")
+    connector.markets_logger = logging.getLogger("test.hyperliquid.markets")
+    connector.orders_logger = logging.getLogger("test.hyperliquid.orders")
+
     return connector
 
 
@@ -633,8 +638,8 @@ def test_invalid_market_handling(hyperliquid_connector):
         hyperliquid_connector.get_ticker("INVALID_MARKET")
 
 
-@pytest.mark.skipif(not has_hyperliquid_creds(), reason="No Hyperliquid credentials available")
-def test_invalid_order_params(hyperliquid_connector):
+@pytest.mark.asyncio
+async def test_invalid_order_params(hyperliquid_connector):
     """Test handling of invalid order parameters."""
     # Mock market metadata
     mock_market_info = {
@@ -653,7 +658,7 @@ def test_invalid_order_params(hyperliquid_connector):
 
     # Test with invalid amount (0)
     with pytest.raises(ValueError, match="Order amount must be positive"):
-        hyperliquid_connector.place_order(
+        await hyperliquid_connector.place_order(
             symbol="BTC",
             side=OrderSide.BUY,
             order_type=OrderType.LIMIT,
@@ -758,35 +763,6 @@ async def test_place_order(hyperliquid_connector):
     assert response["price"] == 50000.0
 
 @pytest.mark.asyncio
-async def test_invalid_order_params(hyperliquid_connector):
-    """Test handling of invalid order parameters."""
-    # Mock market metadata
-    mock_market_info = {
-        "universe": [{
-            "name": "BTC",
-            "szDecimals": 8,
-            "minSize": "0.0001",
-            "tickSize": "0.1",
-            "makerFeeRate": 0.0002,
-            "takerFeeRate": 0.0005,
-            "maxLeverage": 50.0,
-            "fundingInterval": 3600,
-        }]
-    }
-    hyperliquid_connector.info.meta.return_value = mock_market_info
-
-    # Test with invalid amount (0)
-    with pytest.raises(ValueError, match="Order amount must be positive"):
-        await hyperliquid_connector.place_order(
-            symbol="BTC",
-            side=OrderSide.BUY,
-            order_type=OrderType.LIMIT,
-            amount=0,
-            price=50000.0,
-            leverage=1.0
-        )
-
-@pytest.mark.asyncio
 @pytest.mark.production
 @pytest.mark.skipif(not has_hyperliquid_creds() or get_hyperliquid_creds().get('testnet', True),
                     reason="Requires PRODUCTION Hyperliquid credentials (testnet=False)")
@@ -864,7 +840,7 @@ async def test_place_and_close_minimum_size_order_production(mock_get_markets, h
         symbol="BTC",
         side=OrderSide.BUY,
         order_type=OrderType.MARKET,
-        amount=Decimal("0.001")
+        amount=0.001
     )
 
     # Verify buy order response
