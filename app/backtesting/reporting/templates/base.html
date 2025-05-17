@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Spark Stacker Indicator Report{% endblock %}</title>
+    <link rel="stylesheet" href="{{ static_path }}/style.css" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <h1>Spark Stacker</h1>
+        <div class="report-info">
+          <h2>
+            {% block report_title %}Indicator Performance Report{% endblock %}
+          </h2>
+          <div class="metadata">
+            <p>Generated: {{ generation_time }}</p>
+            <p>Market: {{ market }}</p>
+            <p>Timeframe: {{ timeframe }}</p>
+            <p>Period: {{ start_date }} - {{ end_date }}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      {% block content %}
+      <div class="summary-section">
+        <h3>Summary</h3>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <h4>Win Rate</h4>
+            <div class="metric-value">{{ metrics.win_rate|round(2) }}%</div>
+          </div>
+          <div class="metric-card">
+            <h4>Profit Factor</h4>
+            <div class="metric-value">{{ metrics.profit_factor|round(2) }}</div>
+          </div>
+          <div class="metric-card">
+            <h4>Total Return</h4>
+            <div class="metric-value">{{ metrics.total_return|round(2) }}%</div>
+          </div>
+          <div class="metric-card">
+            <h4>Max Drawdown</h4>
+            <div class="metric-value">{{ metrics.max_drawdown|round(2) }}%</div>
+          </div>
+          <div class="metric-card">
+            <h4>Sharpe Ratio</h4>
+            <div class="metric-value">{{ metrics.sharpe|round(2) }}</div>
+          </div>
+          <div class="metric-card">
+            <h4>Total Trades</h4>
+            <div class="metric-value">{{ metrics.total_trades }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="charts-section">
+        <h3>Performance Charts</h3>
+        <div class="chart-container">
+          <div class="chart" id="price-chart">
+            <img src="{{ charts.price_chart }}" alt="Price Chart with Trades" />
+          </div>
+          <div class="chart" id="equity-curve">
+            <img src="{{ charts.equity_curve }}" alt="Equity Curve" />
+          </div>
+          <div class="chart" id="drawdown-chart">
+            <img src="{{ charts.drawdown_chart }}" alt="Drawdown Chart" />
+          </div>
+        </div>
+      </div>
+
+      <div class="trades-section">
+        <h3>Trade List</h3>
+        <div class="trades-filter">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="win">Winners</button>
+          <button class="filter-btn" data-filter="loss">Losers</button>
+        </div>
+        <div class="trades-table-container">
+          <table class="trades-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Entry Time</th>
+                <th>Exit Time</th>
+                <th>Direction</th>
+                <th>Entry Price</th>
+                <th>Exit Price</th>
+                <th>Size</th>
+                <th>P&L</th>
+                <th>P&L %</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for trade in trades %}
+              <tr class="trade-row {{ 'win' if trade.pnl > 0 else 'loss' }}">
+                <td>{{ loop.index }}</td>
+                <td>{{ trade.entry_time }}</td>
+                <td>{{ trade.exit_time }}</td>
+                <td>{{ trade.direction }}</td>
+                <td>{{ trade.entry_price|round(2) }}</td>
+                <td>{{ trade.exit_price|round(2) }}</td>
+                <td>{{ trade.size|round(4) }}</td>
+                <td class="{{ 'positive' if trade.pnl > 0 else 'negative' }}">
+                  {{ trade.pnl|round(2) }}
+                </td>
+                <td
+                  class="{{ 'positive' if trade.pnl_pct > 0 else 'negative' }}"
+                >
+                  {{ trade.pnl_pct|round(2) }}%
+                </td>
+                <td>{{ trade.duration }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endblock %}
+    </main>
+
+    <footer>
+      <div class="container">
+        <p>Spark Stacker &copy; {{ current_year }}</p>
+        <p>Generated with Spark Stacker Backtesting Engine</p>
+      </div>
+    </footer>
+
+    <script>
+      // Simple JS for trade filtering
+      document.addEventListener('DOMContentLoaded', function () {
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        const tradeRows = document.querySelectorAll('.trade-row');
+
+        filterButtons.forEach((button) => {
+          button.addEventListener('click', function () {
+            const filter = this.getAttribute('data-filter');
+
+            // Remove active class from all buttons
+            filterButtons.forEach((btn) => btn.classList.remove('active'));
+
+            // Add active class to clicked button
+            this.classList.add('active');
+
+            // Show all rows if filter is 'all'
+            if (filter === 'all') {
+              tradeRows.forEach((row) => (row.style.display = ''));
+            } else {
+              // Hide/show rows based on filter
+              tradeRows.forEach((row) => {
+                if (row.classList.contains(filter)) {
+                  row.style.display = '';
+                } else {
+                  row.style.display = 'none';
+                }
+              });
+            }
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
