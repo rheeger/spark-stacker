@@ -18,11 +18,29 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          # Enable pip cache to speed up subsequent workflow runs
           cache: 'pip'
-          # Use the requirements file to create a cache hash, so the cache is
-          # automatically invalidated when dependencies change.
           cache-dependency-path: packages/spark-app/requirements.txt
+
+      # Explicit caching configuration
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        id: pip-cache
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('packages/spark-app/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Verify cache status
+        run: |
+          echo "Cache hit: ${{ steps.pip-cache.outputs.cache-hit }}"
+          echo "Cache key: ${{ runner.os }}-pip-${{ hashFiles('packages/spark-app/requirements.txt') }}"
+          if [ "${{ steps.pip-cache.outputs.cache-hit }}" == "true" ]; then
+            echo "Cache was successfully used!"
+            ls -la ~/.cache/pip || echo "Cannot list pip cache directory"
+          else
+            echo "Cache was not found or is being initialized"
+          fi
 
       - name: Install dependencies
         run: |
@@ -31,10 +49,21 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pytest-cov
 
-      - name: Display directory structure
+      - name: Set up environment and debug info
         run: |
+          echo "Python executable: $(which python)"
+          echo "Python version: $(python --version)"
+          echo "Pip version: $(pip --version)"
+          echo "Working directory: $(pwd)"
+          echo "OS: $(uname -a)"
+
+          # Create environment variable file for debugging
           cd packages/spark-app
-          find . -type f -name "*.py" | sort
+          echo "PYTHONPATH=$PWD" > .env
+          echo "PATH=$PATH" >> .env
+
+          # Print directory structure
+          find . -type f -name "*.py" | grep -E "app/utils|tests/" | sort
 
       - name: Test direct import
         run: |
@@ -44,12 +73,23 @@ jobs:
       - name: Run quick tests
         run: |
           cd packages/spark-app
-          python -m pytest -m "not slow" --cov=app tests/
+          # Export environment variables
+          export PYTHONPATH=$PYTHONPATH:$PWD
+          export PYTEST_RUNNING=True
+          export PYTHONUNBUFFERED=1
+
+          # Run the tests with verbose output
+          python -m pytest -xvs -m "not slow" --cov=app tests/
 
       - name: Generate coverage report
         run: |
           cd packages/spark-app
-          python -m pytest --cov=app --cov-report=xml
+          # Export environment variables
+          export PYTHONPATH=$PYTHONPATH:$PWD
+          export PYTEST_RUNNING=True
+          export PYTHONUNBUFFERED=1
+
+          python -m pytest -xvs --cov=app --cov-report=xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

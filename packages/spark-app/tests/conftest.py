@@ -510,3 +510,17 @@ def pytest_configure(config):
         config.option.asyncio_mode = "auto"
     except ImportError:
         pass
+
+# Adjust the Python path to include the app directory
+# This ensures that 'app' can be imported directly in the tests
+APP_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../app"))
+sys.path.insert(0, os.path.dirname(APP_PATH))
+
+print(f"conftest.py: Added to sys.path: {os.path.dirname(APP_PATH)}")
+print(f"conftest.py: sys.path: {sys.path[:3]}")
+
+
+@pytest.fixture(scope="session")
+def app_path():
+    """Return the absolute path to the app directory."""
+    return APP_PATH
