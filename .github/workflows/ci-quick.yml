@@ -28,12 +28,12 @@ jobs:
       - name: Run quick tests
         run: |
           cd packages/spark-app
-          python -m pytest -m "not slow" --cov=app
+          PYTHONPATH=$PYTHONPATH:$(pwd) python -m pytest -m "not slow" --cov=app
 
       - name: Generate coverage report
         run: |
           cd packages/spark-app
-          python -m coverage xml
+          PYTHONPATH=$PYTHONPATH:$(pwd) python -m coverage xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
