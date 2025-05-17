@@ -6,7 +6,7 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
-  cacheDir: '../node_modules/.vite/packages',
+  cacheDir: '../../node_modules/.vite/packages/backtesting-ui',
   server: {
     port: 4200,
     host: 'localhost',
@@ -21,7 +21,7 @@ export default defineConfig(() => ({
   //  plugins: [ nxViteTsPaths() ],
   // },
   build: {
-    outDir: '../dist/packages',
+    outDir: '../../dist/packages/backtesting-ui',
     emptyOutDir: true,
     reportCompressedSize: true,
     commonjsOptions: {

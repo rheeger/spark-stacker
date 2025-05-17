@@ -1,6 +1,6 @@
 import { getGreeting } from '../support/app.po';
 
-describe('packages-e2e', () => {
+describe('backtesting-ui-e2e', () => {
   beforeEach(() => cy.visit('/'));
 
   it('should display welcome message', () => {

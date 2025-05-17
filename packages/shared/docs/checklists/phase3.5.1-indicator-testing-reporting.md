@@ -23,13 +23,13 @@ high-leverage trading strategies.
 
   - [x] Install required NX plugins: `yarn add -D @nx/react -W`
   - [x] Generate a React application with proper configuration:
-        `nx g @nx/react:application backtesting-ui --style=scss --routing=true --e2eTestRunner=cypress --linter=eslint --unitTestRunner=jest --directory=packages`
-  - [ ] Install visualization and UI libraries:
+        `nx g @nx/react:application backtesting-ui --style=scss --routing=true --e2eTestRunner=cypress --linter=eslint --unitTestRunner=jest --directory=packages/backtesting-ui --bundler=vite`
+  - [x] Install visualization and UI libraries:
         `yarn add recharts d3 @tremor/react react-table date-fns tailwindcss postcss autoprefixer -W`
-  - [ ] Set up Tailwind CSS configuration with proper content paths
-  - [ ] Create required folder structure: components, hooks, services, utils
-  - [ ] Create a sample visualization component to validate the setup
-  - [ ] Verify the new app builds and serves correctly:
+  - [x] Set up Tailwind CSS configuration with proper content paths
+  - [x] Create required folder structure: components, hooks, services, utils
+  - [x] Create a sample visualization component to validate the setup
+  - [x] Verify the new app builds and serves correctly:
         `nx build backtesting-ui && nx serve backtesting-ui`
 
 - [ ] **Create shared libraries for common functionality**
