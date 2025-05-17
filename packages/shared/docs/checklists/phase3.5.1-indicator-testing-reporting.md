@@ -1,118 +1,278 @@
-# Phase 3.5.1: Indicator Backtesting and Performance Reporting
+# Phase 3.5.1: Enhanced Indicator Performance Reporting
 
 ## Overview
 
-This phase focuses on evaluating our existing trading indicators against recent Hyperliquid market
-data to identify highly predictable trading signals. We will leverage our existing infrastructure to
-backtest all indicators on 1-minute candles and generate comprehensive reports highlighting
-predictability metrics rather than just returns. The goal is to identify indicators or combinations
-that produce consistent, reliable signals suitable for high-leverage trading with tight stop losses.
+This phase focuses on building comprehensive HTML-based performance reports for our trading
+indicators. Based on our existing test infrastructure, we'll develop standardized reporting
+templates that enable quick assessment of indicator predictability and performance over time. The
+goal is to create intuitive reports that highlight the most reliable trading signals for
+high-leverage trading strategies.
 
 ## Prerequisites
 
-- Functional exchange connectors to pull Hyperliquid historical data
-- Existing indicators in the `app/indicators` directory
-- Basic backtesting capabilities
+- Existing indicator test harness (already implemented)
+- Backtesting engine capabilities (already implemented)
+- Basic results storage in JSON/Markdown (already implemented)
+- Functional exchange connectors (Hyperliquid, etc.)
 
 ## Tasks
 
-### 1. Create Streamlined Backtesting Framework for Indicator Evaluation
+### 0. Set Up Backtesting UI Package in NX Monorepo
 
-- [ ] **Set up standardized testing environment**
+- [ ] **Create new package for backtesting UI/frontend with NX React Preset**
 
-  - [ ] Create a script to pull the last 1000 1-minute candles from Hyperliquid
-  - [ ] Set up config to use production environment variables
-  - [ ] Build a simple runner to test each indicator with identical market data
-  - [ ] Implement parallel processing to evaluate all indicators efficiently
+  - [ ] Install required NX plugins: `yarn add -D @nx/react -W`
+  - [ ] Generate a React application with proper configuration:
+        `nx g @nx/react:application backtesting-ui --style=scss --routing=true --e2eTestRunner=cypress --linter=eslint --unitTestRunner=jest --directory=packages`
+  - [ ] Install visualization and UI libraries:
+        `yarn add recharts d3 @tremor/react react-table date-fns tailwindcss postcss autoprefixer -W`
+  - [ ] Set up Tailwind CSS configuration with proper content paths
+  - [ ] Create required folder structure: components, hooks, services, utils
+  - [ ] Create a sample visualization component to validate the setup
+  - [ ] Verify the new app builds and serves correctly:
+        `nx build backtesting-ui && nx serve backtesting-ui`
 
-- [ ] **Implement practical signal evaluation metrics**
-  - [ ] Add win rate calculation (% of profitable trades)
-  - [ ] Calculate average win/loss ratio
-  - [ ] Measure signal consistency (false positives vs. true positives)
-  - [ ] Track maximum consecutive wins/losses
-  - [ ] Add drawdown metrics for risk assessment
-  - [ ] Implement stop-loss simulation to measure effectiveness
+- [ ] **Create shared libraries for common functionality**
 
-### 2. Develop Trade Predictability Analysis
+  - [ ] Create shared types library with `nx g @nx/js:lib backtesting-types --directory=shared`
+  - [ ] Define core data interfaces (IndicatorResult, BacktestResult, TradeData, etc.)
+  - [ ] Create shared utility functions for data processing
+  - [ ] Add unit tests for shared utilities and type validation
 
-- [ ] **Build entry/exit precision metrics**
+- [ ] **Set up data source integration with existing connectors**
 
-  - [ ] Measure average price movement after signal before reversal
-  - [ ] Calculate signal-to-noise ratio for each indicator
-  - [ ] Track time-to-profit metrics (how quickly signals become profitable)
-  - [ ] Implement "perfect hindsight" comparison (how close to optimal entry/exit)
-  - [ ] Create false signal detection and statistics
+  - [ ] Create integration layer for Hyperliquid connector
+  - [ ] Implement data fetching service for historical market data
+  - [ ] Set up data validation and quality checks for real market data
+  - [ ] Create standardized data formats for different timeframes
+  - [ ] Implement caching mechanisms for frequently accessed market data
+  - [ ] Add data refresh capabilities to update with latest market data
+  - [ ] Test data retrieval with large datasets from real exchange data
 
-- [ ] **Implement practical performance metrics**
-  - [ ] Calculate risk-adjusted returns (Sharpe, Sortino ratios)
-  - [ ] Measure average trade duration
-  - [ ] Track maximum adverse excursion (MAE) to optimize stop-loss placement
-  - [ ] Calculate position sizing effectiveness based on signal strength
-  - [ ] Implement volatility-adjusted performance metrics
+- [ ] **Set up API layer to access spark-app testing harness**
 
-### 3. Create Visual HTML Reporting System
+  - [ ] Design API contract between backtesting-ui and spark-app
+  - [ ] Document API endpoints with request/response schemas
+  - [ ] Implement API endpoints in spark-app to expose testing functionality
+  - [ ] Create data access service to proxy requests to the testing harness
+  - [ ] Set up cross-package imports in tsconfig/jest.config
+  - [ ] Create lightweight adapter for backtesting engine integration
+  - [ ] Implement error handling and retry mechanisms
+  - [ ] Test data flow from spark-app to backtesting-ui with real market data
+  - [ ] Create API documentation for developers
 
-- [ ] **Build comprehensive HTML reports**
+- [ ] **Implement core infrastructure for reporting**
+  - [ ] Set up data persistence layer for storing report results
+  - [ ] Design data schema for report storage
+  - [ ] Create report model with versioning capability
+  - [ ] Implement data transformation between Python and TypeScript formats
+  - [ ] Set up caching strategy for report data
+  - [ ] Implement batch processing of multiple indicators
+  - [ ] Add authentication for report access (if needed)
+  - [ ] Create configuration management for report settings
+  - [ ] Build logging system for tracking report generation and access
 
-  - [ ] Create an enhanced version of the existing view_plots.html
-  - [ ] Add interactive price charts with entry/exit points
-  - [ ] Include performance metrics dashboard at the top
-  - [ ] Show trade journal with all entries/exits and reasons
-  - [ ] Add equity curve with drawdown visualization
-  - [ ] Create comparison view for multiple indicators
+### 1. Develop Interactive HTML Report Template
 
-- [ ] **Implement key predictability visualizations**
-  - [ ] Add distribution chart of winning vs. losing trades
-  - [ ] Create signal reliability heatmap (time of day, market conditions)
-  - [ ] Show false positive/negative rate visualization
-  - [ ] Add stop-loss effectiveness visualization
-  - [ ] Include chart of consecutive wins/losses sequences
+- [ ] **Create base HTML report template**
 
-### 4. Develop Multi-Indicator Strategy Testing
+  - [ ] Design page layout wireframes with component placement
+  - [ ] Create mockups for the main reporting views
+  - [ ] Implement responsive layout with navigation sidebar
+  - [ ] Create base CSS styling system with variables for theming
+  - [ ] Set up data visualization theme (colors, fonts, grid styles)
+  - [ ] Build component library for metrics, cards, and panels
+  - [ ] Create reusable component templates for charts and tables
+  - [ ] Implement filter panel with controls for time periods
+  - [ ] Add market condition filtering capabilities
+  - [ ] Create settings panel for user preferences
+  - [ ] Implement basic state management for user settings
 
-- [ ] **Create simple indicator combination framework**
+- [ ] **Implement core visualization components**
+  - [ ] Research and select appropriate charting libraries
+  - [ ] Create proof of concept visualizations with real Hyperliquid data
+  - [ ] Set up chart theme and default configurations
+  - [ ] Create interactive price chart with zoom capabilities
+  - [ ] Add entry/exit points overlay on price charts
+  - [ ] Implement tooltip system for data point inspection
+  - [ ] Build equity curve chart with drawdown highlighting
+  - [ ] Create performance metrics dashboard component
+  - [ ] Add key metrics display (win rate, Sharpe, drawdown, etc.)
+  - [ ] Implement trade history table with sorting and filtering
+  - [ ] Add pagination or virtualization for large datasets
+  - [ ] Create data export capability (CSV, Excel, JSON)
+  - [ ] Add printable report view with all relevant charts
+  - [ ] Build chart annotation system for marking key events
+  - [ ] Implement chart state persistence (zoom levels, annotations)
+  - [ ] Create unit tests with real market data
 
-  - [ ] Implement basic signal confirmation logic (require multiple indicators to agree)
-  - [ ] Add weighted signal approach based on individual indicator reliability
-  - [ ] Create simple voting mechanism for entry/exit decisions
-  - [ ] Test basic AND/OR logic combinations of top-performing indicators
-  - [ ] Develop filter approach (one indicator triggers, another confirms)
+### 2. Build Advanced Performance Analytics
 
-- [ ] **Build comparative reporting for strategies**
-  - [ ] Create head-to-head comparison view for different strategies
-  - [ ] Add combined metrics dashboard for multi-indicator strategies
-  - [ ] Implement correlation analysis between indicators
-  - [ ] Show win rate improvement from combining indicators
-  - [ ] Create predictability improvement visualization
+- [ ] **Implement predictability metrics**
+
+  - [ ] Design predictability metrics framework and calculations
+  - [ ] Document formulas and implementation for each metric
+  - [ ] Create signal reliability calculator component
+  - [ ] Implement % of profitable trades after signal calculation
+  - [ ] Add time window selector for signal reliability metrics
+  - [ ] Create perfect hindsight comparison algorithm
+  - [ ] Visualize optimal vs. actual entries on charts
+  - [ ] Calculate and display missed opportunities metrics
+  - [ ] Develop signal-to-noise ratio calculation for each indicator
+  - [ ] Create visualization for signal quality over time
+  - [ ] Implement stop-loss effectiveness calculator
+  - [ ] Build stop-loss visualization showing prevented losses
+  - [ ] Add MAE/MFE (Maximum Adverse/Favorable Excursion) charts
+  - [ ] Create benchmark comparison for each metric
+  - [ ] Implement statistical significance testing for results
+  - [ ] Add unit tests for metric calculations with real market data
+
+- [ ] **Develop time-based performance analytics**
+  - [ ] Create data aggregation service for time-based analytics
+  - [ ] Implement sliding window performance calculator
+  - [ ] Add equity curve with configurable window size
+  - [ ] Create periodic breakdown components (daily/weekly/monthly)
+  - [ ] Implement calendar heatmap for performance visualization
+  - [ ] Build market condition classifier for real market data
+  - [ ] Document market condition classification criteria
+  - [ ] Create performance breakdown by market condition
+  - [ ] Add volatility-adjusted performance metrics
+  - [ ] Implement indicator correlation calculator
+  - [ ] Create correlation heatmap for related indicators
+  - [ ] Add correlation timeline to show changing relationships
+  - [ ] Build performance attribution analysis by factor
+  - [ ] Implement progressive loading for large time series datasets
+  - [ ] Add export capabilities for time-based analyses
+  - [ ] Verify calculations with historical market data periods
+
+### 3. Create Comparative Reporting System
+
+- [ ] **Build multi-indicator comparison views**
+
+  - [ ] Design comparative dashboard layout
+  - [ ] Create indicator selector with multi-select capability
+  - [ ] Implement side-by-side metric comparison component
+  - [ ] Add radar charts for multi-dimensional comparison
+  - [ ] Create rank-ordered tables for key performance metrics
+  - [ ] Implement custom sorting and filtering for tables
+  - [ ] Create indicator combination testing framework
+  - [ ] Define combination logic (AND, OR, weighted, sequential)
+  - [ ] Build combined strategy performance visualization
+  - [ ] Add parameter sensitivity analysis for each indicator
+  - [ ] Create parameter optimization suggestions
+  - [ ] Implement win rate comparison across indicators
+  - [ ] Create win rate improvement visualization for combinations
+  - [ ] Build trading opportunity overlap analysis
+  - [ ] Add statistical significance testing for comparisons
+  - [ ] Create exportable comparison reports
+  - [ ] Test combinations against varied market conditions using real data
+
+- [ ] **Develop historical performance tracking**
+  - [ ] Implement report versioning system
+  - [ ] Create report history storage and retrieval
+  - [ ] Build indicator performance timeline view
+  - [ ] Add version comparison functionality
+  - [ ] Create diff view for comparing report versions
+  - [ ] Implement trend analysis for performance metrics
+  - [ ] Create performance degradation detection algorithm
+  - [ ] Document degradation thresholds and detection criteria
+  - [ ] Build alerting system for significant changes
+  - [ ] Add parameter tracking for adaptive indicators
+  - [ ] Create parameter drift visualization
+  - [ ] Implement optimization suggestion system
+  - [ ] Build trade distribution analysis over time
+  - [ ] Add market regime change detection
+  - [ ] Create advanced filtering for historical data
+  - [ ] Verify performance consistency across multiple timeframes
+
+### 4. Documentation and Knowledge Base
+
+- [ ] **Create comprehensive documentation**
+
+  - [ ] Write technical documentation for developer onboarding
+  - [ ] Create API documentation with examples
+  - [ ] Build user guide for report interpretation
+  - [ ] Document metric calculations and methodologies
+  - [ ] Create tutorials for common reporting workflows
+  - [ ] Add contextual help throughout the UI
+  - [ ] Document data source integrations and requirements
+
+- [ ] **Build knowledge base for best practices**
+  - [ ] Document common patterns in successful strategies
+  - [ ] Create guidelines for interpreting performance metrics
+  - [ ] Add reference material for indicator combinations
+  - [ ] Document known limitations and caveats
+  - [ ] Create troubleshooting guide for common issues
+  - [ ] Add examples using real historical market scenarios
 
 ## Validation Criteria
 
-- [ ] **Practical backtest validation**
+- [ ] **Package structure and integration works correctly**
 
-  - [ ] All indicators can be backtested against the same Hyperliquid dataset
-  - [ ] Win rates and performance metrics are accurately calculated
-  - [ ] HTML reports clearly show entry/exit points with reasons
-  - [ ] Stop-loss simulation shows realistic results
+  - [ ] Backtesting-ui package builds and serves without errors
+  - [ ] Data flows correctly from spark-app testing harness to UI
+  - [ ] API endpoints return expected data formats
+  - [ ] Error handling works as expected with graceful fallbacks
+  - [ ] Shared types are consistent across packages
+  - [ ] End-to-end tests pass for core functionality
+  - [ ] Connector integration works with real exchange data
 
-- [ ] **Predictability validation**
-  - [ ] Identified indicators show consistent signals with minimal false positives
-  - [ ] Win/loss ratio and consecutive win/loss metrics show reliability
-  - [ ] Combined indicator strategies show improved predictability over single indicators
-  - [ ] Reports clearly highlight most predictable indicators/strategies
+- [ ] **HTML reports successfully display all metrics**
+
+  - [ ] Base template renders correctly with all components
+  - [ ] All visualizations display properly across different screen sizes
+  - [ ] Interactive elements respond correctly to user interaction
+  - [ ] Filtering and navigation controls work as expected
+  - [ ] Time period selectors correctly update displayed data
+  - [ ] Performance metrics match underlying calculations exactly
+  - [ ] Charts render correctly with accurate data representation
+  - [ ] Accessibility audit passes with no major issues
+  - [ ] Large datasets render efficiently without performance issues
+
+- [ ] **Performance analytics produce valid results**
+
+  - [ ] Predictability metrics match manual calculations
+  - [ ] Time-based analyses show correct periodic breakdowns
+  - [ ] Sliding window calculations perform efficiently
+  - [ ] Market condition classification is accurate
+  - [ ] Correlation heatmap shows expected relationships
+  - [ ] Statistical significance is properly calculated and displayed
+  - [ ] Performance measurements are consistent with backtesting engine
+  - [ ] Results match when using different historical data periods
+
+- [ ] **Comparative analysis functions correctly**
+  - [ ] Multiple indicators display correctly in comparison views
+  - [ ] Rank ordering of indicators is accurate by selected metrics
+  - [ ] Combined strategies accurately reflect component indicators
+  - [ ] Historical performance tracking shows correct trends
+  - [ ] Version comparison highlights expected differences
+  - [ ] Filtering by market conditions produces consistent results
+  - [ ] Strategy combinations produce valid results
+  - [ ] Parameter sensitivity analysis shows correct impact
 
 ## Expected Outcomes
 
-1. [ ] Complete backtests of all indicators against recent Hyperliquid 1-minute data
-2. [ ] Clear identification of the most predictable indicators (not just highest return)
-3. [ ] Detailed HTML reports showing performance and predictability metrics
-4. [ ] Validated multi-indicator strategies with improved reliability
-5. [ ] Identification of optimal stop-loss and position sizing for selected strategies
+1. [ ] Functional backtesting-ui package integrated with spark-app testing harness
+2. [ ] Complete HTML reporting system for all indicators with interactive UI
+3. [ ] Advanced analytics dashboard with predictability metrics
+4. [ ] Interactive comparison views for identifying best strategies
+5. [ ] Time-series tracking of indicator performance over market cycles
+6. [ ] Comprehensive documentation for developers and users
+7. [ ] Validated performance reports using real exchange data
+
+## Deliverables
+
+1. [ ] Source code for backtesting-ui package in the NX monorepo
+2. [ ] API documentation for integration between spark-app and backtesting-ui
+3. [ ] Unit and integration tests with >80% coverage using real data
+4. [ ] User guide for report interpretation and usage
+5. [ ] Example reports for all current indicators using Hyperliquid data
+6. [ ] Data connector integration documentation
 
 ## Next Steps
 
-After completing testing and reporting:
+After completing the reporting system:
 
-1. 🔜 Select top 3 most predictable indicator strategies for live testing
-2. 🔜 Implement the selected strategies with proper risk management
-3. 🔜 Set up real-time performance monitoring for deployed strategies
-4. 🔜 Create periodic re-evaluation process to ensure continued effectiveness
+1. 🔜 Use reports to select top 3 most predictable indicator strategies for live testing
+2. 🔜 Implement continuous performance monitoring
+3. 🔜 Develop automated report generation pipeline
