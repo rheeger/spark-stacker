@@ -162,7 +162,7 @@ def generate_sample_price_data(symbol: str = "ETH") -> pd.DataFrame:
 
 
 @pytest.fixture
-def sample_price_data():
+def sample_price_data(request):
     """
     Sample price data for indicator testing from cache.
     Falls back to synthetic data only if pytest is run with --allow-synthetic-data flag.
@@ -175,7 +175,7 @@ def sample_price_data():
         )
     except FileNotFoundError as e:
         # Check if we should allow synthetic data fallback
-        if pytest.config.getoption("--allow-synthetic-data", default=False):
+        if request.config.getoption("--allow-synthetic-data", default=False):
             logger.warning(
                 "Using synthetic data because cached data is missing and --allow-synthetic-data flag is present"
             )

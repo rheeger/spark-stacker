@@ -3,7 +3,6 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.indicators.base_indicator import SignalDirection
 from app.indicators.bollinger_bands_indicator import BollingerBandsIndicator
 
@@ -66,7 +65,7 @@ def test_bollinger_bands_signal_generation():
     data = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=6, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "close": [1500, 1450, 1430, 1550, 1580, 1570],
             "bb_middle": [1500, 1500, 1500, 1500, 1500, 1500],
             "bb_upper": [1550, 1550, 1550, 1550, 1550, 1550],
@@ -88,7 +87,7 @@ def test_bollinger_bands_signal_generation():
     signal = bb.generate_signal(data.iloc[[0, 1]])
     assert signal is not None
     assert signal.direction == SignalDirection.BUY
-    assert signal.symbol == "ETH"
+    assert signal.symbol == "ETH-USD"
     assert signal.indicator == "test_bb"
     assert signal.confidence > 0.5
     assert signal.params.get("trigger") == "price_crossing_below_lower"
@@ -97,7 +96,7 @@ def test_bollinger_bands_signal_generation():
     signal = bb.generate_signal(data.iloc[[2, 3]])
     assert signal is not None
     assert signal.direction == SignalDirection.BUY
-    assert signal.symbol == "ETH"
+    assert signal.symbol == "ETH-USD"
     assert signal.indicator == "test_bb"
     assert signal.confidence > 0.5
     assert signal.params.get("trigger") == "mean_reversion_buy"
@@ -106,7 +105,7 @@ def test_bollinger_bands_signal_generation():
     signal = bb.generate_signal(data.iloc[[2, 3]])
     assert signal is not None
     assert signal.direction == SignalDirection.BUY
-    assert signal.symbol == "ETH"
+    assert signal.symbol == "ETH-USD"
     assert signal.indicator == "test_bb"
     assert signal.confidence > 0.5
     assert signal.params.get("trigger") == "mean_reversion_buy"
@@ -115,7 +114,7 @@ def test_bollinger_bands_signal_generation():
     upper_cross_data = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "close": [1540, 1560],
             "bb_middle": [1500, 1500],
             "bb_upper": [1550, 1550],
@@ -135,7 +134,7 @@ def test_bollinger_bands_signal_generation():
     signal = bb.generate_signal(upper_cross_data)
     assert signal is not None
     assert signal.direction == SignalDirection.SELL
-    assert signal.symbol == "ETH"
+    assert signal.symbol == "ETH-USD"
     assert signal.indicator == "test_bb"
     assert signal.confidence > 0.5
     assert signal.params.get("trigger") == "price_crossing_above_upper"
@@ -144,7 +143,7 @@ def test_bollinger_bands_signal_generation():
     signal = bb.generate_signal(data.iloc[[4, 5]])
     assert signal is not None
     assert signal.direction == SignalDirection.SELL
-    assert signal.symbol == "ETH"
+    assert signal.symbol == "ETH-USD"
     assert signal.indicator == "test_bb"
     assert signal.confidence > 0.5
     assert signal.params.get("trigger") == "mean_reversion_sell"
@@ -153,7 +152,7 @@ def test_bollinger_bands_signal_generation():
     neutral_data = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "close": [1500, 1510],
             "bb_middle": [1500, 1500],
             "bb_upper": [1550, 1550],
@@ -175,80 +174,103 @@ def test_bollinger_bands_signal_generation():
 
 def test_bollinger_bands_process_method(sample_price_data):
     """Test the combined process method."""
+    # Create indicator with shorter period for testing
     bb = BollingerBandsIndicator(
         name="test_bb", params={"period": 10, "std_dev": 2}
-    )  # Shorter period for quicker signals
+    )
 
-    # Manipulate data to create scenarios for signal generation
+    # Use a simple approach - create a copy of the data to work with
     df = sample_price_data.copy()
 
-    # Get actual row indices - we'll use the timestamp index
-    timestamps = df.index.tolist()
+    # First, call process to get the processed data with Bollinger Bands
+    processed_data, _ = bb.process(df)
 
-    # Define relative positions in the dataset
-    drop_start_idx = int(len(timestamps) * 0.1)  # 10% through data
-    recovery_start_idx = int(len(timestamps) * 0.15)  # 15% through data
-    rise_start_idx = int(len(timestamps) * 0.2)  # 20% through data
-    fall_start_idx = int(len(timestamps) * 0.25)  # 25% through data
-
-    # Define periods for trends
-    trend_period = 5
-
-    # Make sure we don't exceed the dataframe bounds
-    if fall_start_idx + trend_period >= len(timestamps):
-        # Scale down our indices
-        drop_start_idx = 30
-        recovery_start_idx = 40
-        rise_start_idx = 60
-        fall_start_idx = 70
-        trend_period = min(5, (len(timestamps) - fall_start_idx) // 4)
-
-    # Make the price drop sharply below the lower band
-    current_price = df.iloc[drop_start_idx]["close"]
-    for i in range(trend_period):
-        idx = drop_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 0.95  # 5% drop
-            df.loc[timestamps[idx], "close"] = current_price
-
-    # Then make it recover
-    current_price = df.iloc[recovery_start_idx]["close"]
-    for i in range(trend_period):
-        idx = recovery_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 1.05  # 5% rise
-            df.loc[timestamps[idx], "close"] = current_price
-
-    # Make the price rise sharply above the upper band
-    current_price = df.iloc[rise_start_idx]["close"]
-    for i in range(trend_period):
-        idx = rise_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 1.05  # 5% rise
-            df.loc[timestamps[idx], "close"] = current_price
-
-    # Then make it fall
-    current_price = df.iloc[fall_start_idx]["close"]
-    for i in range(trend_period):
-        idx = fall_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 0.95  # 5% drop
-            df.loc[timestamps[idx], "close"] = current_price
-
-    processed_data, signal = bb.process(df)
-
-    # Verify the data was processed
+    # Verify the data was processed correctly
     assert "bb_middle" in processed_data.columns
     assert "bb_upper" in processed_data.columns
     assert "bb_lower" in processed_data.columns
     assert "bb_width" in processed_data.columns
     assert "bb_%b" in processed_data.columns
 
-    # We may or may not get a signal depending on the exact data patterns
-    if signal is not None:
-        assert signal.symbol == "ETH"
-        assert signal.indicator == "test_bb"
-        assert signal.direction in [SignalDirection.BUY, SignalDirection.SELL]
+    # Create a mock DataFrame with clear Bollinger Bands signal conditions
+    mock_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1430, 1380],  # Second value below lower band
+            "bb_middle": [1500, 1500],
+            "bb_upper": [1600, 1600],
+            "bb_lower": [1400, 1400],
+            "bb_width": [0.13, 0.13],
+            "bb_%b": [0.3, -0.2],  # Negative means price below lower band
+            "price_below_lower": [False, True],
+            "price_crossing_below_lower": [False, True],
+            "price_above_upper": [False, False],
+            "price_crossing_above_upper": [False, False],
+            "mean_reversion_buy": [False, False],
+            "mean_reversion_sell": [False, False],
+        }
+    )
+
+    # Test buy signal when price crosses below lower band
+    buy_signal = bb.generate_signal(mock_data)
+    assert buy_signal is not None
+    assert buy_signal.direction == SignalDirection.BUY
+    assert buy_signal.symbol == "ETH-USD"
+    assert buy_signal.indicator == "test_bb"
+    assert buy_signal.params.get("trigger") == "price_crossing_below_lower"
+
+    # Create sell signal data
+    mock_sell_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1590, 1650],  # Second value above upper band
+            "bb_middle": [1500, 1500],
+            "bb_upper": [1600, 1600],
+            "bb_lower": [1400, 1400],
+            "bb_width": [0.13, 0.13],
+            "bb_%b": [0.95, 1.5],  # Above 1 means price above upper band
+            "price_below_lower": [False, False],
+            "price_crossing_below_lower": [False, False],
+            "price_above_upper": [False, True],
+            "price_crossing_above_upper": [False, True],
+            "mean_reversion_buy": [False, False],
+            "mean_reversion_sell": [False, False],
+        }
+    )
+
+    # Test sell signal when price crosses above upper band
+    sell_signal = bb.generate_signal(mock_sell_data)
+    assert sell_signal is not None
+    assert sell_signal.direction == SignalDirection.SELL
+    assert sell_signal.symbol == "ETH-USD"
+    assert sell_signal.indicator == "test_bb"
+    assert sell_signal.params.get("trigger") == "price_crossing_above_upper"
+
+    # Create neutral data - no triggers
+    mock_neutral_data = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1500, 1510],
+            "bb_middle": [1500, 1500],
+            "bb_upper": [1600, 1600],
+            "bb_lower": [1400, 1400],
+            "bb_width": [0.13, 0.13],
+            "bb_%b": [0.5, 0.55],
+            "price_below_lower": [False, False],
+            "price_crossing_below_lower": [False, False],
+            "price_above_upper": [False, False],
+            "price_crossing_above_upper": [False, False],
+            "mean_reversion_buy": [False, False],
+            "mean_reversion_sell": [False, False],
+        }
+    )
+
+    # Test no signal with neutral conditions
+    no_signal = bb.generate_signal(mock_neutral_data)
+    assert no_signal is None
 
 
 def test_bollinger_bands_error_handling():

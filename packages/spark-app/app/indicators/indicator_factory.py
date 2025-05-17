@@ -1,16 +1,16 @@
 import logging
 from typing import Any, Dict, List, Optional, Type
 
-from indicators.adaptive_supertrend_indicator import \
+from app.indicators.adaptive_supertrend_indicator import \
     AdaptiveSupertrendIndicator
-from indicators.adaptive_trend_finder_indicator import \
+from app.indicators.adaptive_trend_finder_indicator import \
     AdaptiveTrendFinderIndicator
-from indicators.base_indicator import BaseIndicator
-from indicators.bollinger_bands_indicator import BollingerBandsIndicator
-from indicators.macd_indicator import MACDIndicator
-from indicators.moving_average_indicator import MovingAverageIndicator
-from indicators.rsi_indicator import RSIIndicator
-from indicators.ultimate_ma_indicator import UltimateMAIndicator
+from app.indicators.base_indicator import BaseIndicator
+from app.indicators.bollinger_bands_indicator import BollingerBandsIndicator
+from app.indicators.macd_indicator import MACDIndicator
+from app.indicators.moving_average_indicator import MovingAverageIndicator
+from app.indicators.rsi_indicator import RSIIndicator
+from app.indicators.ultimate_ma_indicator import UltimateMAIndicator
 
 # Import additional indicators as they are implemented
 # from app.indicators.macd_indicator import MACDIndicator

@@ -2,10 +2,10 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Set, Type, Union
 
-from connectors.base_connector import BaseConnector, MarketType
-from connectors.coinbase_connector import CoinbaseConnector
-from connectors.hyperliquid_connector import HyperliquidConnector
-from connectors.kraken_connector import KrakenConnector
+from app.connectors.base_connector import BaseConnector, MarketType
+from app.connectors.coinbase_connector import CoinbaseConnector
+from app.connectors.hyperliquid_connector import HyperliquidConnector
+from app.connectors.kraken_connector import KrakenConnector
 
 # Import additional connectors as they are implemented
 # from .synthetix_connector import SynthetixConnector

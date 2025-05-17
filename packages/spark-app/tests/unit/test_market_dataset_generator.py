@@ -102,7 +102,11 @@ class TestMarketDatasetGenerator(unittest.TestCase):
 
         # Mock data manager methods
         mock_data_manager = MagicMock()
-        mock_data_manager.download_data.return_value = self.sample_data
+        mock_data_manager.get_multiple_timeframes.return_value = {
+            '1h': self.sample_data,
+            '4h': self.sample_data,
+            '1d': self.sample_data
+        }
         mock_data_manager.clean_data.return_value = self.sample_data
 
         # Set the mocked data_manager
@@ -115,10 +119,10 @@ class TestMarketDatasetGenerator(unittest.TestCase):
         self.generator.load_environment.assert_called_once()
         self.generator.create_exchange_connector.assert_called_once_with('kraken')
 
-        # Verify the number of calls to download_data equals the number of date ranges * intervals
-        # For BTC, we have 2 ranges for each regime (bull, bear, sideways) and 3 intervals
-        expected_download_calls = 2 * 3 * 3  # 2 date ranges * 3 regimes * 3 intervals
-        assert mock_data_manager.download_data.call_count == expected_download_calls
+        # Verify the number of calls to get_multiple_timeframes equals the number of date ranges across all regimes
+        # For BTC, we have 2 ranges for each regime (bull, bear, sideways)
+        expected_multiple_timeframes_calls = 6  # 2 date ranges * 3 regimes
+        assert mock_data_manager.get_multiple_timeframes.call_count == expected_multiple_timeframes_calls
 
     def test_list_available_datasets_empty(self):
         """Test listing datasets when none exist."""

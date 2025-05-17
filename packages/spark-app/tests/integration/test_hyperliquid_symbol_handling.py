@@ -9,7 +9,7 @@ from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.core.trading_engine import TradingEngine
 from app.indicators.base_indicator import Signal, SignalDirection
 from app.risk_management.risk_manager import RiskManager
-from connectors.base_connector import MarketType, OrderSide, OrderStatus
+from app.connectors.base_connector import MarketType, OrderSide, OrderStatus
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)

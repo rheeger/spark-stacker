@@ -233,8 +233,10 @@ def test_get_current_candle(populated_temp_dir, mock_data):
         df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
         timeframe_data[tf] = df
 
-    # Test getting current 1h candle
-    time_1h_30m = pd.Timestamp("2023-01-01 01:30:00")
+    # Test getting current 1h candle using the actual datetime from the data
+    # Get the timestamp of the second 1h candle and add 30 minutes to be within that candle
+    time_1h = timeframe_data["1h"]["datetime"].iloc[1]
+    time_1h_30m = time_1h + pd.Timedelta(minutes=30)
     candle = manager.get_current_candle(timeframe_data, "1h", time_1h_30m)
 
     assert candle is not None
@@ -244,11 +246,13 @@ def test_get_current_candle(populated_temp_dir, mock_data):
     assert candle["close"] == 111
 
     # Test getting current 5m candle
-    time_0h_17m = pd.Timestamp("2023-01-01 00:17:00")
-    candle = manager.get_current_candle(timeframe_data, "5m", time_0h_17m)
+    # Get the timestamp of the fourth 5m candle and add 2 minutes to be within that candle
+    time_5m = timeframe_data["5m"]["datetime"].iloc[3]
+    time_5m_plus = time_5m + pd.Timedelta(minutes=2)
+    candle = manager.get_current_candle(timeframe_data, "5m", time_5m_plus)
 
     assert candle is not None
-    assert candle["datetime"] <= time_0h_17m
+    assert candle["datetime"] <= time_5m_plus
 
 
 def test_resample_on_the_fly(populated_temp_dir, mock_data):

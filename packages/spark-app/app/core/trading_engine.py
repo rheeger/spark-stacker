@@ -11,14 +11,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import requests
-from connectors.base_connector import (BaseConnector, MarketType, OrderSide,
+from app.connectors.base_connector import (BaseConnector, MarketType, OrderSide,
                                        OrderStatus, OrderType)
-from indicators.base_indicator import Signal, SignalDirection
-from metrics import (EXCHANGE_HYPERLIQUID, MARKET_ETH_USD, STRATEGY_MVP,
+from app.indicators.base_indicator import Signal, SignalDirection
+from app.metrics import (EXCHANGE_HYPERLIQUID, MARKET_ETH_USD, STRATEGY_MVP,
                      record_mvp_signal_latency, record_mvp_trade, record_trade,
                      update_mvp_pnl, update_mvp_position_size)
-from risk_management.risk_manager import RiskManager
-from utils.config import AppConfig as Config
+from app.risk_management.risk_manager import RiskManager
+from app.utils.config import AppConfig as Config
 
 # --- End Metrics Import ---
 

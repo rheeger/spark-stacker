@@ -3,7 +3,6 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.indicators.base_indicator import SignalDirection
 from app.indicators.rsi_indicator import RSIIndicator
 
@@ -161,7 +160,7 @@ def test_rsi_process_method(sample_price_data):
 
     # We may or may not get a signal depending on the data
     if signal is not None:
-        assert signal.symbol == "ETH"
+        assert signal.symbol == "ETH-USD"
         assert signal.indicator == "test_rsi"
         assert signal.direction in [SignalDirection.BUY, SignalDirection.SELL]
 
