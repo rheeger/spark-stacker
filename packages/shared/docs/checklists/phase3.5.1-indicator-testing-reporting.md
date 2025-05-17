@@ -27,22 +27,22 @@ application.
 
 ### 2. Set Up Python-Based Report Generation
 
-- [ ] **Install required libraries**
+- [x] **Install required libraries**
 
-  - [ ] Add to packages/spark-app/requirements.txt: `jinja2==3.1.2 plotly==5.14.1`
-  - [ ] Install with: `cd packages/spark-app && pip install -r requirements.txt`
+  - [x] Add to packages/spark-app/requirements.txt: `jinja2==3.1.2 plotly==5.14.1`
+  - [x] Install with: `cd packages/spark-app && pip install -r requirements.txt`
 
-- [ ] **Create report template structure**
+- [x] **Create report template structure**
 
-  - [ ] Create directory: `packages/spark-app/app/backtesting/reporting/templates`
-  - [ ] Create base template: `packages/spark-app/app/backtesting/reporting/templates/base.html`
-  - [ ] Create CSS file: `packages/spark-app/app/backtesting/reporting/templates/static/style.css`
+  - [x] Create directory: `packages/spark-app/app/backtesting/reporting/templates`
+  - [x] Create base template: `packages/spark-app/app/backtesting/reporting/templates/base.html`
+  - [x] Create CSS file: `packages/spark-app/app/backtesting/reporting/templates/static/style.css`
 
-- [ ] **Create report generator module**
-  - [ ] Create file: `packages/spark-app/app/backtesting/reporting/generator.py`
-  - [ ] Implement template loader with Jinja2
-  - [ ] Add function to save HTML reports to disk
-  - [ ] Add function to generate report filenames
+- [x] **Create report generator module**
+  - [x] Create file: `packages/spark-app/app/backtesting/reporting/generator.py`
+  - [x] Implement template loader with Jinja2
+  - [x] Add function to save HTML reports to disk
+  - [x] Add function to generate report filenames
 
 ### 3. Develop Core Report Components
 
