@@ -13,10 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.11 (with pip cache)
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+          # Enable pip cache to speed up subsequent workflow runs
+          cache: 'pip'
+          # Use the requirements file to create a cache hash, so the cache is
+          # automatically invalidated when dependencies change.
+          cache-dependency-path: packages/spark-app/requirements.txt
 
       - name: Install dependencies
         run: |
