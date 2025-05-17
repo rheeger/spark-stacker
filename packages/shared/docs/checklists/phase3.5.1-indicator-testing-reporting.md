@@ -22,7 +22,7 @@ high-leverage trading strategies.
 - [ ] **Create new package for backtesting UI/frontend with NX React Preset**
 
   - [x] Install required NX plugins: `yarn add -D @nx/react -W`
-  - [ ] Generate a React application with proper configuration:
+  - [x] Generate a React application with proper configuration:
         `nx g @nx/react:application backtesting-ui --style=scss --routing=true --e2eTestRunner=cypress --linter=eslint --unitTestRunner=jest --directory=packages`
   - [ ] Install visualization and UI libraries:
         `yarn add recharts d3 @tremor/react react-table date-fns tailwindcss postcss autoprefixer -W`
