@@ -2,9 +2,9 @@ name: Quick CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase3.5.1]
   pull_request:
-    branches: [main]
+    branches: [main, phase3.5.1]
 
 jobs:
   test:
