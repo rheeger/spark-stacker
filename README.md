@@ -1,5 +1,7 @@
 # Spark Stacker
 
+![Quick CI](https://github.com/yourusername/spark-stacker/actions/workflows/ci-quick.yml/badge.svg)
+
 Spark Stacker is an advanced on-chain perpetual trading system with integrated hedging capabilities, organized as an NX monorepo. It's designed to interact with multiple exchanges, implement technical indicators, and execute trading strategies with risk management.
 
 ## Features
