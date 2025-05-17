@@ -11,9 +11,11 @@ export function App() {
       </header>
 
       <main className="container mx-auto p-4">
-        <div className="mb-8">
+        <div className="mb-8 bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">Sample Visualization</h2>
-          <SimpleChart title="Monthly Performance" />
+          <div className="w-full h-80">
+            <SimpleChart title="Monthly Performance" />
+          </div>
         </div>
 
         {/* START: routes */}
@@ -21,14 +23,17 @@ export function App() {
           <div role="navigation" className="mb-4">
             <ul className="flex space-x-4">
               <li>
-                <Link to="/" className="text-blue-500 hover:text-blue-700">
+                <Link
+                  to="/"
+                  className="text-blue-500 hover:text-blue-700 font-medium"
+                >
                   Home
                 </Link>
               </li>
               <li>
                 <Link
                   to="/page-2"
-                  className="text-blue-500 hover:text-blue-700"
+                  className="text-blue-500 hover:text-blue-700 font-medium"
                 >
                   Page 2
                 </Link>
@@ -43,7 +48,7 @@ export function App() {
                   This is the generated root route.{' '}
                   <Link
                     to="/page-2"
-                    className="text-blue-500 hover:text-blue-700"
+                    className="text-blue-500 hover:text-blue-700 font-medium"
                   >
                     Click here for page 2.
                   </Link>
@@ -54,7 +59,10 @@ export function App() {
               path="/page-2"
               element={
                 <div>
-                  <Link to="/" className="text-blue-500 hover:text-blue-700">
+                  <Link
+                    to="/"
+                    className="text-blue-500 hover:text-blue-700 font-medium"
+                  >
                     Click here to go back to root page.
                   </Link>
                 </div>

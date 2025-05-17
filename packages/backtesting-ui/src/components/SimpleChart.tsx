@@ -12,13 +12,13 @@ import {
 
 // Sample data for demonstration
 const data = [
-  { name: 'Jan', value: 400 },
-  { name: 'Feb', value: 300 },
-  { name: 'Mar', value: 600 },
-  { name: 'Apr', value: 800 },
-  { name: 'May', value: 500 },
-  { name: 'Jun', value: 900 },
-  { name: 'Jul', value: 700 },
+  { name: 'Jan', value: 400, profit: 240 },
+  { name: 'Feb', value: 300, profit: 138 },
+  { name: 'Mar', value: 600, profit: 380 },
+  { name: 'Apr', value: 800, profit: 580 },
+  { name: 'May', value: 500, profit: 250 },
+  { name: 'Jun', value: 900, profit: 650 },
+  { name: 'Jul', value: 700, profit: 450 },
 ];
 
 interface SimpleChartProps {
@@ -29,33 +29,38 @@ export const SimpleChart: React.FC<SimpleChartProps> = ({
   title = 'Sample Chart',
 }) => {
   return (
-    <div className="p-4 rounded-lg bg-white shadow-md">
+    <div className="w-full h-full">
       <h2 className="text-xl font-bold mb-4 text-gray-800">{title}</h2>
-      <div className="h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={data}
-            margin={{
-              top: 5,
-              right: 30,
-              left: 20,
-              bottom: 5,
-            }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#8884d8"
-              activeDot={{ r: 8 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart
+          data={data}
+          margin={{
+            top: 5,
+            right: 30,
+            left: 20,
+            bottom: 5,
+          }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="name" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Line
+            type="monotone"
+            dataKey="value"
+            name="Trading Volume"
+            stroke="#8884d8"
+            activeDot={{ r: 8 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="profit"
+            name="Profit"
+            stroke="#82ca9d"
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 };
