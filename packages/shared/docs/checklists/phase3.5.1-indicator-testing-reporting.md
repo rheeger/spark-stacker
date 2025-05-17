@@ -53,10 +53,10 @@ application.
   - [x] Add function: `generate_equity_curve(trades, filename)` using plotly
   - [x] Add function: `generate_drawdown_chart(equity_curve, filename)` using plotly
 
-- [ ] **Create metrics calculator**
+- [x] **Create metrics calculator**
 
-  - [ ] Create file: `packages/spark-app/app/backtesting/reporting/metrics.py`
-  - [ ] Add function: `calculate_performance_metrics(trades)` that returns dict with:
+  - [x] Create file: `packages/spark-app/app/backtesting/reporting/metrics.py`
+  - [x] Add function: `calculate_performance_metrics(trades)` that returns dict with:
     - Win rate, profit factor, max drawdown, Sharpe ratio, total return
 
 - [ ] **Implement report data transformer**
