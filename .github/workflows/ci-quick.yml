@@ -30,15 +30,55 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
+      - name: Check workspace and files
+        run: |
+          echo "Working directory: $(pwd)"
+          ls -la packages/spark-app/app/utils
+          ls -la packages/spark-app/tests
+
+      - name: Create direct import test
+        run: |
+          cd packages/spark-app
+          cat > test_direct_import.py << 'EOL'
+          import sys
+          import os
+
+          # Add the app directory to the Python path
+          sys.path.insert(0, os.path.abspath('./app'))
+
+          try:
+              from app.utils import config
+              print("Successfully imported app.utils.config")
+              from app.core import trading_engine
+              print("Successfully imported app.core.trading_engine")
+              print("All imports OK!")
+              exit(0)
+          except ImportError as e:
+              print(f"Import error: {e}")
+              # Try without app prefix
+              try:
+                  from utils import config
+                  print("Successfully imported utils.config")
+                  from core import trading_engine
+                  print("Successfully imported core.trading_engine")
+                  print("All imports OK with direct import!")
+                  exit(0)
+              except ImportError as e2:
+                  print(f"Second import error: {e2}")
+                  exit(1)
+          EOL
+
+          python test_direct_import.py
+
       - name: Run quick tests
         run: |
           cd packages/spark-app
-          PYTHONPATH=$PYTHONPATH:$(pwd) python -m pytest -m "not slow" --cov=app
+          PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/app python -m pytest -m "not slow" --cov=app tests/test_imports.py -v
 
       - name: Generate coverage report
         run: |
           cd packages/spark-app
-          PYTHONPATH=$PYTHONPATH:$(pwd) python -m coverage xml
+          PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/app python -m coverage xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

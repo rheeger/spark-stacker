@@ -45,6 +45,11 @@ warnings.filterwarnings(
     category=DeprecationWarning
 )
 
+# Check if we're running in CI
+IN_CI = os.environ.get("CI", "").lower() == "true"
+if IN_CI:
+    print("Running in CI environment")
+
 # Get the absolute path to the project root
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 print(f"Project root: {project_root}")
@@ -111,6 +116,21 @@ except ImportError as e:
     # Try imports without app prefix
     try:
         print("Attempting imports without 'app.' prefix...")
+        import_path = "."
+        if IN_CI:
+            # In CI, we need to use the absolute path
+            print("Setting sys.path for direct imports in CI")
+            sys.path.insert(0, os.path.abspath(os.path.join(project_root, "app")))
+            import_path = os.path.abspath(os.path.join(project_root, "app"))
+            print(f"Import path: {import_path}")
+
+        # Show all directories in the import path
+        print(f"Directories in app path:")
+        for item in os.listdir(import_path):
+            if os.path.isdir(os.path.join(import_path, item)):
+                print(f"  - {item}")
+
+        # Try direct imports
         from connectors.base_connector import (BaseConnector, MarketType,
                                                OrderSide, OrderType)
         from connectors.connector_factory import ConnectorFactory
