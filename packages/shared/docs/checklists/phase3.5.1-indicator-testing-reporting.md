@@ -46,12 +46,12 @@ application.
 
 ### 3. Develop Core Report Components
 
-- [ ] **Implement essential visualization functions**
+- [x] **Implement essential visualization functions**
 
-  - [ ] Create file: `packages/spark-app/app/backtesting/reporting/visualizations.py`
-  - [ ] Add function: `generate_price_chart(df, trades, filename)` using plotly
-  - [ ] Add function: `generate_equity_curve(trades, filename)` using plotly
-  - [ ] Add function: `generate_drawdown_chart(equity_curve, filename)` using plotly
+  - [x] Create file: `packages/spark-app/app/backtesting/reporting/visualizations.py`
+  - [x] Add function: `generate_price_chart(df, trades, filename)` using plotly
+  - [x] Add function: `generate_equity_curve(trades, filename)` using plotly
+  - [x] Add function: `generate_drawdown_chart(equity_curve, filename)` using plotly
 
 - [ ] **Create metrics calculator**
 
