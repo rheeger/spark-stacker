@@ -9,9 +9,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 import urllib3.exceptions
 # Import the BaseConnector interface
-from connectors.base_connector import (BaseConnector, ConnectorError,
-                                       MarketType, OrderSide, OrderStatus,
-                                       OrderType)
+from app.connectors.base_connector import (BaseConnector, ConnectorError,
+                                           MarketType, OrderSide, OrderStatus,
+                                           OrderType)
 
 # For type hinting and future import
 try:

@@ -63,7 +63,7 @@ def test_macd_signal_generation():
     data = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "close": [1500, 1550, 1600, 1650, 1600],
             "macd": [-2, -1, 0, 1, 0.5],
             "macd_signal": [-1, -1.2, -0.5, 0.5, 0.8],
@@ -81,7 +81,7 @@ def test_macd_signal_generation():
     signal = macd.generate_signal(data.iloc[[0, 1]])
     assert signal is not None
     assert signal.direction == SignalDirection.BUY
-    assert signal.symbol == "ETH"
+    assert signal.symbol == "ETH-USD"
     assert signal.indicator == "test_macd"
     assert signal.confidence > 0.5
     assert signal.params.get("trigger") == "crosses_above_signal"
@@ -90,7 +90,7 @@ def test_macd_signal_generation():
     signal = macd.generate_signal(data.iloc[[3, 4]])
     assert signal is not None
     assert signal.direction == SignalDirection.SELL
-    assert signal.symbol == "ETH"
+    assert signal.symbol == "ETH-USD"
     assert signal.indicator == "test_macd"
     assert signal.confidence > 0.5
     assert signal.params.get("trigger") == "crosses_below_signal"
@@ -99,7 +99,7 @@ def test_macd_signal_generation():
     neutral_data = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "close": [1500, 1550],
             "macd": [1, 1.2],
             "macd_signal": [0.5, 0.7],
@@ -168,7 +168,7 @@ def test_macd_process_method(sample_price_data):
 
     # We may or may not get a signal depending on the data patterns
     if signal is not None:
-        assert signal.symbol == "ETH"
+        assert signal.symbol == "ETH-USD"
         assert signal.indicator == "test_macd"
         assert signal.direction in [SignalDirection.BUY, SignalDirection.SELL]
 
@@ -181,7 +181,7 @@ def test_macd_error_handling():
     invalid_df = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "invalid_column": [1, 2, 3, 4, 5],
         }
     )
@@ -193,7 +193,7 @@ def test_macd_error_handling():
     insufficient_df = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "close": [1500, 1550, 1600, 1650, 1700],
         }
     )
@@ -209,7 +209,7 @@ def test_macd_error_handling():
     missing_macd_df = pd.DataFrame(
         {
             "timestamp": pd.date_range(start="2023-01-01", periods=5, freq="1h"),
-            "symbol": "ETH",
+            "symbol": "ETH-USD",
             "close": [1500, 1550, 1600, 1650, 1700],
         }
     )

@@ -32,6 +32,8 @@ pandas-ta==0.3.14b0  # Pinning to a specific version for numpy compatibility
 matplotlib>=3.5.0
 seaborn
 prometheus-client>=0.16.0  # For metrics collection and exposure
+jinja2==3.1.2            # Template engine for HTML reports
+plotly==5.14.1           # Interactive plotting library for reports
 
 # For progress bars in CLI
 tqdm

@@ -3,7 +3,6 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.indicators.base_indicator import SignalDirection
 from app.indicators.moving_average_indicator import MovingAverageIndicator
 
@@ -179,79 +178,153 @@ def test_moving_average_signal_generation():
 
 def test_moving_average_process_method(sample_price_data):
     """Test the combined process method."""
+    # Create indicator with shorter periods for testing
     ma = MovingAverageIndicator(
         name="test_ma", params={"fast_period": 5, "slow_period": 15, "ma_type": "ema"}
-    )  # Shorter periods for quicker signals
+    )
 
-    # Manipulate data to create crossover scenarios
+    # Use a simple approach - create a copy of the data to work with
     df = sample_price_data.copy()
 
-    # Get actual row indices - we'll use the timestamp index
-    timestamps = df.index.tolist()
+    # First, process the data to get moving averages
+    processed_data, _ = ma.process(df)
 
-    # Define relative positions in the dataset
-    down_start_idx = int(len(timestamps) * 0.15)  # Start downtrend at 15% through data
-    up_start_idx = int(len(timestamps) * 0.25)  # Start uptrend at 25% through data
-    up2_start_idx = int(len(timestamps) * 0.35)  # Start second uptrend at 35%
-    down2_start_idx = int(len(timestamps) * 0.45)  # Start second downtrend at 45%
-
-    # Ensure we have enough data points
-    trend_period = 20
-
-    # Make sure we don't exceed the dataframe bounds
-    if down2_start_idx + trend_period >= len(timestamps):
-        # Scale down our indices
-        down_start_idx = 20
-        up_start_idx = 40
-        up2_start_idx = 60
-        down2_start_idx = 80
-        trend_period = min(20, (len(timestamps) - down2_start_idx) // 2)
-
-    # Create a downtrend
-    current_price = df.iloc[down_start_idx]["close"]
-    for i in range(trend_period):
-        idx = down_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 0.99  # 1% drop
-            df.loc[timestamps[idx], "close"] = current_price
-
-    # Create an uptrend
-    current_price = df.iloc[up_start_idx]["close"]
-    for i in range(trend_period):
-        idx = up_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 1.01  # 1% increase
-            df.loc[timestamps[idx], "close"] = current_price
-
-    # Create a second uptrend
-    current_price = df.iloc[up2_start_idx]["close"]
-    for i in range(trend_period):
-        idx = up2_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 1.01  # 1% increase
-            df.loc[timestamps[idx], "close"] = current_price
-
-    # Create a second downtrend
-    current_price = df.iloc[down2_start_idx]["close"]
-    for i in range(trend_period):
-        idx = down2_start_idx + i
-        if idx < len(timestamps):
-            current_price *= 0.99  # 1% drop
-            df.loc[timestamps[idx], "close"] = current_price
-
-    processed_data, signal = ma.process(df)
-
-    # Verify the data was processed
+    # Verify the data was processed correctly
     assert "fast_ma" in processed_data.columns
     assert "slow_ma" in processed_data.columns
     assert "ma_diff" in processed_data.columns
     assert "ma_ratio" in processed_data.columns
 
-    # We may or may not get a signal depending on the exact data patterns
-    if signal is not None:
-        assert signal.symbol == "ETH"
-        assert signal.indicator == "test_ma"
-        assert signal.direction in [SignalDirection.BUY, SignalDirection.SELL]
+    # Create a mock DataFrame with clear Golden Cross signal conditions
+    mock_golden_cross = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1500, 1550],
+            "fast_ma": [1490, 1530],
+            "slow_ma": [1500, 1510],
+            "ma_diff": [-10, 20],
+            "ma_ratio": [0.993, 1.02],
+            "ma_crosses_above": [False, True],
+            "ma_crosses_below": [False, False],
+            "price_above_slow_ma": [False, True],
+            "price_below_slow_ma": [True, False],
+            "price_crosses_above_slow_ma": [False, False],
+            "price_crosses_below_slow_ma": [False, False],
+        }
+    )
+
+    # Test golden cross buy signal
+    golden_cross_signal = ma.generate_signal(mock_golden_cross)
+    assert golden_cross_signal is not None
+    assert golden_cross_signal.direction == SignalDirection.BUY
+    assert golden_cross_signal.symbol == "ETH-USD"
+    assert golden_cross_signal.indicator == "test_ma"
+    assert golden_cross_signal.params.get("trigger") == "golden_cross"
+
+    # Create a mock DataFrame with clear Death Cross signal conditions
+    mock_death_cross = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1500, 1460],
+            "fast_ma": [1510, 1490],
+            "slow_ma": [1500, 1500],
+            "ma_diff": [10, -10],
+            "ma_ratio": [1.007, 0.993],
+            "ma_crosses_above": [False, False],
+            "ma_crosses_below": [False, True],
+            "price_above_slow_ma": [False, False],
+            "price_below_slow_ma": [False, True],
+            "price_crosses_above_slow_ma": [False, False],
+            "price_crosses_below_slow_ma": [False, False],
+        }
+    )
+
+    # Test death cross sell signal
+    death_cross_signal = ma.generate_signal(mock_death_cross)
+    assert death_cross_signal is not None
+    assert death_cross_signal.direction == SignalDirection.SELL
+    assert death_cross_signal.symbol == "ETH-USD"
+    assert death_cross_signal.indicator == "test_ma"
+    assert death_cross_signal.params.get("trigger") == "death_cross"
+
+    # Create a mock DataFrame with price crossing above MA
+    mock_price_above = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1490, 1520],
+            "fast_ma": [1510, 1515],
+            "slow_ma": [1500, 1505],
+            "ma_diff": [10, 10],
+            "ma_ratio": [1.007, 1.01],
+            "ma_crosses_above": [False, False],
+            "ma_crosses_below": [False, False],
+            "price_above_slow_ma": [False, True],
+            "price_below_slow_ma": [True, False],
+            "price_crosses_above_slow_ma": [False, True],
+            "price_crosses_below_slow_ma": [False, False],
+        }
+    )
+
+    # Test price crosses above MA buy signal
+    price_above_signal = ma.generate_signal(mock_price_above)
+    assert price_above_signal is not None
+    assert price_above_signal.direction == SignalDirection.BUY
+    assert price_above_signal.symbol == "ETH-USD"
+    assert price_above_signal.indicator == "test_ma"
+    assert price_above_signal.params.get("trigger") == "price_crosses_above_ma"
+
+    # Create a mock DataFrame with price crossing below MA
+    mock_price_below = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1520, 1490],
+            "fast_ma": [1510, 1515],
+            "slow_ma": [1500, 1505],
+            "ma_diff": [10, 10],
+            "ma_ratio": [1.007, 1.01],
+            "ma_crosses_above": [False, False],
+            "ma_crosses_below": [False, False],
+            "price_above_slow_ma": [True, False],
+            "price_below_slow_ma": [False, True],
+            "price_crosses_above_slow_ma": [False, False],
+            "price_crosses_below_slow_ma": [False, True],
+        }
+    )
+
+    # Test price crosses below MA sell signal
+    price_below_signal = ma.generate_signal(mock_price_below)
+    assert price_below_signal is not None
+    assert price_below_signal.direction == SignalDirection.SELL
+    assert price_below_signal.symbol == "ETH-USD"
+    assert price_below_signal.indicator == "test_ma"
+    assert price_below_signal.params.get("trigger") == "price_crosses_below_ma"
+
+    # Create a mock DataFrame with no signal conditions
+    mock_no_signal = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(start="2023-01-01", periods=2, freq="1h"),
+            "symbol": "ETH-USD",
+            "close": [1520, 1525],
+            "fast_ma": [1510, 1515],
+            "slow_ma": [1500, 1505],
+            "ma_diff": [10, 10],
+            "ma_ratio": [1.007, 1.01],
+            "ma_crosses_above": [False, False],
+            "ma_crosses_below": [False, False],
+            "price_above_slow_ma": [True, True],
+            "price_below_slow_ma": [False, False],
+            "price_crosses_above_slow_ma": [False, False],
+            "price_crosses_below_slow_ma": [False, False],
+        }
+    )
+
+    # Test no signal with neutral conditions
+    no_signal = ma.generate_signal(mock_no_signal)
+    assert no_signal is None
 
 
 def test_moving_average_error_handling():

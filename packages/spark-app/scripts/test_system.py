@@ -23,17 +23,30 @@ ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 
 # Add the project root to Python path so tests can import from app
 sys.path.insert(0, ROOT_DIR)
+# Also add the app directory for direct imports
+sys.path.insert(0, os.path.join(ROOT_DIR, "app"))
 
 # Market data cache directory
 MARKET_DATA_CACHE_DIR = os.path.join(ROOT_DIR, "tests", "test_data", "market_data")
 
+# Check if we're running in CI
+IN_CI = os.environ.get("CI", "").lower() == "true"
 
 def find_venv_python():
     """Find the Python interpreter in the virtual environment."""
+    if IN_CI:
+        # In CI, just use the system Python
+        logger.info("Running in CI environment, using system Python")
+        return sys.executable
+
     venv_dir = os.path.join(ROOT_DIR, ".venv")
     if not os.path.exists(venv_dir):
         logger.error(f"Virtual environment not found at {venv_dir}")
-        return None
+        if IN_CI:
+            # In CI, this is not an error
+            return sys.executable
+        else:
+            return None
 
     # Try common locations
     possible_paths = [
@@ -48,7 +61,11 @@ def find_venv_python():
             return path
 
     logger.error("Could not find Python interpreter in virtual environment")
-    return None
+    if IN_CI:
+        # In CI, fall back to system Python
+        return sys.executable
+    else:
+        return None
 
 
 # Find the virtual environment Python
@@ -57,11 +74,21 @@ if not VENV_PYTHON:
     logger.error(
         "Please run 'scripts/setup_test_env.sh' first to create the virtual environment"
     )
-    sys.exit(1)
+    if not IN_CI:
+        # Only exit if not in CI
+        sys.exit(1)
+    else:
+        # In CI, use system Python
+        VENV_PYTHON = sys.executable
+        logger.info(f"Using system Python in CI: {VENV_PYTHON}")
 
 
 def ensure_test_env():
     """Ensure the test environment is properly set up."""
+    # In CI, we assume the environment is already set up
+    if IN_CI:
+        return True
+
     # Check if pytest is installed
     try:
         subprocess.run(
@@ -90,6 +117,11 @@ def ensure_data_cache_exists():
     Returns:
         bool: True if successful, False otherwise
     """
+    # In CI, we'll use synthetic data
+    if IN_CI:
+        logger.info("Running in CI, using synthetic data")
+        return True
+
     logger.info("Ensuring market data cache exists...")
     refresh_script = os.path.join(SCRIPT_DIR, "refresh_test_market_data.py")
 
@@ -160,9 +192,14 @@ def run_tests(test_path=None, verbose=False, capture_output=False):
     # Add flag to allow synthetic data as fallback
     cmd.append("--allow-synthetic-data")
 
+    # Set PYTHONPATH to include app directory
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f"{ROOT_DIR}:{os.path.join(ROOT_DIR, 'app')}:{env.get('PYTHONPATH', '')}"
+
     try:
         logger.info(f"Executing: {' '.join(cmd)}")
         logger.info(f"Working directory: {ROOT_DIR}")
+        logger.info(f"PYTHONPATH: {env['PYTHONPATH']}")
 
         # Always run from the project root
         os.chdir(ROOT_DIR)
@@ -174,6 +211,7 @@ def run_tests(test_path=None, verbose=False, capture_output=False):
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
                 check=False,
+                env=env
             )
 
             print(result.stdout)
@@ -183,7 +221,7 @@ def run_tests(test_path=None, verbose=False, capture_output=False):
             success = result.returncode == 0
         else:
             # Run with direct output to terminal
-            success = subprocess.call(cmd) == 0
+            success = subprocess.call(cmd, env=env) == 0
 
         if success:
             logger.info("Tests passed successfully!")

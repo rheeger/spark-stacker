@@ -26,7 +26,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    command: python main.py --config /app/config.json
+    command: python -m app.main --config /app/config.json
     networks:
       - default
       - monitoring_network

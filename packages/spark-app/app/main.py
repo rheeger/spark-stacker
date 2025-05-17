@@ -22,16 +22,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from connectors.connector_factory import ConnectorFactory
-from core.strategy_manager import StrategyManager
-from core.trading_engine import TradingEngine
-from indicators.indicator_factory import IndicatorFactory
-from metrics import start_metrics_server, update_mvp_signal_state
-from metrics.registry import start_historical_data_api
-from risk_management.risk_manager import RiskManager
-from utils.config import AppConfig, ConfigManager
-from utils.logging_setup import setup_logging
-from webhook.webhook_server import WebhookServer
+from app.connectors.connector_factory import ConnectorFactory
+from app.core.strategy_manager import StrategyManager
+from app.core.trading_engine import TradingEngine
+from app.indicators.indicator_factory import IndicatorFactory
+from app.metrics import start_metrics_server, update_mvp_signal_state
+from app.metrics.registry import start_historical_data_api
+from app.risk_management.risk_manager import RiskManager
+from app.utils.config import AppConfig, ConfigManager
+from app.utils.logging_setup import setup_logging
+from app.webhook.webhook_server import WebhookServer
 
 # Global variables
 engine: Optional[TradingEngine] = None

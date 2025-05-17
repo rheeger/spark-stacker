@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY scripts/bootstrap.sh /usr/local/bin/bootstrap.sh
 RUN chmod +x /usr/local/bin/bootstrap.sh
 
-# Copy application code
-COPY app/ .
+# Copy application code to a subdirectory named 'app'
+COPY app/ /app/app/
 
 # Create log directory
 RUN mkdir -p /app/logs && \
@@ -59,4 +59,4 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/bootstrap.sh"]
 
 # Run the application
-CMD ["python", "main.py", "--config", "/app/config.json"]
+CMD ["python", "-m", "app.main", "--config", "/app/config.json"]

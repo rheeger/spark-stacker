@@ -452,3 +452,137 @@ class DataManager:
         df = df.sort_values("timestamp")
 
         return df
+
+    def resample_timeframe(self, df: pd.DataFrame, target_interval: str) -> pd.DataFrame:
+        """
+        Resample data to a different timeframe.
+
+        Args:
+            df: DataFrame with OHLCV data
+            target_interval: Target timeframe interval (e.g., '1m', '5m', '1h', '4h', '1d')
+
+        Returns:
+            DataFrame resampled to the target interval
+        """
+        # Make a copy to avoid modifying the original
+        df = df.copy()
+
+        # Ensure df has a proper datetime index
+        if 'timestamp' in df.columns:
+            # Convert timestamp from ms to datetime if needed
+            if pd.api.types.is_numeric_dtype(df['timestamp']):
+                df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+            else:
+                df['datetime'] = pd.to_datetime(df['timestamp'])
+
+            # Set index for resampling
+            df = df.set_index('datetime')
+
+        # Parse target interval for pandas resampling
+        interval_map = {
+            '1m': '1min', '3m': '3min', '5m': '5min', '15m': '15min', '30m': '30min',
+            '1h': '1H', '2h': '2H', '4h': '4H', '6h': '6H', '12h': '12H',
+            '1d': '1D', '3d': '3D', '1w': '1W'
+        }
+
+        if target_interval not in interval_map:
+            raise ValueError(f"Unsupported target interval: {target_interval}")
+
+        resample_rule = interval_map[target_interval]
+
+        # Resample OHLCV data
+        resampled = pd.DataFrame()
+        resampled['open'] = df['open'].resample(resample_rule).first()
+        resampled['high'] = df['high'].resample(resample_rule).max()
+        resampled['low'] = df['low'].resample(resample_rule).min()
+        resampled['close'] = df['close'].resample(resample_rule).last()
+        resampled['volume'] = df['volume'].resample(resample_rule).sum()
+
+        # Reset index and convert back to timestamp format
+        resampled = resampled.reset_index()
+        resampled['timestamp'] = resampled['datetime'].astype(int) // 10**6
+
+        # Ensure we have the expected columns and order
+        result = resampled[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+
+        return result
+
+    def get_multiple_timeframes(
+        self,
+        source_name: str,
+        symbol: str,
+        intervals: List[str],
+        start_time: Union[int, datetime],
+        end_time: Union[int, datetime],
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        Get historical data for multiple timeframes.
+
+        Args:
+            source_name: Name of the registered data source
+            symbol: The market symbol (e.g., 'ETH-USD')
+            intervals: List of timeframe intervals (e.g., ['1m', '5m', '1h'])
+            start_time: Start time (timestamp in ms or datetime)
+            end_time: End time (timestamp in ms or datetime)
+
+        Returns:
+            Dictionary mapping intervals to DataFrames with OHLCV data
+        """
+        result = {}
+
+        # Download the smallest timeframe data first
+        base_intervals = ['1m', '5m', '15m', '1h', '4h', '1d']
+        available_intervals = [i for i in base_intervals if i in intervals]
+
+        if not available_intervals:
+            logger.error(f"No valid intervals specified: {intervals}")
+            return result
+
+        # Sort intervals by granularity (smallest first)
+        interval_values = {
+            '1m': 1, '3m': 3, '5m': 5, '15m': 15, '30m': 30,
+            '1h': 60, '2h': 120, '4h': 240, '6h': 360, '12h': 720,
+            '1d': 1440, '3d': 4320, '1w': 10080
+        }
+
+        available_intervals.sort(key=lambda x: interval_values.get(x, 999999))
+        base_interval = available_intervals[0]
+
+        # Get base timeframe data
+        logger.info(f"Downloading base timeframe data: {symbol} {base_interval}")
+        base_df = self.download_data(
+            source_name=source_name,
+            symbol=symbol,
+            interval=base_interval,
+            start_time=start_time,
+            end_time=end_time,
+            save=True
+        )
+
+        if base_df.empty:
+            logger.error(f"Failed to download base timeframe data: {symbol} {base_interval}")
+            return result
+
+        # Add base timeframe to result
+        result[base_interval] = base_df
+
+        # Generate other timeframes by resampling
+        for interval in intervals:
+            if interval == base_interval:
+                continue
+
+            logger.info(f"Generating {interval} timeframe by resampling from {base_interval}")
+            try:
+                resampled_df = self.resample_timeframe(base_df, interval)
+                result[interval] = resampled_df
+
+                # Save resampled data
+                file_name = f"{symbol}_{interval}.csv"
+                file_path = os.path.join(self.data_dir, file_name)
+                resampled_df.to_csv(file_path, index=False)
+                logger.info(f"Saved resampled {interval} data ({len(resampled_df)} records) to {file_path}")
+
+            except Exception as e:
+                logger.error(f"Error resampling to {interval}: {e}")
+
+        return result

@@ -1,4 +1,4 @@
-.PHONY: help install-all build-all start-all stop-all test-all lint-all clean-all monitoring spark-app shared restart-all reset-all
+.PHONY: help install-all build-all start-all stop-all test-all lint-all clean-all clean-results monitoring spark-app shared restart-all reset-all
 
 # Default target
 help:
@@ -105,6 +105,12 @@ clean-all:
 	@echo "Cleaning monitoring..."
 	@cd packages/monitoring && make clean
 	@echo "All packages cleaned"
+
+clean-results:
+	@echo "Cleaning test results..."
+	@rm -rf packages/spark-app/tests/test_results/**/*.png
+	@rm -rf packages/spark-app/tests/test_results/*
+	@echo "Test results cleaned"
 
 restart-all:
 	@echo "Restarting all services..."

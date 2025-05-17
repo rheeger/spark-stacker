@@ -6,14 +6,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from connectors.base_connector import BaseConnector
-from core.trading_engine import TradingEngine
-from indicators.base_indicator import BaseIndicator, Signal, SignalDirection
-from indicators.macd_indicator import MACDIndicator
-from metrics import (INDICATOR_MACD, MARKET_ETH_USD, TIMEFRAME_1M,
+from app.connectors.base_connector import BaseConnector
+from app.core.trading_engine import TradingEngine
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from app.indicators.macd_indicator import MACDIndicator
+from app.metrics import (INDICATOR_MACD, MARKET_ETH_USD, TIMEFRAME_1M,
                      record_mvp_signal_latency, update_candle_data,
                      update_macd_indicator, update_mvp_signal_state)
-from metrics.registry import (publish_historical_time_series,
+from app.metrics.registry import (publish_historical_time_series,
                               set_historical_data_mode, verify_historical_data)
 
 logger = logging.getLogger(__name__)

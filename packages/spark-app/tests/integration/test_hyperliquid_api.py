@@ -11,9 +11,9 @@ import pandas as pd
 import pytest
 import requests
 import requests_mock
-from connectors.base_connector import MarketType, OrderSide, OrderType
+from app.connectors.base_connector import MarketType, OrderSide, OrderType
 # Import the connector to test
-from connectors.hyperliquid_connector import (HyperliquidConnector,
+from app.connectors.hyperliquid_connector import (HyperliquidConnector,
                                               MetadataWrapper)
 from eth_account import Account
 
