@@ -59,11 +59,11 @@ application.
   - [x] Add function: `calculate_performance_metrics(trades)` that returns dict with:
     - Win rate, profit factor, max drawdown, Sharpe ratio, total return
 
-- [ ] **Implement report data transformer**
+- [x] **Implement report data transformer**
 
-  - [ ] Create file: `packages/spark-app/app/backtesting/reporting/transformer.py`
-  - [ ] Add function: `transform_backtest_results(results)` to prepare data for templates
-  - [ ] Add function: `format_trade_list(trades)` to generate HTML table
+  - [x] Create file: `packages/spark-app/app/backtesting/reporting/transformer.py`
+  - [x] Add function: `transform_backtest_results(results)` to prepare data for templates
+  - [x] Add function: `format_trade_list(trades)` to generate HTML table
 
 - [ ] **Create report generator script**
   - [ ] Create file: `packages/spark-app/app/backtesting/reporting/generate_report.py`
