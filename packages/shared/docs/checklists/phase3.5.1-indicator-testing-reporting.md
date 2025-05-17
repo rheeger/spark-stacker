@@ -19,7 +19,7 @@ high-leverage trading strategies.
 
 ### 0. Set Up Backtesting UI Package in NX Monorepo
 
-- [ ] **Create new package for backtesting UI/frontend with NX React Preset**
+- [x] **Create new package for backtesting UI/frontend with NX React Preset**
 
   - [x] Install required NX plugins: `yarn add -D @nx/react -W`
   - [x] Generate a React application with proper configuration:
