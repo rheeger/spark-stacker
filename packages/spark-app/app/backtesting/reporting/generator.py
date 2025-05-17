@@ -44,6 +44,12 @@ class ReportGenerator:
             lstrip_blocks=True
         )
 
+        # Add custom filters
+        self.template_env.filters['format_timestamp'] = self._format_timestamp
+        self.template_env.filters['format_price'] = self._format_price
+        self.template_env.filters['format_size'] = self._format_size
+        self.template_env.filters['format_pnl'] = self._format_pnl
+
         # Set up output directory
         if output_dir is None:
             # Default to test_results/backtesting_reports directory
@@ -63,6 +69,49 @@ class ReportGenerator:
         self._copy_static_files(static_dir, self.output_static_dir)
 
         logger.info(f"Report generator initialized with output directory: {self.output_dir}")
+
+    def _format_timestamp(self, timestamp) -> str:
+        """Format a timestamp (milliseconds since epoch) as a human-readable date/time."""
+        if not timestamp:
+            return ""
+        try:
+            # Convert to seconds if in milliseconds
+            if isinstance(timestamp, (int, float)) and timestamp > 1000000000000:
+                timestamp = timestamp / 1000
+            return datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            return str(timestamp)
+
+    def _format_price(self, price) -> str:
+        """Format a price value with appropriate precision."""
+        if not price:
+            return "0.00"
+        try:
+            return f"{float(price):.2f}"
+        except (ValueError, TypeError):
+            return str(price)
+
+    def _format_size(self, size) -> str:
+        """Format a size/amount value with appropriate precision."""
+        if not size:
+            return "0.0000"
+        try:
+            return f"{float(size):.4f}"
+        except (ValueError, TypeError):
+            return str(size)
+
+    def _format_pnl(self, pnl) -> str:
+        """Format a profit/loss value with appropriate precision and sign."""
+        if not pnl:
+            return "0.00"
+        try:
+            value = float(pnl)
+            if value > 0:
+                return f"+{value:.2f}"
+            else:
+                return f"{value:.2f}"
+        except (ValueError, TypeError):
+            return str(pnl)
 
     def _copy_static_files(self, source_dir: Path, target_dir: Path) -> None:
         """

@@ -84,36 +84,24 @@
             <thead>
               <tr>
                 <th>#</th>
-                <th>Entry Time</th>
-                <th>Exit Time</th>
-                <th>Direction</th>
-                <th>Entry Price</th>
-                <th>Exit Price</th>
+                <th>Time</th>
+                <th>Side</th>
+                <th>Price</th>
                 <th>Size</th>
-                <th>P&L</th>
-                <th>P&L %</th>
-                <th>Duration</th>
+                <th>PnL</th>
               </tr>
             </thead>
             <tbody>
               {% for trade in trades %}
-              <tr class="trade-row {{ 'win' if trade.pnl > 0 else 'loss' }}">
+              <tr
+                class="trade-row {{ 'win' if trade.get('realized_pnl', 0) > 0 else 'loss' }}"
+              >
                 <td>{{ loop.index }}</td>
-                <td>{{ trade.entry_time }}</td>
-                <td>{{ trade.exit_time }}</td>
-                <td>{{ trade.direction }}</td>
-                <td>{{ trade.entry_price|round(2) }}</td>
-                <td>{{ trade.exit_price|round(2) }}</td>
-                <td>{{ trade.size|round(4) }}</td>
-                <td class="{{ 'positive' if trade.pnl > 0 else 'negative' }}">
-                  {{ trade.pnl|round(2) }}
-                </td>
-                <td
-                  class="{{ 'positive' if trade.pnl_pct > 0 else 'negative' }}"
-                >
-                  {{ trade.pnl_pct|round(2) }}%
-                </td>
-                <td>{{ trade.duration }}</td>
+                <td>{{ trade.get('timestamp', '') | format_timestamp }}</td>
+                <td>{{ trade.get('side', '') }}</td>
+                <td>{{ trade.get('price', 0) | format_price }}</td>
+                <td>{{ trade.get('amount', 0) | format_size }}</td>
+                <td>{{ trade.get('realized_pnl', 0) | format_pnl }}</td>
               </tr>
               {% endfor %}
             </tbody>

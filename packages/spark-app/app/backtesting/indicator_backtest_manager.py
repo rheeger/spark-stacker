@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
+from ..connectors.base_connector import OrderSide, OrderType
 from ..indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 from .backtest_engine import BacktestEngine, BacktestResult
 from .indicator_config_loader import IndicatorConfigLoader
@@ -123,57 +124,81 @@ class IndicatorBacktestManager:
                 logger.warning("Missing required parameters in strategy call")
                 return
 
-            # Use only the current candle for signal generation
-            latest_data = data.iloc[-1:]
+            # Calculate indicator values on the full dataset first
+            data_with_indicators = indicator.calculate(data)
+
+            # Use only the current candle for signal generation but with indicators
+            latest_data = data_with_indicators.iloc[-1:].copy()
             latest_data["symbol"] = symbol
 
             # Generate signal
-            signal = indicator.generate_signal(data)
+            signal = indicator.generate_signal(data_with_indicators)
 
             # Execute trades based on signal
             if signal is not None:
                 logger.debug(f"Generated signal: {signal}")
 
                 # Check for existing position
-                position = simulation_engine.get_position(symbol)
+                positions = simulation_engine.get_positions(symbol)
+                position = positions[0] if positions else None
                 position_side = None if position is None else position.side
 
                 if signal.direction == SignalDirection.BUY and position_side != "LONG":
                     # Close any existing short position
                     if position_side == "SHORT":
-                        simulation_engine.close_position(symbol)
+                        # Place an order in the opposite direction to close the position
+                        position_amount = position.amount if position else 0
+                        if position_amount > 0:
+                            simulation_engine.place_order(
+                                symbol=symbol,
+                                side=OrderSide.BUY,  # Opposite of SHORT
+                                order_type=OrderType.MARKET,
+                                amount=position_amount,
+                                timestamp=current_candle["timestamp"],
+                                current_candle=current_candle
+                            )
 
                     # Calculate position size based on available balance
-                    balance = simulation_engine.get_balance_for_asset("USD")
+                    balance = simulation_engine.get_balance("USD")
                     position_size = (balance * 0.95) / current_candle["close"]  # Use 95% of available balance
 
                     # Open long position
-                    simulation_engine.open_position(
+                    simulation_engine.place_order(
                         symbol=symbol,
-                        side="LONG",
+                        side=OrderSide.BUY,
+                        order_type=OrderType.MARKET,
                         amount=position_size,
-                        leverage=leverage,
-                        order_type="MARKET",
-                        params={"reason": f"{indicator.name} BUY signal"}
+                        timestamp=current_candle["timestamp"],
+                        current_candle=current_candle
                     )
 
                 elif signal.direction == SignalDirection.SELL and position_side != "SHORT":
                     # Close any existing long position
                     if position_side == "LONG":
-                        simulation_engine.close_position(symbol)
+                        # Place an order in the opposite direction to close the position
+                        position_amount = position.amount if position else 0
+                        if position_amount > 0:
+                            simulation_engine.place_order(
+                                symbol=symbol,
+                                side=OrderSide.SELL,  # Opposite of LONG
+                                order_type=OrderType.MARKET,
+                                amount=position_amount,
+                                timestamp=current_candle["timestamp"],
+                                current_candle=current_candle
+                            )
 
                     # Calculate position size based on available balance
-                    balance = simulation_engine.get_balance_for_asset("USD")
+                    balance = simulation_engine.get_balance("USD")
                     position_size = (balance * 0.95) / current_candle["close"]  # Use 95% of available balance
 
                     # Open short position
-                    simulation_engine.open_position(
+                    simulation_engine.place_order(
                         symbol=symbol,
-                        side="SHORT",
+                        side=OrderSide.SELL,
+                        order_type=OrderType.MARKET,
                         amount=position_size,
-                        leverage=leverage,
-                        order_type="MARKET",
-                        params={"reason": f"{indicator.name} SELL signal"}
+                        timestamp=current_candle["timestamp"],
+                        current_candle=current_candle
                     )
 
         return indicator_strategy
