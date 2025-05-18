@@ -18,6 +18,8 @@ help:
 	@echo "  make clean           : Clean up temporary files and build artifacts"
 	@echo "  make clean-logs      : Clean up all log files"
 	@echo "  make test            : Run tests for spark-app"
+	@echo "  make test-quick      : Run quick tests (excluding slow tests) with coverage"
+	@echo "  make test-slow       : Run only slow tests"
 	@echo "  make spark-app-clean : Clean up spark-app services and volumes"
 	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
 
@@ -87,6 +89,18 @@ test:
 	@echo "Running tests for spark-app..."
 	@cd $(CURDIR) && .venv/bin/python -m pytest -v
 	@echo "Tests complete"
+
+# Run quick tests (skip slow tests)
+test-quick:
+	@echo "Running quick tests (excluding slow tests) with coverage..."
+	@cd $(CURDIR) && .venv/bin/python -m pytest -m "not slow" --cov=app -v --durations=10
+	@echo "Quick tests complete. For full coverage report, run: 'coverage html'"
+
+# Run only slow tests
+test-slow:
+	@echo "Running only slow tests..."
+	@cd $(CURDIR) && .venv/bin/python -m pytest -m "slow" -v
+	@echo "Slow tests complete"
 
 # Run Hyperliquid connector tests
 test-hyperliquid:

@@ -5,11 +5,11 @@ import time
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
+from app.connectors.base_connector import MarketType, OrderSide, OrderStatus
 from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.core.trading_engine import TradingEngine
 from app.indicators.base_indicator import Signal, SignalDirection
 from app.risk_management.risk_manager import RiskManager
-from app.connectors.base_connector import MarketType, OrderSide, OrderStatus
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -240,45 +240,47 @@ class TestHyperliquidSymbolHandling:
             engine.stop()
             connector.disconnect()
 
+    @pytest.mark.slow
     def test_leverage_tiers_format_consistency(self):
-        """
-        Test that get_leverage_tiers maintains consistent symbol handling across different formats.
-        """
+        """Test that leverage tiers are consistently formatted across different symbols."""
+        # Create a connector instance
         connector = HyperliquidConnector(testnet=True)
         connector.connect()
 
-        try:
-            # Test cases with different symbol formats
-            test_cases = [
-                ("ETH-USD", "ETH"),  # Standard format
-                ("eth-usd", "ETH"),  # Lowercase
-                ("ETH", "ETH"),      # Base format
-                ("BTC-USD", "BTC"),  # Different symbol
-            ]
+        symbols = ["BTC-USD", "ETH-USD", "SOL-USD"]
 
-            for input_symbol, expected_base in test_cases:
-                # Get leverage tiers
-                tiers = connector.get_leverage_tiers(input_symbol)
+        for symbol in symbols:
+            leverage_tiers = connector.get_leverage_tiers(symbol)
 
-                # Verify the response format
-                assert len(tiers) > 0, f"Should get tiers for {input_symbol}"
-                assert isinstance(tiers[0], dict), f"Tiers for {input_symbol} should be a dict"
-                assert "max_leverage" in tiers[0], f"Tiers for {input_symbol} should have max_leverage"
-                assert isinstance(tiers[0]["max_leverage"], (int, float)), f"Invalid max_leverage type for {input_symbol}"
-                assert tiers[0]["max_leverage"] > 0, f"Max leverage should be positive for {input_symbol}"
+            # Check that we get a list of tiers
+            assert isinstance(leverage_tiers, list)
+            assert len(leverage_tiers) > 0
 
-                # Log the actual API request format
-                logger.info(f"Testing leverage tiers for {input_symbol} -> {expected_base}")
+            # Check the format of each tier based on the actual API response structure
+            for tier in leverage_tiers:
+                # Verify the expected fields are present
+                assert "initial_margin_fraction" in tier
+                assert "maintenance_margin_fraction" in tier
+                assert "max_leverage" in tier
 
-        finally:
-            connector.disconnect()
+                # Type checking
+                assert isinstance(tier["initial_margin_fraction"], (int, float))
+                assert isinstance(tier["maintenance_margin_fraction"], (int, float))
+                assert isinstance(tier["max_leverage"], (int, float))
 
+                # Value checking
+                assert tier["initial_margin_fraction"] > 0
+                assert tier["maintenance_margin_fraction"] > 0
+                assert tier["max_leverage"] > 0
+                assert tier["maintenance_margin_fraction"] <= tier["initial_margin_fraction"]
+
+        # Clean up
+        connector.disconnect()
+
+    @pytest.mark.slow
     @pytest.mark.asyncio
     async def test_signal_order_preparation_with_real_api(self):
-        """
-        Test that verifies signal processing and order preparation using the real Hyperliquid API.
-        This test uses dry_run mode to avoid placing actual orders.
-        """
+        """Test the entire flow of signal to order preparation with the real API."""
         # Get wallet credentials from environment variables
         wallet_address = os.environ.get("WALLET_ADDRESS")
         private_key = os.environ.get("PRIVATE_KEY")

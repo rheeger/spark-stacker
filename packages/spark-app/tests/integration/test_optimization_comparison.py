@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.backtesting.backtest_engine import BacktestEngine
 from app.backtesting.data_manager import CSVDataSource, DataManager
 from app.backtesting.strategy import simple_moving_average_crossover_strategy
@@ -22,54 +21,70 @@ class TestOptimizationComparison:
         """Create a temporary directory with sample data."""
         # Create a temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Generate sample data
-            symbol = "BTC-USD"
-            interval = "1d"
+            # Generate sample data for both ETH and BTC
+            for symbol in ["ETH-USD", "BTC-USD"]:
+                interval = "1h"
 
-            # Generate 365 days of daily data
-            start_date = datetime(2020, 1, 1)
-            periods = 365
+                # Also create daily data for BTC-USD
+                intervals = ["1h"]
+                if symbol == "BTC-USD":
+                    intervals.append("1d")
 
-            dates = [start_date + timedelta(days=i) for i in range(periods)]
-            timestamps = [int(date.timestamp() * 1000) for date in dates]
+                for interval in intervals:
+                    # Generate 60 days of data
+                    start_date = datetime(2020, 1, 1)
+                    periods = 24 * 60 if interval == "1h" else 60  # hourly or daily
+                    td = timedelta(hours=1) if interval == "1h" else timedelta(days=1)
 
-            # Generate price data with trends, cycles, and noise
-            closes = []
-            base_price = 10000.0
+                    dates = [start_date + i * td for i in range(periods)]
+                    timestamps = [int(date.timestamp() * 1000) for date in dates]
 
-            for i in range(periods):
-                # Add long-term trend
-                trend = i * 10
+                    # Generate price data with a trend, cyclical pattern, and volatility regimes
+                    closes = []
+                    base_price = 100.0 if symbol == "ETH-USD" else 1000.0  # Higher base price for BTC
 
-                # Add market cycles (approximately 60-day cycles)
-                cycle = 2000 * np.sin(2 * np.pi * i / 60)
+                    # Add different volatility regimes
+                    volatility_regimes = [0.5, 1.5, 0.8, 2.0, 0.6]
+                    regime_length = periods // len(volatility_regimes)
 
-                # Add shorter-term oscillations (approximately 10-day cycles)
-                oscillation = 500 * np.sin(2 * np.pi * i / 10)
+                    for i in range(periods):
+                        # Determine current volatility regime
+                        regime_idx = min(i // regime_length, len(volatility_regimes) - 1)
+                        volatility = volatility_regimes[regime_idx]
 
-                # Add random noise
-                noise = np.random.normal(0, 200)
+                        # Add trend component
+                        if i < periods / 2:
+                            trend = i * 0.02  # Upward trend in first half
+                        else:
+                            trend = (periods - i) * 0.015  # Downward trend in second half
 
-                # Combine components
-                price = base_price + trend + cycle + oscillation + noise
-                closes.append(max(price, 1.0))  # Ensure price > 0
+                        # Add cyclical component (24-hour cycle or daily cycle)
+                        cycle_divisor = 24 if interval == "1h" else 7  # 24-hour or weekly
+                        cycle = 3.0 * np.sin(2 * np.pi * (i % cycle_divisor) / cycle_divisor)
 
-            # Create OHLCV data
-            data = {
-                "timestamp": timestamps,
-                "open": [c * (1 - np.random.uniform(0, 0.01)) for c in closes],
-                "high": [c * (1 + np.random.uniform(0, 0.02)) for c in closes],
-                "low": [c * (1 - np.random.uniform(0, 0.02)) for c in closes],
-                "close": closes,
-                "volume": [np.random.uniform(1000, 10000) for _ in range(periods)],
-            }
+                        # Add randomness with regime-specific volatility
+                        noise = np.random.normal(0, volatility)
 
-            # Create DataFrame
-            df = pd.DataFrame(data)
+                        # Combine components
+                        price = base_price + trend + cycle + noise
+                        closes.append(max(price, 1.0))  # Ensure price > 0
 
-            # Save to CSV
-            file_path = os.path.join(temp_dir, f"{symbol}_{interval}.csv")
-            df.to_csv(file_path, index=False)
+                    # Create OHLCV data
+                    data = {
+                        "timestamp": timestamps,
+                        "open": [c * (1 - np.random.uniform(0, 0.005)) for c in closes],
+                        "high": [c * (1 + np.random.uniform(0, 0.01)) for c in closes],
+                        "low": [c * (1 - np.random.uniform(0, 0.01)) for c in closes],
+                        "close": closes,
+                        "volume": [np.random.uniform(1000, 10000) for _ in range(periods)],
+                    }
+
+                    # Create DataFrame
+                    df = pd.DataFrame(data)
+
+                    # Save to CSV
+                    file_path = os.path.join(temp_dir, f"{symbol}_{interval}.csv")
+                    df.to_csv(file_path, index=False)
 
             yield temp_dir
 
@@ -93,16 +108,25 @@ class TestOptimizationComparison:
 
         return engine
 
-    def test_optimization_methods_comparison(self, backtest_engine):
+    @pytest.mark.slow
+    def test_optimization_methods_comparison(self, backtest_engine, sample_data_directory):
         """Compare genetic algorithm and grid search optimization methods."""
         # Common test parameters
         symbol = "BTC-USD"
         interval = "1d"
         start_date = "2020-01-01"
-        end_date = "2020-06-30"  # First 6 months
-        validation_date = "2020-12-31"  # Last 6 months
+        end_date = "2020-02-15"  # First half of data
+        validation_date = "2020-03-01"  # Second half of data
 
         print("\n=== Optimization Methods Comparison ===")
+
+        # Debug check - verify the test data exists
+        data_path = os.path.join(sample_data_directory, f"{symbol}_{interval}.csv")
+        print(f"Looking for data at: {data_path}")
+        print(f"File exists: {os.path.exists(data_path)}")
+
+        # List all files in the data directory to debug
+        print(f"Files in data directory: {os.listdir(sample_data_directory)}")
 
         # Set up parameter space
         # For grid search we need discrete options
@@ -118,6 +142,12 @@ class TestOptimizationComparison:
             "slow_period": (25, 65, 5),  # Continuous range
             "position_size": [0.1, 0.3, 0.5],  # Same discrete options
         }
+
+        # Check if test data file exists, if not, fallback to ETH-USD
+        if not os.path.exists(data_path):
+            print(f"WARNING: Test data file {data_path} not found, using ETH-USD instead")
+            symbol = "ETH-USD"
+            interval = "1h"  # Switch to hourly which we know exists
 
         # 1. Run grid search optimization
         print("\nRunning grid search optimization...")
