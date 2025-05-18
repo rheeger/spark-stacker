@@ -96,11 +96,11 @@ application.
 
 #### 4.1 Foundational Fixtures
 
-- [ ] **4.1-A** Create `tests/conftest.py` with shared fixtures (`price_dataframe`, `temp_csv_dir`,
+- [x] **4.1-A** Create `tests/conftest.py` with shared fixtures (`price_dataframe`, `temp_csv_dir`,
       `backtest_env`, `results_dir`) using deterministic seed
-- [ ] **4.1-B** Add typing stubs `tests/conftest.pyi` for IDE support
-- [ ] **4.1-C** Refactor `tests/unit/test_backtest_engine.py` to use new fixtures
-- [ ] **4.1-D** Ensure `pytest -q` passes and count of `TemporaryDirectory` usages drops (track via
+- [x] **4.1-B** Add typing stubs `tests/conftest.pyi` for IDE support
+- [x] **4.1-C** Refactor `tests/unit/test_backtest_engine.py` to use new fixtures
+- [x] **4.1-D** Ensure `pytest -q` passes and count of `TemporaryDirectory` usages drops (track via
       `git grep`)
 
 #### 4.2 Single Synthetic-Data Generator

@@ -1,74 +1,18 @@
 import os
-import tempfile
-from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.backtesting.backtest_engine import BacktestEngine
-from app.backtesting.data_manager import CSVDataSource, DataManager
-from app.backtesting.simulation_engine import SimulationEngine
 from app.backtesting.strategy import simple_moving_average_crossover_strategy
 from app.connectors.base_connector import OrderSide
 
 
 class TestBacktestEngine:
-    @pytest.fixture
-    def sample_data(self):
-        """Create sample price data for testing."""
-        # Create a date range
-        start_date = datetime(2020, 1, 1)
-        dates = [start_date + timedelta(days=i) for i in range(100)]
-        timestamps = [int(date.timestamp() * 1000) for date in dates]
-
-        # Generate price data with a simple trend
-        closes = [100.0]
-        for i in range(1, 100):
-            # Simple random walk with upward trend
-            prev_close = closes[-1]
-            change = np.random.normal(0.1, 1.0)  # Mean positive drift
-            new_close = max(prev_close + change, 1.0)  # Ensure price > 0
-            closes.append(new_close)
-
-        # Create OHLCV data
-        data = {
-            "timestamp": timestamps,
-            "open": closes,
-            "high": [c * (1 + np.random.uniform(0, 0.01)) for c in closes],
-            "low": [c * (1 - np.random.uniform(0, 0.01)) for c in closes],
-            "close": closes,
-            "volume": [np.random.uniform(1000, 10000) for _ in range(100)],
-        }
-
-        return pd.DataFrame(data)
-
-    @pytest.fixture
-    def data_manager(self, sample_data):
-        """Create a DataManager with sample data."""
-        # Create a temporary directory for data
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a DataManager
-            dm = DataManager(data_dir=temp_dir)
-
-            # Save sample data to CSV
-            sample_data.to_csv(os.path.join(temp_dir, "ETH-USD_1d.csv"), index=False)
-
-            # Register a CSV data source
-            dm.register_data_source("csv", CSVDataSource(temp_dir))
-
-            yield dm
-
-    def test_backtest_engine_initialization(self, data_manager):
+    def test_backtest_engine_initialization(self, backtest_env):
         """Test that BacktestEngine initializes correctly."""
-        # Create a BacktestEngine
-        engine = BacktestEngine(
-            data_manager=data_manager,
-            initial_balance={"USD": 10000.0},
-            maker_fee=0.001,
-            taker_fee=0.002,
-            slippage_model="fixed",
-        )
+        # Unpack the backtest environment fixture
+        engine, data_manager, _, _ = backtest_env
 
         # Check attributes
         assert engine.data_manager == data_manager
@@ -77,18 +21,16 @@ class TestBacktestEngine:
         assert engine.taker_fee == 0.002
         assert engine.slippage_model == "fixed"
 
-    def test_run_backtest(self, data_manager):
+    def test_run_backtest(self, backtest_env):
         """Test running a backtest with a simple strategy."""
-        # Create a BacktestEngine
-        engine = BacktestEngine(
-            data_manager=data_manager, initial_balance={"USD": 10000.0}
-        )
+        # Unpack the backtest environment fixture
+        engine, _, symbol, interval = backtest_env
 
         # Run a backtest with moving average crossover strategy
         result = engine.run_backtest(
             strategy_func=simple_moving_average_crossover_strategy,
-            symbol="ETH-USD",
-            interval="1d",
+            symbol=symbol,
+            interval=interval,
             start_date="2020-01-01",
             end_date="2020-04-10",
             data_source_name="csv",
@@ -101,23 +43,21 @@ class TestBacktestEngine:
 
         # Verify the result
         assert result is not None
-        assert result.symbol == "ETH-USD"
+        assert result.symbol == symbol
         assert isinstance(result.metrics, dict)
         assert isinstance(result.equity_curve, pd.DataFrame)
         assert isinstance(result.trades, list)
 
-    def test_backtest_results_metrics(self, data_manager):
+    def test_backtest_results_metrics(self, backtest_env):
         """Test that backtest results contain the expected metrics."""
-        # Create a BacktestEngine
-        engine = BacktestEngine(
-            data_manager=data_manager, initial_balance={"USD": 10000.0}
-        )
+        # Unpack the backtest environment fixture
+        engine, _, symbol, interval = backtest_env
 
         # Run a backtest with moving average crossover strategy
         result = engine.run_backtest(
             strategy_func=simple_moving_average_crossover_strategy,
-            symbol="ETH-USD",
-            interval="1d",
+            symbol=symbol,
+            interval=interval,
             start_date="2020-01-01",
             end_date="2020-04-10",
             data_source_name="csv",
@@ -150,18 +90,16 @@ class TestBacktestEngine:
         for metric in expected_metrics:
             assert metric in result.metrics
 
-    def test_drawdown_calculation(self, data_manager):
+    def test_drawdown_calculation(self, backtest_env):
         """Test drawdown calculation."""
-        # Create a BacktestEngine
-        engine = BacktestEngine(
-            data_manager=data_manager, initial_balance={"USD": 10000.0}
-        )
+        # Unpack the backtest environment fixture
+        engine, _, symbol, interval = backtest_env
 
         # Run a backtest
         result = engine.run_backtest(
             strategy_func=simple_moving_average_crossover_strategy,
-            symbol="ETH-USD",
-            interval="1d",
+            symbol=symbol,
+            interval=interval,
             start_date="2020-01-01",
             end_date="2020-04-10",
             data_source_name="csv",
@@ -178,12 +116,10 @@ class TestBacktestEngine:
         # Verify max drawdown in metrics
         assert 0 <= result.metrics["max_drawdown"] <= 1.0
 
-    def test_parameter_optimization(self, data_manager):
+    def test_parameter_optimization(self, backtest_env):
         """Test parameter optimization functionality."""
-        # Create a BacktestEngine
-        engine = BacktestEngine(
-            data_manager=data_manager, initial_balance={"USD": 10000.0}
-        )
+        # Unpack the backtest environment fixture
+        engine, _, symbol, interval = backtest_env
 
         # Define parameter grid
         param_grid = {
@@ -195,8 +131,8 @@ class TestBacktestEngine:
         # Run parameter optimization
         best_params, best_result = engine.optimize_parameters(
             strategy_func=simple_moving_average_crossover_strategy,
-            symbol="ETH-USD",
-            interval="1d",
+            symbol=symbol,
+            interval=interval,
             start_date="2020-01-01",
             end_date="2020-04-10",
             data_source_name="csv",
@@ -216,8 +152,8 @@ class TestBacktestEngine:
             type(
                 engine.run_backtest(
                     strategy_func=simple_moving_average_crossover_strategy,
-                    symbol="ETH-USD",
-                    interval="1d",
+                    symbol=symbol,
+                    interval=interval,
                     start_date="2020-01-01",
                     end_date="2020-04-10",
                     data_source_name="csv",
@@ -225,18 +161,16 @@ class TestBacktestEngine:
             ),
         )
 
-    def test_equity_calculation(self, data_manager):
+    def test_equity_calculation(self, backtest_env):
         """Test equity calculation during backtest."""
-        # Create a BacktestEngine
-        engine = BacktestEngine(
-            data_manager=data_manager, initial_balance={"USD": 10000.0}
-        )
+        # Unpack the backtest environment fixture
+        engine, _, symbol, interval = backtest_env
 
         # Run a backtest
         result = engine.run_backtest(
             strategy_func=simple_moving_average_crossover_strategy,
-            symbol="ETH-USD",
-            interval="1d",
+            symbol=symbol,
+            interval=interval,
             start_date="2020-01-01",
             end_date="2020-04-10",
             data_source_name="csv",
@@ -254,12 +188,10 @@ class TestBacktestEngine:
         # First equity value should equal initial balance
         assert abs(result.equity_curve["equity"].iloc[0] - 10000.0) < 1e-6
 
-    def test_genetic_optimization(self, data_manager):
+    def test_genetic_optimization(self, backtest_env):
         """Test genetic algorithm optimization functionality."""
-        # Create a BacktestEngine
-        engine = BacktestEngine(
-            data_manager=data_manager, initial_balance={"USD": 10000.0}
-        )
+        # Unpack the backtest environment fixture
+        engine, _, symbol, interval = backtest_env
 
         # Define parameter space
         param_space = {
@@ -271,8 +203,8 @@ class TestBacktestEngine:
         # Run genetic optimization with small population and generations for testing
         best_params, best_result = engine.genetic_optimize(
             strategy_func=simple_moving_average_crossover_strategy,
-            symbol="ETH-USD",
-            interval="1d",
+            symbol=symbol,
+            interval=interval,
             start_date="2020-01-01",
             end_date="2020-04-10",
             data_source_name="csv",
@@ -302,8 +234,8 @@ class TestBacktestEngine:
             type(
                 engine.run_backtest(
                     strategy_func=simple_moving_average_crossover_strategy,
-                    symbol="ETH-USD",
-                    interval="1d",
+                    symbol=symbol,
+                    interval=interval,
                     start_date="2020-01-01",
                     end_date="2020-04-10",
                     data_source_name="csv",

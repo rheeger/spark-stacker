@@ -7,6 +7,7 @@ import importlib.util
 import json
 import logging
 import sys
+import tempfile
 import time
 import warnings
 from datetime import datetime, timedelta
@@ -18,6 +19,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import pytest_asyncio
+from app.backtesting.backtest_engine import BacktestEngine
+from app.backtesting.data_manager import CSVDataSource, DataManager
 
 # Configure pytest-asyncio
 pytest.mark.asyncio.apply_to_all = True
@@ -524,3 +527,98 @@ print(f"conftest.py: sys.path: {sys.path[:3]}")
 def app_path():
     """Return the absolute path to the app directory."""
     return APP_PATH
+
+# Define a deterministic seed for reproducible tests
+DETERMINISTIC_SEED = 42
+
+@pytest.fixture
+def price_dataframe():
+    """
+    Creates a sample price dataframe with deterministic values for testing.
+
+    Returns:
+        pd.DataFrame: A DataFrame with OHLCV price data
+    """
+    # Set seed for reproducibility
+    np.random.seed(DETERMINISTIC_SEED)
+
+    # Create a date range
+    start_date = datetime(2020, 1, 1)
+    dates = [start_date + timedelta(days=i) for i in range(100)]
+    timestamps = [int(date.timestamp() * 1000) for date in dates]
+
+    # Generate price data with a simple trend
+    closes = [100.0]
+    for i in range(1, 100):
+        # Simple random walk with upward trend
+        prev_close = closes[-1]
+        change = np.random.normal(0.1, 1.0)  # Mean positive drift
+        new_close = max(prev_close + change, 1.0)  # Ensure price > 0
+        closes.append(new_close)
+
+    # Create OHLCV data
+    data = {
+        "timestamp": timestamps,
+        "open": closes,
+        "high": [c * (1 + np.random.uniform(0, 0.01)) for c in closes],
+        "low": [c * (1 - np.random.uniform(0, 0.01)) for c in closes],
+        "close": closes,
+        "volume": [np.random.uniform(1000, 10000) for _ in range(100)],
+    }
+
+    return pd.DataFrame(data)
+
+@pytest.fixture
+def temp_csv_dir():
+    """
+    Creates a temporary directory for CSV files and cleans up after the test.
+
+    Yields:
+        Path: Path to the temporary directory
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
+
+@pytest.fixture
+def backtest_env(price_dataframe, temp_csv_dir):
+    """
+    Sets up a BacktestEngine with a DataManager and sample data.
+
+    Args:
+        price_dataframe: Sample price data
+        temp_csv_dir: Temporary directory for CSV files
+
+    Returns:
+        tuple: (BacktestEngine, DataManager, symbol, interval)
+    """
+    # Save sample data to CSV
+    symbol = "ETH-USD"
+    interval = "1d"
+    csv_path = temp_csv_dir / f"{symbol}_{interval}.csv"
+    price_dataframe.to_csv(csv_path, index=False)
+
+    # Create a DataManager and register a CSV data source
+    data_manager = DataManager(data_dir=str(temp_csv_dir))
+    data_manager.register_data_source("csv", CSVDataSource(str(temp_csv_dir)))
+
+    # Create a BacktestEngine
+    engine = BacktestEngine(
+        data_manager=data_manager,
+        initial_balance={"USD": 10000.0},
+        maker_fee=0.001,
+        taker_fee=0.002,
+        slippage_model="fixed",
+    )
+
+    return (engine, data_manager, symbol, interval)
+
+@pytest.fixture
+def results_dir():
+    """
+    Creates a temporary directory for test results and cleans up after the test.
+
+    Yields:
+        Path: Path to the temporary directory for test results
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
