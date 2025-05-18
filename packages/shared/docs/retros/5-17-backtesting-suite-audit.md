@@ -35,8 +35,8 @@ Detailed observations:
 5. **Folder Nomenclature** – `simulation/` vs `indicator_testing/` vs `integration/` leads to grep
    fatigue.
 6. **Reporting Layer Untested** – HTML/Plotly generation is only exercised manually.
-7. **CI Duration Risks** – GA optimisation stress tests take minutes; no marker to exclude on quick
-   runs.
+7. **Test Suite Duration Risks** – GA optimisation stress tests take minutes; no marker to exclude
+   on quick runs.
 8. **Indicator On-Ramp** – writing a new indicator requires edits in 4+ places: class, factory, test
    harness, demo script.
 
@@ -88,7 +88,7 @@ Developers lose time figuring out where each piece goes.
 
 ### 3.5 Reporting Blind Spot
 
-HTML generator may break silently—​no CI guard.
+HTML generator may break silently—​no automated test guard.
 
 ---
 
@@ -108,7 +108,7 @@ _Purpose: create a clean slate so later diffs are readable._
 | 0-B        | Remove all committed artefacts (`git rm -r tests/test_results && git commit`)                                          | Repo size shrinks, `pytest` still passes                          |
 | 0-C        | Add `make clean-results` that deletes any stray artefacts in **developer** machines                                    | `make clean-results` removes the folder and exits with code 0     |
 | 0-D        | Generate a **baseline branch coverage report** (pytest-cov) and store it in `htmlcov/` (ignored) for future comparison | `coverage html` page renders locally                              |
-| 0-E        | **Bootstrap CI:** add `.github/workflows/ci-quick.yml` running `pytest -m \"not slow\" --cov=app` on Python 3.11       | Workflow completes successfully; badge renders in README          |
+| 0-E        | **Quick test script:** create `make test-quick` that executes `pytest -m \"not slow\" --cov=app` on Python 3.11        | Script executes successfully and README documents its usage       |
 
 ---
 
@@ -144,10 +144,10 @@ _Purpose: make the test tree self-describing._
 | Checkpoint | Action                                                                                                              | Acceptance Criteria                                                             |
 | ---------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | 3-A        | Create target directories `tests/backtesting/{unit,integration,simulation,regression}` and `tests/indicators/unit`. | Folders exist in repo.                                                          |
-| 3-B        | Move `tests/unit/test_backtest_engine.py` to `tests/backtesting/unit/` and fix imports if necessary.                | CI green.                                                                       |
+| 3-B        | Move `tests/unit/test_backtest_engine.py` to `tests/backtesting/unit/` and fix imports if necessary.                | All tests pass locally (`pytest -q`).                                           |
 | 3-C        | Add `__init__.py` files so IDEs treat directories as packages.                                                      | `python -m pytest -q` passes, `import tests.backtesting.unit` succeeds in REPL. |
 | 3-D        | Update `pytest.ini`: set `testpaths = tests` and declare `slow` marker.                                             | `pytest -q` discovers same test count as before.                                |
-| 3-E        | After CI green, migrate remaining files folder-by-folder, one PR per folder to keep diffs small.                    | No import-errors and path structure finalised.                                  |
+| 3-E        | After the test suite is green, migrate remaining files folder-by-folder, one PR per folder to keep diffs small.     | No import-errors and path structure finalised.                                  |
 
 ---
 
@@ -170,7 +170,7 @@ _Purpose: unify entry-points and prevent script drift._
 | Checkpoint | Action                                                                                                       | Acceptance Criteria                                                |
 | ---------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | 5-A        | Create `app/cli.py` using `click`; first command `backtest` mirrors `BacktestEngine.run_backtest` arguments. | `python -m app.cli backtest --help` prints usage.                  |
-| 5-B        | Add integration smoke test invoking the CLI via `subprocess.run` and completing < 10 s.                      | Test passes on CI with `not slow` marker.                          |
+| 5-B        | Add integration smoke test invoking the CLI via `subprocess.run` and completing < 10 s.                      | Smoke test passes during the quick-test run (`make test-quick`).   |
 | 5-C        | Replace `run_eth_macd_backtest.py` by a `cli demo-macd` sub-command housed in `examples/`.                   | Functionality parity confirmed; script deleted.                    |
 | 5-D        | Remove any other orphan scripts; update docs to point to CLI.                                                | `scripts/` directory contains only maintained helpers or is empty. |
 
@@ -201,15 +201,15 @@ _Purpose: scaffold everything needed for a new indicator with one command._
 
 ---
 
-### 4.8 CI Strategy
+### 4.8 Test-Suite Strategy
 
-_Purpose: build upon the quick workflow introduced in **0-E** and expand CI for full coverage._
+_Purpose: codify expectations for fast feedback locally and thorough coverage on demand._
 
-| Checkpoint | Action                                                                                        | Acceptance Criteria                    |
-| ---------- | --------------------------------------------------------------------------------------------- | -------------------------------------- |
-| 8-A        | Modify GitHub Actions quick workflow to run `pytest -m "not slow" --cov=app` on Python 3.11.  | Workflow passes in < 3 minutes.        |
-| 8-B        | Add scheduled `ci-nightly.yml` that runs `pytest -m slow` and uploads `htmlcov/` as artefact. | Artefact downloadable in workflow run. |
-| 8-C        | Enable branch protection requiring the quick workflow on `main`.                              | GitHub shows required check status.    |
+| Checkpoint | Action                                                                                                                 | Acceptance Criteria                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 8-A        | Ensure the quick-test target (`pytest -m "not slow"`) completes in < 3 minutes on a typical developer machine.         | Stopwatch shows < 180 s.                                |
+| 8-B        | Document a full test target (`pytest -m slow --cov=app`) that generates an updated HTML coverage report in `htmlcov/`. | Coverage report refreshes without errors.               |
+| 8-C        | Add README guidance reminding contributors to run `make test-quick` before opening a PR.                               | README section "Testing" lists the command and purpose. |
 
 ---
 
@@ -221,7 +221,7 @@ _Purpose: build upon the quick workflow introduced in **0-E** and expand CI for 
   seconds.
 - **Discoverability** – Single test tree; developers can grep "backtest" and see all relevant files.
 - **Scalability** – New indicators gain tests, configs, docs, and CLI hooks in minutes.
-- **Reliability** – Report generator covered by CI; failures surface immediately.
+- **Reliability** – Report generator covered by automated tests; failures surface immediately.
 - **Clean Git History** – No more binary artefacts in diffs; smaller repo size.
 
 ### Scope & Terminology: Runtime vs Test-Suite

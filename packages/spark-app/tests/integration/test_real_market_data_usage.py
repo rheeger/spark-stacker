@@ -99,6 +99,7 @@ class TestRealMarketDataUsage:
 
         return connector
 
+    @pytest.mark.slow
     @pytest.mark.asyncio
     async def test_macd_signal_from_real_market_data(self):
         """

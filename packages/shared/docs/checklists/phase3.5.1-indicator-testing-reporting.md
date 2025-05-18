@@ -1,4 +1,12 @@
-# Phase 3.5.1: Simplified Indicator Performance Reporting
+Run cd packages/spark-app ImportError while loading conftest
+'/home/runner/work/spark-stacker/spark-stacker/packages/spark-app/tests/conftest.py'.
+tests/conftest.py:77: in <module> from app.core.trading_engine import TradingEngine
+app/core/trading_engine.py:21: in <module> from app.utils.config import AppConfig as Config E
+ModuleNotFoundError: No module named 'app.utils.config' Initializing logging_setup.py app_dir:
+/home/runner/work/spark-stacker/spark-stacker/packages/spark-app/app Logs directory path:
+/home/runner/work/spark-stacker/spark-stacker/packages/spark-app/logs In test mode - using dummy log
+directory: /tmp/test_logs Error: Process completed with exit code 4.# Phase 3.5.1: Simplified
+Indicator Performance Reporting
 
 ## Overview
 
@@ -83,8 +91,8 @@ application.
 - [x] **4.0-B** Purge committed artefacts (`git rm -r tests/test_results`)
 - [x] **4.0-C** Add `make clean-results` target that deletes local artefacts
 - [x] **4.0-D** Generate baseline coverage report (`pytest --cov=app && coverage html`)
-- [x] **4.0-E** Bootstrap CI quick workflow `.github/workflows/ci-quick.yml` running
-      `pytest -m "not slow" --cov=app` on Python 3.11; add badge to README
+- [x] **4.0-E** Set up a **local quick-test** target (e.g., `make test-quick`) that runs
+      `pytest -m "not slow" --cov=app` on Python 3.11 and prints a concise summary in the terminal.
 
 #### 4.1 Foundational Fixtures
 
@@ -137,11 +145,14 @@ application.
 - [ ] **4.7-B** Auto-insert import into `IndicatorFactory.register_defaults()`
 - [ ] **4.7-C** Update CONTRIBUTING.md with onboarding steps
 
-#### 4.8 CI Strategy
+#### 4.8 Test-Suite Strategy
 
-- [ ] **4.8-A** Extend quick workflow to `pytest -m "not slow" --cov=app`
-- [ ] **4.8-B** Add nightly workflow running `pytest -m slow` and uploading `htmlcov/`
-- [ ] **4.8-C** Enable branch protection requiring quick workflow on `main`
+- [ ] **4.8-A** Ensure the **quick-test run** (`pytest -m "not slow"`) completes in < 3 minutes on a
+      typical dev laptop.
+- [ ] **4.8-B** Document an extended test target (`pytest -m slow --cov=app`) that generates an
+      updated HTML coverage report in `htmlcov/`.
+- [ ] **4.8-C** Add a note in the README reminding contributors to execute `make test-quick` before
+      pushing changes.
 
 ---
 

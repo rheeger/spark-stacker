@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.backtesting.backtest_engine import BacktestEngine, BacktestResult
 from app.backtesting.data_manager import CSVDataSource, DataManager
 from app.backtesting.simulation_engine import SimulationEngine
@@ -101,6 +100,7 @@ class TestGeneticOptimizationWorkflow:
 
         return engine
 
+    @pytest.mark.slow
     def test_genetic_optimization_workflow(
         self, backtest_engine, sample_data_directory
     ):

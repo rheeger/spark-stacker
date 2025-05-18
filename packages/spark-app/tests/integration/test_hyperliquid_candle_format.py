@@ -207,54 +207,49 @@ def test_historical_candles_response_handling():
             assert candles[1]["volume"] == 12.3
 
 @pytest.mark.skipif(SKIP_REAL_API, reason="Skipping real API test")
+@pytest.mark.slow
 def test_real_api_historical_candles():
-    """
-    Integration test with the real Hyperliquid API (no mocks).
+    """Test getting historical candles from the real Hyperliquid API."""
+    connector = HyperliquidConnector(testnet=True)
+    connector.connect()
 
-    This will fail if there are API format or compatibility issues,
-    which is essential for proper integration testing.
-    """
-    # Create a real connector instance
-    connector = HyperliquidConnector(
-        name="test_hyperliquid",
-        wallet_address="0xA30BDaFFe8EEab7eaCB88Bc17158E28f7EcC07F8",  # Public address
-        testnet=USE_TESTNET,
-        market_types=[MarketType.PERPETUAL]
-    )
+    try:
+        # Test different symbols
+        symbols = ["ETH-USD", "BTC-USD"]
 
-    # Actually connect to the API
-    connected = connector.connect()
-    assert connected, "Failed to connect to Hyperliquid API"
+        # Fetch historical candles - this should fail with 422 if request format is wrong
+        for symbol in symbols:
+            interval = "1m"
+            end_time = int(time.time() * 1000)
+            start_time = end_time - (3600 * 1000)  # 1 hour ago
 
-    # Fetch historical candles - this should fail with 422 if request format is wrong
-    symbol = "ETH-USD"
-    interval = "1m"
-    end_time = int(time.time() * 1000)
-    start_time = end_time - (3600 * 1000)  # 1 hour ago
+            # Get candles
+            candles = connector.get_historical_candles(
+                symbol=symbol,
+                interval=interval,
+                start_time=start_time,
+                end_time=end_time,
+                limit=60
+            )
 
-    # Get candles
-    candles = connector.get_historical_candles(
-        symbol=symbol,
-        interval=interval,
-        start_time=start_time,
-        end_time=end_time,
-        limit=60
-    )
+            # Real integration test must return data, not an empty list on error
+            assert len(candles) > 0, f"Failed to fetch candles for {symbol} using real API"
 
-    # Real integration test must return data, not an empty list on error
-    assert len(candles) > 0, f"Failed to fetch candles for {symbol} using real API"
+            # Verify candle structure
+            first_candle = candles[0]
+            assert "timestamp" in first_candle, "Missing timestamp in candle data"
+            assert "open" in first_candle, "Missing open price in candle data"
+            assert "high" in first_candle, "Missing high price in candle data"
+            assert "low" in first_candle, "Missing low price in candle data"
+            assert "close" in first_candle, "Missing close price in candle data"
 
-    # Verify candle structure
-    first_candle = candles[0]
-    assert "timestamp" in first_candle, "Missing timestamp in candle data"
-    assert "open" in first_candle, "Missing open price in candle data"
-    assert "high" in first_candle, "Missing high price in candle data"
-    assert "low" in first_candle, "Missing low price in candle data"
-    assert "close" in first_candle, "Missing close price in candle data"
+            # Log success
+            logger.info(f"Successfully fetched {len(candles)} candles from real Hyperliquid API")
+            logger.info(f"First candle: {first_candle}")
 
-    # Log success
-    logger.info(f"Successfully fetched {len(candles)} candles from real Hyperliquid API")
-    logger.info(f"First candle: {first_candle}")
+    except Exception as e:
+        logger.error(f"Error in test_real_api_historical_candles: {e}")
+        assert False, "Error in test_real_api_historical_candles"
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

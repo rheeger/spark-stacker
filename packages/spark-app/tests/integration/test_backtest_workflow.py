@@ -7,17 +7,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.backtesting.backtest_engine import BacktestEngine, BacktestResult
 from app.backtesting.data_manager import CSVDataSource, DataManager
 from app.backtesting.simulation_engine import SimulationEngine
-from app.backtesting.strategy import (
-    bollinger_bands_mean_reversion_strategy,
-    macd_strategy,
-    multi_indicator_strategy,
-    rsi_strategy,
-    simple_moving_average_crossover_strategy,
-)
+from app.backtesting.strategy import (bollinger_bands_mean_reversion_strategy,
+                                      macd_strategy, multi_indicator_strategy,
+                                      rsi_strategy,
+                                      simple_moving_average_crossover_strategy)
 
 
 class TestBacktestWorkflow:
@@ -103,6 +99,7 @@ class TestBacktestWorkflow:
 
         return engine
 
+    @pytest.mark.slow
     def test_complete_backtest_workflow(self, backtest_engine, sample_data_directory):
         """Test a complete backtesting workflow."""
         # 1. Define test parameters

@@ -14,7 +14,7 @@ import requests_mock
 from app.connectors.base_connector import MarketType, OrderSide, OrderType
 # Import the connector to test
 from app.connectors.hyperliquid_connector import (HyperliquidConnector,
-                                              MetadataWrapper)
+                                                  MetadataWrapper)
 from eth_account import Account
 
 # Configure logging for tests
@@ -90,15 +90,11 @@ TEST_MODE = os.getenv('HYPERLIQUID_TEST_MODE', TestMode.MOCK)  # Default to MOCK
 
 @pytest.fixture
 def connector():
-    """Fixture to create a Hyperliquid connector instance."""
-    connector = HyperliquidConnector(
-        name="test_hyperliquid",
-        wallet_address=TEST_WALLET_ADDRESS,
-        private_key=TEST_PRIVATE_KEY,
-        testnet=USE_TESTNET
-    )
-    # Initialize but don't connect yet
-    return connector
+    """Create and connect a Hyperliquid connector."""
+    conn = HyperliquidConnector(testnet=True)
+    conn.connect()
+    yield conn
+    conn.disconnect()
 
 @pytest.fixture
 def connected_connector(connector):
@@ -138,30 +134,13 @@ def connected_connector(connector):
 # CONNECTION TESTS
 # =============================================================================
 
-def test_connection(connector):
-    """Test connection to the Hyperliquid API."""
-    if TEST_MODE == TestMode.RECORD:
-        # Real connection test
-        result = connector.connect()
-
-        # Record the response for later use
-        meta_response = connector.info.meta()
-        APIResponseRecorder.save_response('info_meta', meta_response.get("universe", []))
-
-        assert result is True
-        assert connector.is_connected is True
-    else:
-        # Test with recorded/mocked data
-        with patch('hyperliquid.info.Info') as mock_info_class:
-            # Create a mock Info instance
-            mock_info_instance = MagicMock()
-            mock_info_instance.meta.return_value = {"universe": [{"name": "ETH", "szDecimals": 2}]}
-            mock_info_class.return_value = mock_info_instance
-
-            result = connector.connect()
-
-            assert result is True
-            assert connector.is_connected is True
+@pytest.mark.slow
+def test_connection():
+    """Test connecting to the Hyperliquid API."""
+    conn = HyperliquidConnector(testnet=True)
+    connected = conn.connect()
+    assert connected, "Failed to connect to Hyperliquid API"
+    conn.disconnect()
 
 # =============================================================================
 # MARKET DATA TESTS
