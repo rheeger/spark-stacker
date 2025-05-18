@@ -535,38 +535,15 @@ DETERMINISTIC_SEED = 42
 def price_dataframe():
     """
     Creates a sample price dataframe with deterministic values for testing.
+    Uses the make_price_dataframe factory with pattern="trend".
 
     Returns:
         pd.DataFrame: A DataFrame with OHLCV price data
     """
-    # Set seed for reproducibility
-    np.random.seed(DETERMINISTIC_SEED)
+    from tests._helpers.data_factory import make_price_dataframe
 
-    # Create a date range
-    start_date = datetime(2020, 1, 1)
-    dates = [start_date + timedelta(days=i) for i in range(100)]
-    timestamps = [int(date.timestamp() * 1000) for date in dates]
-
-    # Generate price data with a simple trend
-    closes = [100.0]
-    for i in range(1, 100):
-        # Simple random walk with upward trend
-        prev_close = closes[-1]
-        change = np.random.normal(0.1, 1.0)  # Mean positive drift
-        new_close = max(prev_close + change, 1.0)  # Ensure price > 0
-        closes.append(new_close)
-
-    # Create OHLCV data
-    data = {
-        "timestamp": timestamps,
-        "open": closes,
-        "high": [c * (1 + np.random.uniform(0, 0.01)) for c in closes],
-        "low": [c * (1 - np.random.uniform(0, 0.01)) for c in closes],
-        "close": closes,
-        "volume": [np.random.uniform(1000, 10000) for _ in range(100)],
-    }
-
-    return pd.DataFrame(data)
+    # Create a price dataframe with a trending pattern
+    return make_price_dataframe(rows=100, pattern="trend", noise=0.5, seed=DETERMINISTIC_SEED)
 
 @pytest.fixture
 def temp_csv_dir():

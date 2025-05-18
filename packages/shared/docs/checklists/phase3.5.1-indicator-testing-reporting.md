@@ -105,9 +105,9 @@ application.
 
 #### 4.2 Single Synthetic-Data Generator
 
-- [ ] **4.2-A** Implement `tests/_helpers/data_factory.py::make_price_dataframe`
-- [ ] **4.2-B** Wire the `price_dataframe` fixture to the factory (`pattern="trend"`)
-- [ ] **4.2-C** Add deterministic output unit test `tests/backtesting/unit/test_data_factory.py`
+- [x] **4.2-A** Implement `tests/_helpers/data_factory.py::make_price_dataframe`
+- [x] **4.2-B** Wire the `price_dataframe` fixture to the factory (`pattern="trend"`)
+- [x] **4.2-C** Add deterministic output unit test `tests/backtesting/unit/test_data_factory.py`
 
 #### 4.3 Directory Realignment
 
