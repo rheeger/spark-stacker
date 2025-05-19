@@ -355,7 +355,7 @@ class IndicatorBacktestManager:
     def generate_indicator_performance_report(
         self,
         indicator_name: str,
-        output_dir: Union[str, Path],
+        output_dir: Union[str, Path] = None,
         include_plots: bool = True
     ) -> Dict[str, Any]:
         """
@@ -363,20 +363,27 @@ class IndicatorBacktestManager:
 
         Args:
             indicator_name: Name of the indicator to generate a report for
-            output_dir: Directory to save report files
+            output_dir: Directory to save report files. If None, a temporary directory will be used.
             include_plots: Whether to include plots in the report
 
         Returns:
-            Dictionary containing report data
+            Dictionary containing report data and generated file paths
         """
         result = self.results.get(indicator_name)
         if not result:
             logger.error(f"No backtest results available for indicator: {indicator_name}")
             return {}
 
-        # Create output directory
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # If output_dir is None, use a temporary directory
+        if output_dir is None:
+            import tempfile
+            temp_dir = tempfile.TemporaryDirectory()
+            output_dir = Path(temp_dir.name)
+            logger.info(f"Using temporary directory for report: {output_dir}")
+        else:
+            # Create output directory
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
 
         # Prepare report data
         report = {
@@ -384,7 +391,8 @@ class IndicatorBacktestManager:
             "symbol": result.symbol,
             "period": f"{result.start_date} to {result.end_date}",
             "metrics": result.metrics,
-            "trades": result.trades
+            "trades": result.trades,
+            "output_dir": str(output_dir)  # Include the output directory in the report
         }
 
         # Save result to JSON file
@@ -437,6 +445,14 @@ class IndicatorBacktestManager:
                     f.write(f"Win Rate: {win_rate:.2f}%\n")
 
         report["summary_file"] = str(summary_file)
+
+        # Generated paths for easier access
+        report["generated_paths"] = {
+            "output_dir": str(output_dir),
+            "result_file": str(result_file),
+            "summary_file": str(summary_file),
+            "plots": plots if include_plots else {}
+        }
 
         logger.info(f"Generated performance report for {indicator_name} at {output_dir}")
         return report

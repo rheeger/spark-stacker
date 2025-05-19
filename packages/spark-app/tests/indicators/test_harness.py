@@ -30,12 +30,13 @@ class IndicatorTestHarness:
     - Validate signal generation
     """
 
-    def __init__(self, data_source_name: str = "csv"):
+    def __init__(self, data_source_name: str = "csv", output_path: Optional[Union[str, Path]] = None):
         """
         Initialize the indicator test harness.
 
         Args:
             data_source_name: Name of the data source to use for backtesting
+            output_path: Path to store test results. If None, uses default test results directory.
         """
         self.data_source_name = data_source_name
         self.data_manager = DataManager()
@@ -44,11 +45,22 @@ class IndicatorTestHarness:
 
         # Setup paths
         self.project_root = Path(os.path.abspath(__file__)).parents[3]
-        self__test_data___dir = self.project_root / "tests" / "__test_data__" / "market_scenarios"
-        self__test_results___dir = self.project_root / "tests" / "__test_results__"
+        self.__test_data___dir = self.project_root / "tests" / "__test_data__" / "market_scenarios"
+
+        # Use provided output_path or default to project test results directory
+        if output_path is not None:
+            self.__test_results___dir = Path(output_path)
+        else:
+            self.__test_results___dir = self.project_root / "tests" / "__test_results__"
 
         # Ensure directories exist
-        self__test_results___dir.mkdir(parents=True, exist_ok=True)
+        self.__test_results___dir.mkdir(parents=True, exist_ok=True)
+
+        # Create a plots directory within the results dir
+        self.plots_dir = self.__test_results___dir / "indicators" / "plots"
+        self.plots_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Test results will be stored in: {self.__test_results___dir}")
 
         # Default test parameters
         self.default_symbol = "ETH"
@@ -59,24 +71,24 @@ class IndicatorTestHarness:
         self.market_scenarios = {
             "bull": {
                 "description": "Strong upward trend",
-                "file": self__test_data___dir / "bull_market.csv"
+                "file": self.__test_data___dir / "bull_market.csv"
             },
             "bear": {
                 "description": "Strong downward trend",
-                "file": self__test_data___dir / "bear_market.csv"
+                "file": self.__test_data___dir / "bear_market.csv"
             },
             "sideways": {
                 "description": "Sideways range-bound market",
-                "file": self__test_data___dir / "sideways_market.csv"
+                "file": self.__test_data___dir / "sideways_market.csv"
             },
             "volatile": {
                 "description": "Highly volatile market with quick reversals",
-                "file": self__test_data___dir / "volatile_market.csv"
+                "file": self.__test_data___dir / "volatile_market.csv"
             }
         }
 
         # Test results
-        self__test_results__: Dict[str, Dict[str, Any]] = {}
+        self.__test_results__: Dict[str, Dict[str, Any]] = {}
 
     def load_all_available_indicators(self) -> List[str]:
         """
@@ -269,7 +281,7 @@ class IndicatorTestHarness:
             # Plot data with indicator signals if signals were generated
             plot_path = None
             if signal_count > 0:
-                plot_path = self__test_results___dir / "indicators" / "plots" / f"{indicator_name}_signals.png"
+                plot_path = self.plots_dir / f"{indicator_name}_signals.png"
                 plot_path.parent.mkdir(parents=True, exist_ok=True)
 
                 fig, ax = plt.subplots(figsize=(12, 6))
@@ -373,16 +385,16 @@ class IndicatorTestHarness:
 
             # Generate plots
             plots = {}
-            plots_dir = self__test_results___dir / "indicators" / "plots"
-            plots_dir.mkdir(parents=True, exist_ok=True)
+            # Use the class-wide plots directory
+            self.plots_dir.mkdir(parents=True, exist_ok=True)
 
             # Equity curve plot
-            equity_plot_file = plots_dir / f"{indicator_name}_{market_type}_equity.png"
+            equity_plot_file = self.plots_dir / f"{indicator_name}_{market_type}_equity.png"
             result.plot_equity_curve(save_path=str(equity_plot_file))
             plots["equity_curve"] = str(equity_plot_file)
 
             # Drawdown plot
-            drawdown_plot_file = plots_dir / f"{indicator_name}_{market_type}_drawdown.png"
+            drawdown_plot_file = self.plots_dir / f"{indicator_name}_{market_type}_drawdown.png"
             result.plot_drawdown(save_path=str(drawdown_plot_file))
             plots["drawdown"] = str(drawdown_plot_file)
 
@@ -474,7 +486,7 @@ class IndicatorTestHarness:
             all_results[indicator_name] = indicator_results
 
         # Store test results
-        self__test_results__ = all_results
+        self.__test_results__ = all_results
 
         return all_results
 
@@ -485,7 +497,7 @@ class IndicatorTestHarness:
         Returns:
             Tuple of (json_file_path, markdown_file_path)
         """
-        if not self__test_results__:
+        if not self.__test_results__:
             logger.warning("No test results to save")
             return None, None
 
@@ -493,13 +505,13 @@ class IndicatorTestHarness:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # Create indicators directory if it doesn't exist
-        indicators_dir = self__test_results___dir / "indicators"
+        indicators_dir = self.__test_results___dir / "indicators"
         indicators_dir.mkdir(parents=True, exist_ok=True)
 
         # Save to JSON
         json_file = indicators_dir / f"indicator_tests_{timestamp}.json"
         with open(json_file, "w") as f:
-            json.dump(self__test_results__, f, indent=2, default=str)
+            json.dump(self.__test_results__, f, indent=2, default=str)
 
         # Create Markdown report
         md_file = indicators_dir / f"indicator_tests_{timestamp}.md"
@@ -512,7 +524,7 @@ class IndicatorTestHarness:
             f.write("| Indicator | Valid | Scenarios Tested | Signal Generation | Profitability |\n")
             f.write("|-----------|-------|------------------|-------------------|---------------|\n")
 
-            for indicator_name, results in self__test_results__.items():
+            for indicator_name, results in self.__test_results__.items():
                 # Check validity
                 signal_tests = results.get("signal_tests", {})
                 valid = all(test.get("valid", False) for test in signal_tests.values())
@@ -540,7 +552,7 @@ class IndicatorTestHarness:
             # Detailed results by indicator
             f.write("\n## Detailed Results\n\n")
 
-            for indicator_name, results in self__test_results__.items():
+            for indicator_name, results in self.__test_results__.items():
                 f.write(f"### {indicator_name}\n\n")
 
                 # Signal generation tests
@@ -584,10 +596,18 @@ class IndicatorTestHarness:
         return str(json_file), str(md_file)
 
 
-def run_indicator_tests():
-    """Run tests for all available indicators and save the results."""
+def run_indicator_tests(output_path: Optional[Union[str, Path]] = None):
+    """
+    Run tests for all available indicators and save the results.
+
+    Args:
+        output_path: Optional path to store test results. If None, uses default test results directory.
+
+    Returns:
+        Dictionary of test results by indicator name.
+    """
     # Initialize test harness
-    test_harness = IndicatorTestHarness()
+    test_harness = IndicatorTestHarness(output_path=output_path)
 
     # Load all available indicators
     indicator_names = test_harness.load_all_available_indicators()

@@ -119,11 +119,11 @@ application.
 
 #### 4.4 Artefact Stewardship
 
-- [ ] **4.4-A** Extend `IndicatorBacktestManager` & integration tests to accept `output_path`
+- [x] **4.4-A** Extend `IndicatorBacktestManager` & integration tests to accept `output_path`
       parameter (default tmp fixture) and return generated paths
-- [ ] **4.4-B** Refactor `tests/indicator_testing/test_harness.py` to use `results_dir` fixture;
-      remove hard-coded paths
-- [ ] **4.4-C** Add README section "Viewing local artefacts" explaining tmp paths
+- [x] **4.4-B** Refactor `tests/indicators/test_harness.py` to use `results_dir` fixture; remove
+      hard-coded paths
+- [x] **4.4-C** Add README section "Viewing local artefacts" explaining tmp paths
 
 #### 4.5 Script ➜ CLI Consolidation
 
