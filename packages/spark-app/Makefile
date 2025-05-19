@@ -1,4 +1,4 @@
-.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build rebuild force-rebuild
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build rebuild force-rebuild clean-results test-cli
 
 # Default target
 help:
@@ -17,11 +17,14 @@ help:
 	@echo "  make force-rebuild   : Force rebuild Docker image without cache and restart"
 	@echo "  make clean           : Clean up temporary files and build artifacts"
 	@echo "  make clean-logs      : Clean up all log files"
+	@echo "  make clean-results   : Clean up test result artifacts"
 	@echo "  make test            : Run tests for spark-app"
 	@echo "  make test-quick      : Run quick tests (excluding slow tests) with coverage"
 	@echo "  make test-slow       : Run only slow tests"
 	@echo "  make spark-app-clean : Clean up spark-app services and volumes"
 	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
+	@echo "  make test-cli        : Test the CLI commands"
+	@echo "  make demo-macd       : Run the MACD indicator demo via CLI"
 
 # Build target
 build: install-deps
@@ -34,8 +37,8 @@ lint: lint-python lint-markdown
 lint-python:
 	@echo "Running Python linters..."
 	black .
-	pylint app/ tests/ scripts/ || true
-	mypy app/ tests/ scripts/ || true
+	pylint app/ tests/ || true
+	mypy app/ tests/ || true
 	@echo "Python linting complete"
 
 lint-markdown:
@@ -108,6 +111,14 @@ test-hyperliquid:
 	@cd $(CURDIR) && .venv/bin/python -m pytest tests/integration/test_hyperliquid_*.py tests/unit/test_hyperliquid_*.py -v
 	@echo "Hyperliquid tests complete"
 
+# Clean test results
+clean-results:
+	@echo "Cleaning up test result artifacts..."
+	rm -rf tests/__test_results__
+	rm -rf tests/test_results
+	rm -rf htmlcov
+	@echo "Test results cleaned up"
+
 clean:
 	@echo "Cleaning up spark-app package..."
 	find . -type d -name __pycache__ -exec rm -rf {} +
@@ -119,7 +130,7 @@ clean:
 
 clean-logs:
 	@echo "Cleaning up all logs..."
-	@cd $(CURDIR) && .venv/bin/python scripts/cleanup_logs.py
+	@cd $(CURDIR) && .venv/bin/python -m tests.utils.cleanup_logs
 	@echo "Logs cleaned up. New logs will be stored in app/logs directory."
 
 # Restart command
@@ -147,3 +158,16 @@ force-rebuild:
 	cd docker && docker-compose build --no-cache
 	cd docker && docker-compose up -d
 	@echo "Docker image force rebuilt and services restarted"
+
+# Test the CLI
+test-cli:
+	@echo "Testing CLI commands..."
+	@cd $(CURDIR) && .venv/bin/python -m app.cli --help
+	@cd $(CURDIR) && .venv/bin/python -m app.cli list-indicators
+	@echo "CLI test complete"
+
+# Run MACD demo
+demo-macd:
+	@echo "Running MACD demo using the CLI..."
+	@cd $(CURDIR) && .venv/bin/python -m app.cli demo-macd
+	@echo "MACD demo complete"
