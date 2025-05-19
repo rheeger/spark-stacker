@@ -465,7 +465,7 @@ def plot_indicator_signals(data, indicator):
 def main():
     """Run the indicator demonstration."""
     # Setup directories
-    results_dir = Path("tests/__test_results__/indicator_demo")
+    results_dir = Path("../../../tests/__test_results__/indicator_demo")
     results_dir.mkdir(parents=True, exist_ok=True)
 
     # Create config file if it doesn't exist

@@ -19,7 +19,7 @@ logger = logging.getLogger("SystemTest")
 
 # Get the root directory of the project
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 
 # Add the project root to Python path so tests can import from app
 sys.path.insert(0, ROOT_DIR)
@@ -100,7 +100,8 @@ def ensure_test_env():
     except subprocess.CalledProcessError:
         logger.error("pytest not found in virtual environment")
         logger.error("Running setup_test_env.sh to install dependencies...")
-        setup_script = os.path.join(SCRIPT_DIR, "setup_test_env.sh")
+        # Updated path to point to scripts directory
+        setup_script = os.path.join(ROOT_DIR, "scripts", "setup_test_env.sh")
         try:
             subprocess.run([setup_script], check=True)
         except subprocess.CalledProcessError:
@@ -124,11 +125,7 @@ def ensure_data_cache_exists():
 
     logger.info("Ensuring market data cache exists...")
     refresh_script = os.path.join(SCRIPT_DIR, "refresh_test_market_data.py")
-
-    if not os.path.exists(refresh_script):
-        logger.warning(f"Data refresh script not found at {refresh_script}")
-        logger.warning("Tests will use synthetic data")
-        return True
+    logger.info(f"Using refresh script at: {refresh_script}")
 
     try:
         # Run with --essential-only flag to only generate the minimal required data

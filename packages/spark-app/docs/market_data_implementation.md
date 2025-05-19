@@ -49,7 +49,7 @@ This document describes the implementation of the historical market data capabil
 from app.backtesting.market_dataset_generator import MarketDatasetGenerator
 
 # Initialize generator
-generator = MarketDatasetGenerator(data_dir="data/market_datasets")
+generator = MarketDatasetGenerator(data_dir="tests/__test-data__/market-data")
 
 # Generate datasets for specific symbols with multiple timeframes
 generator.generate_standard_datasets(
@@ -69,11 +69,11 @@ datasets = generator.list_available_datasets()
 from app.backtesting.data_normalizer import DataNormalizer
 
 # Initialize normalizer
-normalizer = DataNormalizer(data_dir="data/market_datasets")
+normalizer = DataNormalizer(data_dir="tests/__test-data__/market-data")
 
 # Normalize a single dataset
 normalized_df = normalizer.normalize_dataset(
-    filepath="data/market_datasets/bull/BTC_1h_bull_1.csv",
+    filepath="tests/__test-data__/market-data/bull/BTC_1h_bull_1.csv",
     normalization_method="z_score"
 )
 
@@ -90,7 +90,7 @@ normalizer.normalize_all_datasets(
 from app.backtesting.timeframe_manager import TimeframeManager
 
 # Initialize timeframe manager
-manager = TimeframeManager(data_dir="data/market_datasets")
+manager = TimeframeManager(data_dir="tests/__test-data__/market-data")
 
 # Get available timeframes for a symbol
 timeframes = manager.get_available_timeframes("BTC", market_regime="bull")
@@ -175,16 +175,16 @@ data/
 
 The implementation includes comprehensive unit tests:
 
-- `tests/unit/test_market_dataset_generator.py`: Tests for the MarketDatasetGenerator class
-- `tests/unit/test_data_normalizer.py`: Tests for the DataNormalizer class
-- `tests/unit/test_timeframe_manager.py`: Tests for the TimeframeManager class
-- `tests/unit/test_data_manager.py`: Tests for the DataManager class with focus on timeframe conversion
+- `tests/backtesting/unit/test_market_dataset_generator.py`: Tests for the MarketDatasetGenerator class
+- `tests/backtesting/unit/test_data_normalizer.py`: Tests for the DataNormalizer class
+- `tests/backtesting/unit/test_timeframe_manager.py`: Tests for the TimeframeManager class
+- `tests/backtesting/unit/test_data_manager.py`: Tests for the DataManager class with focus on timeframe conversion
 
 Run tests using:
 
 ```bash
-python -m pytest tests/unit/test_market_dataset_generator.py
-python -m pytest tests/unit/test_data_normalizer.py
-python -m pytest tests/unit/test_timeframe_manager.py
-python -m pytest tests/unit/test_data_manager.py
+python -m pytest tests/backtesting/unit/test_market_dataset_generator.py
+python -m pytest tests/backtesting/unit/test_data_normalizer.py
+python -m pytest tests/backtesting/unit/test_timeframe_manager.py
+python -m pytest tests/backtesting/unit/test_data_manager.py
 ```

@@ -18,7 +18,7 @@ from pathlib import Path
 
 # Add parent directory to path to allow imports
 current_dir = Path(os.path.abspath(__file__)).parent
-project_root = current_dir.parent
+project_root = current_dir.parent.parent
 sys.path.append(str(project_root.parent.parent))  # Add the root directory to path
 
 # Use relative imports instead of package imports
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 def main():
     """Run the indicator backtesting example."""
     # Setup paths
-    project_root = Path(os.path.abspath(__file__)).parents[1]
+    project_root = Path(os.path.abspath(__file__)).parents[2]
     config_file = project_root / "app" / "backtesting" / "indicator_configs" / "default_indicators.yaml"
     results_dir = project_root / "tests" / "__test_results__" / "backtesting_reports"
 

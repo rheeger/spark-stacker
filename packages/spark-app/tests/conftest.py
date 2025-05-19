@@ -245,7 +245,7 @@ def get_cached_market_data(
     # Raise error with helpful message if cache doesn't exist
     error_msg = (
         f"Cached market data not found: {cache_file}. "
-        f"Please run 'python scripts/refresh_test_market_data.py' first to populate the cache."
+        f"Please run 'python tests/_utils/refresh_test_market_data.py' first to populate the cache."
     )
     logger.error(error_msg)
     raise FileNotFoundError(error_msg)

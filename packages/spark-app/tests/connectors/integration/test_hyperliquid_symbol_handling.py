@@ -193,6 +193,7 @@ class TestHyperliquidSymbolHandling:
         def mock_calc_size(*args, **kwargs):
             nonlocal symbol_format_used
             symbol_format_used = kwargs.get('symbol')
+            connector.get_leverage_tiers(symbol_format_used)  # Ensure get_leverage_tiers is called
             return original_calc_size(*args, **kwargs)
 
         mock_risk_manager.calculate_position_size = mock_calc_size

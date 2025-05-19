@@ -6,7 +6,7 @@ set -e # Exit immediately if a command exits with non-zero status
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the package root directory
-PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PACKAGE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PACKAGE_DIR"
 

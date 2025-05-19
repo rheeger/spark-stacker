@@ -162,12 +162,12 @@ force-rebuild:
 # Test the CLI
 test-cli:
 	@echo "Testing CLI commands..."
-	@cd $(CURDIR) && .venv/bin/python -m app.cli --help
-	@cd $(CURDIR) && .venv/bin/python -m app.cli list-indicators
+	@cd $(CURDIR) && .venv/bin/python -m tests._utils.cli --help
+	@cd $(CURDIR) && .venv/bin/python -m tests._utils.cli list-indicators
 	@echo "CLI test complete"
 
 # Run MACD demo
 demo-macd:
 	@echo "Running MACD demo using the CLI..."
-	@cd $(CURDIR) && .venv/bin/python -m app.cli demo-macd
+	@cd $(CURDIR) && .venv/bin/python -m tests._utils.cli demo-macd
 	@echo "MACD demo complete"

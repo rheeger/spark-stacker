@@ -37,6 +37,7 @@ class IndicatorBacktestManager:
         self.backtest_engine = backtest_engine
         self.indicators: Dict[str, BaseIndicator] = {}
         self.results: Dict[str, BacktestResult] = {}
+        self.output_dir: Path = Path("./backtest_results")  # Default output directory
 
     def load_indicators_from_config(self, config_path: Union[str, Path]) -> None:
         """
@@ -543,3 +544,101 @@ class IndicatorBacktestManager:
             logger.info(f"Saved indicator signals plot to {output_file}")
 
         return fig
+
+    def set_output_directory(self, output_dir: Union[str, Path]) -> None:
+        """
+        Set the output directory for reports and results.
+
+        Args:
+            output_dir: Directory path to save output files
+        """
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Set output directory: {self.output_dir}")
+
+    def run_indicator_backtest(
+        self,
+        indicator_name: str,
+        symbol: str,
+        timeframe: str,
+        generate_report: bool = True,
+        data_source_name: str = "default",
+        start_date: Optional[Union[str, pd.Timestamp]] = None,
+        end_date: Optional[Union[str, pd.Timestamp]] = None,
+        leverage: float = 1.0
+    ) -> Dict[str, str]:
+        """
+        Run a backtest for a specific indicator with simplified parameters.
+
+        Args:
+            indicator_name: Name of the indicator to backtest
+            symbol: Market symbol to backtest
+            timeframe: Timeframe interval (e.g., '1m', '1h', '1d')
+            generate_report: Whether to generate a performance report
+            data_source_name: Name of the data source to use
+            start_date: Start date for backtest (optional)
+            end_date: End date for backtest (optional)
+            leverage: Leverage to use for trades
+
+        Returns:
+            Dictionary with paths to generated files
+        """
+        from ..indicators.indicator_factory import IndicatorFactory
+
+        # Get the indicator from factory if not already loaded
+        if indicator_name not in self.indicators:
+            try:
+                # Use create_indicator instead of create
+                indicator = IndicatorFactory.create_indicator(
+                    name=indicator_name.upper(),
+                    indicator_type=indicator_name.lower()
+                )
+                if not indicator:
+                    logger.error(f"Failed to create indicator {indicator_name}")
+                    return {}
+                self.add_indicator(indicator)
+            except Exception as e:
+                logger.error(f"Failed to create indicator {indicator_name}: {str(e)}")
+                return {}
+
+        # Use default dates if not specified
+        if not start_date:
+            start_date = "2020-01-01"
+        if not end_date:
+            end_date = pd.Timestamp.now().strftime("%Y-%m-%d")
+
+        # Run the backtest
+        result = self.backtest_indicator(
+            indicator_name=indicator_name,
+            symbol=symbol,
+            interval=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            data_source_name=data_source_name,
+            leverage=leverage
+        )
+
+        if not result:
+            logger.error(f"No results for indicator {indicator_name}")
+            return {}
+
+        # Generate report if requested
+        result_paths = {}
+        if generate_report:
+            if not hasattr(self, "output_dir"):
+                import tempfile
+                self.output_dir = Path(tempfile.mkdtemp())
+                logger.info(f"Using temporary directory for output: {self.output_dir}")
+
+            report = self.generate_indicator_performance_report(
+                indicator_name=indicator_name,
+                output_dir=self.output_dir,
+                include_plots=True
+            )
+
+            if report:
+                result_paths["report_path"] = report.get("summary_file", "")
+                result_paths["json_path"] = report.get("result_file", "")
+                result_paths["output_dir"] = str(self.output_dir)
+
+        return result_paths

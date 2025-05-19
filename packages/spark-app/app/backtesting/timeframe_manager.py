@@ -18,7 +18,7 @@ class TimeframeManager:
     during backtesting to allow multi-timeframe analysis and strategy testing.
     """
 
-    def __init__(self, data_dir: str = "data/market_datasets"):
+    def __init__(self, data_dir: str = "tests/__test_data__/market_data"):
         """
         Initialize the timeframe manager.
 

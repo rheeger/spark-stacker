@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Define simple version of the classes to avoid import issues
 class SimpleMarketDatasetGenerator:
@@ -27,7 +27,7 @@ class SimpleMarketDatasetGenerator:
     This is a standalone version for use in the script.
     """
 
-    def __init__(self, data_dir: str = "data/market_datasets"):
+    def __init__(self, data_dir: str = "tests/__test_data__/market_data"):
         """
         Initialize the dataset generator.
 
@@ -80,7 +80,7 @@ class SimpleDataNormalizer:
     This is a standalone version for use in the script.
     """
 
-    def __init__(self, data_dir: str = "data/market_datasets"):
+    def __init__(self, data_dir: str = "tests/__test_data__/market_data"):
         """
         Initialize the data normalizer.
 
@@ -156,8 +156,8 @@ def parse_arguments():
     parser.add_argument(
         "--data-dir",
         type=str,
-        default="data/market_datasets",
-        help="Directory to store market datasets (default: data/market_datasets)"
+        default="tests/__test_data__/market_data",
+        help="Directory to store market datasets (default: tests/__test_data__/market_data)"
     )
 
     parser.add_argument(

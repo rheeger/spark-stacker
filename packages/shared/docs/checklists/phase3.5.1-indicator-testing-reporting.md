@@ -127,7 +127,7 @@ application.
 
 #### 4.5 Script ➜ CLI Consolidation
 
-- [x] **4.5-A** Create `tests/utils/cli.py` with `click` command `backtest`
+- [x] **4.5-A** Create `tests/_utils/cli.py` with `click` command `backtest`
 - [x] **4.5-B** Add integration smoke test invoking CLI via `subprocess.run`
 - [x] **4.5-C** Replace `run_eth_macd_backtest.py` with `cli demo-macd` sub-command
 - [x] **4.5-D** Remove orphan scripts; update docs to point to CLI

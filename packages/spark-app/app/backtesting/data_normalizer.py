@@ -27,7 +27,7 @@ class DataNormalizer:
         "unknown_method": "unknown_method"
     }
 
-    def __init__(self, data_dir: str = "data/market_datasets"):
+    def __init__(self, data_dir: str = "tests/__test_data__/market_data"):
         """
         Initialize the data normalizer.
 

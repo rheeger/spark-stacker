@@ -72,7 +72,7 @@ class MarketDatasetGenerator:
     Downloads and organizes historical market data for backtesting.
     """
 
-    def __init__(self, data_dir: str = "data/market_datasets"):
+    def __init__(self, data_dir: str = "tests/__test_data__/market_data"):
         """
         Initialize the dataset generator.
 

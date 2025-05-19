@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Add parent directory to path so we can import app modules
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from app.backtesting.market_dataset_generator import MarketDatasetGenerator
 
@@ -46,8 +46,8 @@ def parse_arguments():
     parser.add_argument(
         "--data-dir",
         type=str,
-        default="data/market_datasets",
-        help="Directory to store market datasets (default: data/market_datasets)"
+        default="tests/__test_data__/market_data",
+        help="Directory to store market datasets (default: tests/__test_data__/market_data)"
     )
 
     parser.add_argument(

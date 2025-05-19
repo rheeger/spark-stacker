@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-Test runner script for Spark Stacker.
+Test runner utility for Spark Stacker.
 
 This script runs all the tests and generates a coverage report.
+It has been moved from scripts/ to tests/_utils/ as part of the
+backtesting suite refactor (Phase 3.5.1, task 4.5).
 """
 
 import argparse
@@ -20,7 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger("TestRunner")
 
 # Get the root directory of the project
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # Market data cache directory
 MARKET_DATA_CACHE_DIR = os.path.join(ROOT_DIR, "tests", "__test_data__", "market_data")
@@ -81,13 +83,16 @@ def check_market_data_cache():
 
 def refresh_market_data():
     """
-    Refresh the market data cache by running the refresh script.
+    Refresh the market data cache.
 
     Returns:
         bool: True if successful, False otherwise
     """
     logger.info("Refreshing market data cache...")
-    refresh_script = os.path.join(ROOT_DIR, "scripts", "refresh_test_market_data.py")
+
+    # Updated path to refresh script in the utils directory
+    refresh_script = os.path.join(ROOT_DIR, "tests", "utils", "refresh_test_market_data.py")
+    logger.info(f"Using refresh script at: {refresh_script}")
 
     try:
         result = subprocess.run(
@@ -118,6 +123,7 @@ def run_tests(
     verbose=False,
     failfast=False,
     allow_synthetic_data=False,
+    exclude_slow=False,
 ):
     """Run tests with optional coverage report."""
     logger.info("Running tests...")
@@ -136,6 +142,11 @@ def run_tests(
 
     if failfast:
         cmd.append("-x")
+
+    # Exclude slow tests if requested
+    if exclude_slow:
+        cmd.append("-m")
+        cmd.append("not slow")
 
     # Add flag to allow synthetic data if requested
     if allow_synthetic_data:
@@ -288,6 +299,12 @@ if __name__ == "__main__":
         help="Allow tests to use synthetic data if cache is missing",
         action="store_true",
     )
+    parser.add_argument(
+        "--quick",
+        "-q",
+        help="Run only quick tests (exclude slow tests)",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -316,4 +333,5 @@ if __name__ == "__main__":
         verbose=args.verbose,
         failfast=args.fail_fast,
         allow_synthetic_data=args.allow_synthetic_data,
+        exclude_slow=args.quick,
     )
