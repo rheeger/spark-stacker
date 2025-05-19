@@ -45,7 +45,6 @@ node_modules/
 **/tests/*/test_results/**
 **/tests/*/__test_data__/**
 **/tests/*/__test_results__/**
-
 **/tests/*/market_data/**
 *.png
 

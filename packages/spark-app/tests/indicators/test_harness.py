@@ -45,7 +45,7 @@ class IndicatorTestHarness:
         # Setup paths
         self.project_root = Path(os.path.abspath(__file__)).parents[3]
         self__test_data___dir = self.project_root / "tests" / "__test_data__" / "market_scenarios"
-        self__test_results___dir = self.project_root / "tests" / "__test_results__" / "indicator_tests"
+        self__test_results___dir = self.project_root / "tests" / "__test_results__"
 
         # Ensure directories exist
         self__test_results___dir.mkdir(parents=True, exist_ok=True)
@@ -269,7 +269,7 @@ class IndicatorTestHarness:
             # Plot data with indicator signals if signals were generated
             plot_path = None
             if signal_count > 0:
-                plot_path = self__test_results___dir / "plots" / f"{indicator_name}_signals.png"
+                plot_path = self__test_results___dir / "indicators" / "plots" / f"{indicator_name}_signals.png"
                 plot_path.parent.mkdir(parents=True, exist_ok=True)
 
                 fig, ax = plt.subplots(figsize=(12, 6))
@@ -373,7 +373,7 @@ class IndicatorTestHarness:
 
             # Generate plots
             plots = {}
-            plots_dir = self__test_results___dir / "plots"
+            plots_dir = self__test_results___dir / "indicators" / "plots"
             plots_dir.mkdir(parents=True, exist_ok=True)
 
             # Equity curve plot
@@ -492,13 +492,17 @@ class IndicatorTestHarness:
         # Create timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+        # Create indicators directory if it doesn't exist
+        indicators_dir = self__test_results___dir / "indicators"
+        indicators_dir.mkdir(parents=True, exist_ok=True)
+
         # Save to JSON
-        json_file = self__test_results___dir / f"indicator_tests_{timestamp}.json"
+        json_file = indicators_dir / f"indicator_tests_{timestamp}.json"
         with open(json_file, "w") as f:
             json.dump(self__test_results__, f, indent=2, default=str)
 
         # Create Markdown report
-        md_file = self__test_results___dir / f"indicator_tests_{timestamp}.md"
+        md_file = indicators_dir / f"indicator_tests_{timestamp}.md"
         with open(md_file, "w") as f:
             f.write("# Indicator Backtesting Test Results\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")

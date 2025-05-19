@@ -110,6 +110,7 @@ clean-results:
 	@echo "Cleaning test results..."
 	@rm -rf packages/spark-app/tests/__test_results__/**/*.png
 	@rm -rf packages/spark-app/tests/__test_results__/*
+	@rm -rf packages/spark-app/tests/indicators/__test_results__
 	@echo "Test results cleaned"
 
 
