@@ -111,11 +111,11 @@ application.
 
 #### 4.3 Directory Realignment
 
-- [ ] **4.3-A** Create `tests/backtesting/{unit,integration,simulation,regression}` and
+- [x] **4.3-A** Create `tests/backtesting/{unit,integration,simulation,regression}` and
       `tests/indicators/unit` directories (with `__init__.py`)
-- [ ] **4.3-B** Move `tests/unit/test_backtest_engine.py` to `tests/backtesting/unit/`; fix imports
-- [ ] **4.3-C** Update `pytest.ini` (`testpaths = tests`, declare `slow` marker)
-- [ ] **4.3-D** Migrate remaining test files folder-by-folder (one PR per folder)
+- [x] **4.3-B** Move `tests/unit/test_backtest_engine.py` to `tests/backtesting/unit/`; fix imports
+- [x] **4.3-C** Update `pytest.ini` (`testpaths = tests`, declare `slow` marker)
+- [x] **4.3-D** Migrate remaining test files folder-by-folder (one PR per folder)
 
 #### 4.4 Artefact Stewardship
 

@@ -208,7 +208,7 @@ DEFAULT_TEST_EXCHANGE = "hyperliquid"  # Change to coinbase if preferred
 DEFAULT_TEST_SYMBOL = "ETH-USD"  # Use format that works with your connector
 DEFAULT_TEST_TIMEFRAME = "1h"
 DEFAULT_DATA_DAYS = 30
-MARKET_DATA_CACHE_DIR = Path(__file__).parent / "test_data" / "market_data"
+MARKET_DATA_CACHE_DIR = Path(__file__).parent / "__test_data__" / "market_data"
 
 # Create cache directory if it doesn't exist
 MARKET_DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)

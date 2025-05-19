@@ -52,9 +52,9 @@ class ReportGenerator:
 
         # Set up output directory
         if output_dir is None:
-            # Default to test_results/backtesting_reports directory
+            # Default to __test_results__/backtesting_reports directory
             project_root = Path(__file__).parent.parent.parent.parent
-            self.output_dir = project_root / "tests" / "test_results" / "backtesting_reports"
+            self.output_dir = project_root / "tests" / "__test_results__" / "backtesting_reports"
         else:
             self.output_dir = Path(output_dir)
 

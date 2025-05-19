@@ -14,7 +14,7 @@ class TestDataNormalizer(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test."""
         # Create a temporary directory for test data
-        self.test_data_dir = "tests/test_data/normalizer_test"
+        self.test_data_dir = "tests/__test_data__/normalizer_test"
         self.test_input_dir = os.path.join(self.test_data_dir, "input")
         self.normalized_dir = os.path.join(self.test_data_dir, "normalized")
 

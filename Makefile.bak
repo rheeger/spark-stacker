@@ -107,9 +107,10 @@ clean-all:
 	@echo "All packages cleaned"
 
 clean-results:
+clean-results:
 	@echo "Cleaning test results..."
-	@rm -rf packages/spark-app/tests/__test_results__/**/*.png
-	@rm -rf packages/spark-app/tests/__test_results__/*
+	@rm -rf packages/spark-app/tests/.test_results/**/*.png
+	@rm -rf packages/spark-app/tests/.test_results/*
 	@echo "Test results cleaned"
 
 

@@ -27,7 +27,7 @@ sys.path.insert(0, ROOT_DIR)
 sys.path.insert(0, os.path.join(ROOT_DIR, "app"))
 
 # Market data cache directory
-MARKET_DATA_CACHE_DIR = os.path.join(ROOT_DIR, "tests", "test_data", "market_data")
+MARKET_DATA_CACHE_DIR = os.path.join(ROOT_DIR, "tests", "__test_data__", "market_data")
 
 # Check if we're running in CI
 IN_CI = os.environ.get("CI", "").lower() == "true"

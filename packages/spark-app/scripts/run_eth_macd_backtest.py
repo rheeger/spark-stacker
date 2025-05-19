@@ -129,8 +129,8 @@ def main():
     project_root = Path(os.path.abspath(__file__)).parents[1]
 
     # Define paths for data and results
-    data_dir = project_root / "tests" / "test_data" / "market_data"
-    results_dir = project_root / "tests" / "test_results" / "backtesting_reports"
+    data_dir = project_root / "tests" / "__test_data__" / "market_data"
+    results_dir = project_root / "tests" / "__test_results__" / "backtesting_reports"
     # Note: CSV file name must match pattern {symbol}_{interval}.csv to work with CSVDataSource
     sample_data_path = data_dir / "ETH-USD_1m.csv"
 

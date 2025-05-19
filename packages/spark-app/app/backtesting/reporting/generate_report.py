@@ -258,7 +258,7 @@ def main():
         # Set default output directory if not specified
         if args.output_dir is None:
             project_root = Path(__file__).parent.parent.parent.parent
-            args.output_dir = str(project_root / "tests" / "test_results" / "backtesting_reports")
+            args.output_dir = str(project_root / "tests" / "__test_results__" / "backtesting_reports")
 
         # Ensure output directory exists
         os.makedirs(args.output_dir, exist_ok=True)

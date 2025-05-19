@@ -24,7 +24,7 @@ from app.risk_management.risk_manager import RiskManager
 from tests.conftest import get_cached_market_data
 
 # Directory to save visualization results
-TEST_RESULTS_DIR = Path(__file__).parent.parent / "test_results"
+TEST_RESULTS_DIR = Path(__file__).parent.parent / "__test_results__"
 TEST_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 

@@ -40,7 +40,7 @@ def main():
     # Setup paths
     project_root = Path(os.path.abspath(__file__)).parents[1]
     config_file = project_root / "app" / "backtesting" / "indicator_configs" / "default_indicators.yaml"
-    results_dir = project_root / "tests" / "test_results" / "backtesting_reports"
+    results_dir = project_root / "tests" / "__test_results__" / "backtesting_reports"
 
     # Ensure results directory exists
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +62,8 @@ def main():
     data_source_name = "csv"  # Changed from hyperliquid to csv which is more likely to be available
 
     # Create sample data for testing
-    from tests.indicator_testing.test_harness import IndicatorTestHarness
+    from tests.indicators.test_harness import IndicatorTestHarness
+
     test_harness = IndicatorTestHarness()
     sample_data_path = project_root / "tests" / "test_data" / "sample_eth_data.csv"
 

@@ -5,12 +5,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.indicators.base_indicator import SignalDirection
 from app.indicators.macd_indicator import MACDIndicator
 
 # Directory to save charts for visual inspection
-TEST_RESULTS_DIR = Path(__file__).parent.parent / "test_results"
+TEST_RESULTS_DIR = Path(__file__).parent.parent / "__test_results__"
 TEST_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 

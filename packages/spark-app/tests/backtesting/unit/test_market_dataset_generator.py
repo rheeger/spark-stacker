@@ -16,7 +16,7 @@ class TestMarketDatasetGenerator(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test."""
         # Create a temporary directory for test data
-        self.test_data_dir = "tests/test_data/test_market_datasets"
+        self.test_data_dir = "tests/__test_data__/test_market_datasets"
         os.makedirs(self.test_data_dir, exist_ok=True)
 
         # Initialize the generator with the test directory

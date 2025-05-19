@@ -44,11 +44,11 @@ class IndicatorTestHarness:
 
         # Setup paths
         self.project_root = Path(os.path.abspath(__file__)).parents[3]
-        self.test_data_dir = self.project_root / "tests" / "test_data" / "market_scenarios"
-        self.test_results_dir = self.project_root / "tests" / "test_results" / "indicator_tests"
+        self__test_data___dir = self.project_root / "tests" / "__test_data__" / "market_scenarios"
+        self__test_results___dir = self.project_root / "tests" / "__test_results__" / "indicator_tests"
 
         # Ensure directories exist
-        self.test_results_dir.mkdir(parents=True, exist_ok=True)
+        self__test_results___dir.mkdir(parents=True, exist_ok=True)
 
         # Default test parameters
         self.default_symbol = "ETH"
@@ -59,24 +59,24 @@ class IndicatorTestHarness:
         self.market_scenarios = {
             "bull": {
                 "description": "Strong upward trend",
-                "file": self.test_data_dir / "bull_market.csv"
+                "file": self__test_data___dir / "bull_market.csv"
             },
             "bear": {
                 "description": "Strong downward trend",
-                "file": self.test_data_dir / "bear_market.csv"
+                "file": self__test_data___dir / "bear_market.csv"
             },
             "sideways": {
                 "description": "Sideways range-bound market",
-                "file": self.test_data_dir / "sideways_market.csv"
+                "file": self__test_data___dir / "sideways_market.csv"
             },
             "volatile": {
                 "description": "Highly volatile market with quick reversals",
-                "file": self.test_data_dir / "volatile_market.csv"
+                "file": self__test_data___dir / "volatile_market.csv"
             }
         }
 
         # Test results
-        self.test_results: Dict[str, Dict[str, Any]] = {}
+        self__test_results__: Dict[str, Dict[str, Any]] = {}
 
     def load_all_available_indicators(self) -> List[str]:
         """
@@ -269,7 +269,7 @@ class IndicatorTestHarness:
             # Plot data with indicator signals if signals were generated
             plot_path = None
             if signal_count > 0:
-                plot_path = self.test_results_dir / "plots" / f"{indicator_name}_signals.png"
+                plot_path = self__test_results___dir / "plots" / f"{indicator_name}_signals.png"
                 plot_path.parent.mkdir(parents=True, exist_ok=True)
 
                 fig, ax = plt.subplots(figsize=(12, 6))
@@ -373,7 +373,7 @@ class IndicatorTestHarness:
 
             # Generate plots
             plots = {}
-            plots_dir = self.test_results_dir / "plots"
+            plots_dir = self__test_results___dir / "plots"
             plots_dir.mkdir(parents=True, exist_ok=True)
 
             # Equity curve plot
@@ -474,7 +474,7 @@ class IndicatorTestHarness:
             all_results[indicator_name] = indicator_results
 
         # Store test results
-        self.test_results = all_results
+        self__test_results__ = all_results
 
         return all_results
 
@@ -485,7 +485,7 @@ class IndicatorTestHarness:
         Returns:
             Tuple of (json_file_path, markdown_file_path)
         """
-        if not self.test_results:
+        if not self__test_results__:
             logger.warning("No test results to save")
             return None, None
 
@@ -493,12 +493,12 @@ class IndicatorTestHarness:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # Save to JSON
-        json_file = self.test_results_dir / f"indicator_tests_{timestamp}.json"
+        json_file = self__test_results___dir / f"indicator_tests_{timestamp}.json"
         with open(json_file, "w") as f:
-            json.dump(self.test_results, f, indent=2, default=str)
+            json.dump(self__test_results__, f, indent=2, default=str)
 
         # Create Markdown report
-        md_file = self.test_results_dir / f"indicator_tests_{timestamp}.md"
+        md_file = self__test_results___dir / f"indicator_tests_{timestamp}.md"
         with open(md_file, "w") as f:
             f.write("# Indicator Backtesting Test Results\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -508,7 +508,7 @@ class IndicatorTestHarness:
             f.write("| Indicator | Valid | Scenarios Tested | Signal Generation | Profitability |\n")
             f.write("|-----------|-------|------------------|-------------------|---------------|\n")
 
-            for indicator_name, results in self.test_results.items():
+            for indicator_name, results in self__test_results__.items():
                 # Check validity
                 signal_tests = results.get("signal_tests", {})
                 valid = all(test.get("valid", False) for test in signal_tests.values())
@@ -536,7 +536,7 @@ class IndicatorTestHarness:
             # Detailed results by indicator
             f.write("\n## Detailed Results\n\n")
 
-            for indicator_name, results in self.test_results.items():
+            for indicator_name, results in self__test_results__.items():
                 f.write(f"### {indicator_name}\n\n")
 
                 # Signal generation tests

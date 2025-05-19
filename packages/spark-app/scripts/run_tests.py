@@ -23,7 +23,7 @@ logger = logging.getLogger("TestRunner")
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # Market data cache directory
-MARKET_DATA_CACHE_DIR = os.path.join(ROOT_DIR, "tests", "test_data", "market_data")
+MARKET_DATA_CACHE_DIR = os.path.join(ROOT_DIR, "tests", "__test_data__", "market_data")
 # Required exchanges and timeframes for tests
 REQUIRED_DATA_FILES = {
     "hyperliquid_ETH_USD_1h.csv",  # Default test data
