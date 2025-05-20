@@ -18,8 +18,8 @@ fi
 cd docker
 
 # Build and start the containers
-docker-compose down
-docker-compose up -d --build
+docker-compose --project-name spark-stacker down
+docker-compose --project-name spark-stacker up -d --build
 
 echo ""
 echo "Monitoring stack is now running!"
@@ -30,4 +30,4 @@ echo ""
 echo "Prometheus metrics available at: http://localhost:9090"
 echo "Log metrics exporter available at: http://localhost:9001/metrics"
 echo ""
-echo "To stop the monitoring stack, run: docker-compose down"
+echo "To stop the monitoring stack, run: docker-compose --project-name spark-stacker down"

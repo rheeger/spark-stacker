@@ -74,17 +74,17 @@ stop: spark-app-stop
 
 spark-app-start:
 	@echo "Starting spark-app services..."
-	cd docker && docker-compose up -d
+	cd docker && docker-compose --project-name spark-stacker up -d
 	@echo "Services started. Check logs with: docker logs -f spark-stacker"
 
 spark-app-stop:
 	@echo "Stopping spark-app services..."
-	cd docker && docker-compose down
+	cd docker && docker-compose --project-name spark-stacker down
 	@echo "Services stopped"
 
 spark-app-clean:
 	@echo "Cleaning up spark-app services..."
-	cd docker && docker-compose down -v
+	cd docker && docker-compose --project-name spark-stacker down -v
 	@echo "Services cleaned up"
 
 # Run tests
@@ -146,17 +146,17 @@ reset: spark-app-clean clean
 # Rebuild Docker image and restart services
 rebuild:
 	@echo "Rebuilding Docker image and restarting services..."
-	cd docker && docker-compose down
-	cd docker && docker-compose build
-	cd docker && docker-compose up -d
+	cd docker && docker-compose --project-name spark-stacker down
+	cd docker && docker-compose --project-name spark-stacker build
+	cd docker && docker-compose --project-name spark-stacker up -d
 	@echo "Docker image rebuilt and services restarted"
 
 # Force rebuild Docker image without cache and restart services
 force-rebuild:
 	@echo "Force rebuilding Docker image without cache and restarting services..."
-	cd docker && docker-compose down
-	cd docker && docker-compose build --no-cache
-	cd docker && docker-compose up -d
+	cd docker && docker-compose --project-name spark-stacker down
+	cd docker && docker-compose --project-name spark-stacker build --no-cache
+	cd docker && docker-compose --project-name spark-stacker up -d
 	@echo "Docker image force rebuilt and services restarted"
 
 # Test the CLI

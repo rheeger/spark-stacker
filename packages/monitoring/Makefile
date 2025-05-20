@@ -20,21 +20,21 @@ help:
 # Monitoring services
 monitoring-start:
 	@echo "Starting monitoring services..."
-	cd docker && docker-compose up -d
+	cd docker && docker-compose --project-name spark-stacker up -d
 
 monitoring-stop:
 	@echo "Stopping monitoring services..."
-	cd docker && docker-compose down
+	cd docker && docker-compose --project-name spark-stacker down
 
 monitoring-clean:
 	@echo "Cleaning up monitoring services..."
-	cd docker && docker-compose down -v
+	cd docker && docker-compose --project-name spark-stacker down -v
 
 # Restart monitoring services
 monitoring-restart: sync-dashboards
 	@echo "Restarting monitoring services..."
-	cd docker && docker-compose down
-	cd docker && docker-compose up -d
+	cd docker && docker-compose --project-name spark-stacker down
+	cd docker && docker-compose --project-name spark-stacker up -d
 	@echo "Monitoring services restarted"
 
 # Update dashboards

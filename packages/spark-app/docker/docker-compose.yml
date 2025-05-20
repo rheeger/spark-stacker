@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: spark-stacker
+    container_name: spark-app
     restart: unless-stopped
     ports:
       - "${WEBHOOK_PORT:-8080}:8080"
@@ -36,4 +36,4 @@ networks:
     driver: bridge
   monitoring_network:
     external: true
-    name: docker_monitoring
+    name: spark-stacker_monitoring

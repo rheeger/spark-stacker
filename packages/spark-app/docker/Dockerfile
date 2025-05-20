@@ -22,8 +22,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY scripts/bootstrap.sh /usr/local/bin/bootstrap.sh
 RUN chmod +x /usr/local/bin/bootstrap.sh
 
-# Copy application code to a subdirectory named 'app'
+# Copy application code to the app directory (the root directory)
 COPY app/ /app/app/
+COPY __init__.py /app/
 
 # Create log directory
 RUN mkdir -p /app/logs && \
