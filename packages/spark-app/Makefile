@@ -1,4 +1,4 @@
-.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build rebuild force-rebuild clean-results test-cli
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build rebuild force-rebuild clean-results clean-old-results test-cli
 
 # Default target
 help:
@@ -17,7 +17,8 @@ help:
 	@echo "  make force-rebuild   : Force rebuild Docker image without cache and restart"
 	@echo "  make clean           : Clean up temporary files and build artifacts"
 	@echo "  make clean-logs      : Clean up all log files"
-	@echo "  make clean-results   : Clean up test result artifacts"
+	@echo "  make clean-results   : Clean up all test result artifacts"
+	@echo "  make clean-old-results: Clean up old test results but keep the 5 most recent runs"
 	@echo "  make test            : Run tests for spark-app"
 	@echo "  make test-quick      : Run quick tests (excluding slow tests) with coverage"
 	@echo "  make test-slow       : Run only slow tests"
@@ -116,8 +117,17 @@ clean-results:
 	@echo "Cleaning up test result artifacts..."
 	rm -rf tests/__test_results__
 	rm -rf tests/test_results
+	rm -rf test_results
 	rm -rf htmlcov
 	@echo "Test results cleaned up"
+
+# Clean old test results but keep the 5 most recent runs
+clean-old-results:
+	@echo "Cleaning up old test result runs (keeping the 5 most recent)..."
+	@if [ -d "test_results" ]; then \
+		cd test_results && ls -tp | grep run_ | tail -n +6 | xargs -I {} rm -rf -- {}; \
+	fi
+	@echo "Old test results cleaned up"
 
 clean:
 	@echo "Cleaning up spark-app package..."

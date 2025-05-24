@@ -477,9 +477,17 @@ class SimulationEngine:
         """
         symbol = order.symbol
 
-        # Get the base and quote currencies
-        base_currency = symbol.split("-")[0]
-        quote_currency = symbol.split("-")[1]
+        # Get the base and quote currencies - handle both dash and underscore delimiters
+        if "-" in symbol:
+            base_currency = symbol.split("-")[0]
+            quote_currency = symbol.split("-")[1]
+        elif "_" in symbol:
+            base_currency = symbol.split("_")[0]
+            quote_currency = symbol.split("_")[1]
+        else:
+            # Fallback - assume it's a single asset like BTC
+            base_currency = symbol
+            quote_currency = "USD"
 
         # Calculate order value
         order_value = order.filled_price * order.filled_amount
@@ -785,10 +793,43 @@ class SimulationEngine:
             current_prices: Dictionary of symbol -> current price
 
         Returns:
-            Total equity value
+            Total equity value in USD
         """
-        # Start with cash balance
-        equity = sum(self.balance.values())
+        equity = 0.0
+
+        # Convert all asset balances to USD value
+        for asset, balance in self.balance.items():
+            if balance == 0:
+                continue
+
+            if asset == "USD" or asset == "USDT" or asset == "USDC":
+                # Already in USD-equivalent
+                equity += balance
+            else:
+                # Convert asset to USD using current price
+                # Look for a symbol that matches this asset
+                asset_price = None
+                for symbol, price in current_prices.items():
+                    # Check both dash and underscore separators
+                    if "-" in symbol:
+                        base_currency, quote_currency = symbol.split("-")
+                    elif "_" in symbol:
+                        base_currency, quote_currency = symbol.split("_")
+                    else:
+                        continue
+
+                    # If this symbol's base currency matches our asset and quotes in USD
+                    if (base_currency == asset and
+                        quote_currency in ["USD", "USDT", "USDC"]):
+                        asset_price = price
+                        break
+
+                if asset_price is not None:
+                    asset_value = balance * asset_price
+                    equity += asset_value
+                else:
+                    # If we can't find a price, warn and treat as zero
+                    logger.warning(f"No price found for asset {asset}, treating as zero value")
 
         # Add unrealized PnL from open positions
         for symbol, position in self.positions.items():

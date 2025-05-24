@@ -48,8 +48,9 @@ def run_macd_backtest(
     elif os.path.exists(os.path.join(ROOT_DIR, ".venv", "Scripts", "python.exe")):
         python_path = os.path.join(ROOT_DIR, ".venv", "Scripts", "python.exe")
 
-    # Build CLI command
-    cmd = [python_path, "-m", "app.cli", "demo-macd"]
+    # Build CLI command - use the tests utils CLI
+    cli_path = os.path.join(ROOT_DIR, "tests", "_utils", "cli.py")
+    cmd = [python_path, cli_path, "demo-macd"]
 
     # Add command line options
     cmd.extend(["--symbol", symbol, "--timeframe", timeframe])

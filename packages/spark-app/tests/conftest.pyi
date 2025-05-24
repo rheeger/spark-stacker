@@ -45,10 +45,12 @@ def backtest_env(price_dataframe: pd.DataFrame, temp_csv_dir: Path) -> Tuple[Bac
 @pytest.fixture
 def results_dir() -> Path:
     """
-    Creates a temporary directory for test results and cleans up after the test.
+    Creates a persistent timestamped directory for test results within tests/__test_results__.
+    These results will remain after test completion to allow viewing of reports.
+    Use the `make clean-test-results` command to clean up old test results.
 
-    Yields:
-        Path: Path to the temporary directory for test results
+    Returns:
+        Path: Path to the permanent directory for test results
     """
     ...
 

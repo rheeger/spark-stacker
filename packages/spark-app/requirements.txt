@@ -35,6 +35,7 @@ seaborn
 prometheus-client>=0.16.0  # For metrics collection and exposure
 jinja2==3.1.2            # Template engine for HTML reports
 plotly==5.14.1           # Interactive plotting library for reports
+beautifulsoup4>=4.11.0   # HTML parsing for report testing
 
 # For progress bars in CLI
 tqdm

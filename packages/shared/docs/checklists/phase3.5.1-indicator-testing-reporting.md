@@ -134,10 +134,10 @@ application.
 
 #### 4.6 Automated Report Verification
 
-- [ ] **4.6-A** Use `backtest_env` to run one-trade backtest yielding result object
-- [ ] **4.6-B** Generate HTML report into `results_dir`
-- [ ] **4.6-C** Parse HTML via BeautifulSoup; assert key metrics present
-- [ ] **4.6-D** Verify linked chart files exist on disk
+- [x] **4.6-A** Use `backtest_env` to run one-trade backtest yielding result object
+- [x] **4.6-B** Generate HTML report into `results_dir`
+- [x] **4.6-C** Parse HTML via BeautifulSoup; assert key metrics present
+- [x] **4.6-D** Verify linked chart files exist on disk
 
 #### 4.7 Indicator Onboarding Template
 
