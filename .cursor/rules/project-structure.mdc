@@ -1,0 +1,27 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Project Structure - Spark Stacker
+
+This is a monorepo managed with NX containing multiple packages.
+
+## Core Packages
+
+- [packages/spark-app](mdc:packages/spark-app) - Main trading application with connectors, indicators, and backtesting
+- [packages/monitoring](mdc:packages/monitoring) - Monitoring infrastructure including Grafana dashboards and Prometheus
+- [packages/shared](mdc:packages/shared) - Shared utilities, documentation, and examples
+
+## Environment Setup
+
+- Python version: 3.11+
+- Node.js version: 20+
+- Always use the `.venv` virtual environment in [packages/spark-app/.venv](mdc:packages/spark-app/.venv)
+- When running Python scripts: `python3 path/to/script.py`
+
+## Key Configuration Files
+
+- [nx.json](mdc:nx.json) - NX monorepo configuration
+- [package.json](mdc:package.json) - Root package.json with workspaces
+- [Makefile](mdc:Makefile) - Contains common project commands

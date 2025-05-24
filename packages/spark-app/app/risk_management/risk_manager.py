@@ -3,7 +3,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
-from connectors.base_connector import BaseConnector, OrderSide
+from app.connectors.base_connector import BaseConnector, OrderSide
 
 logger = logging.getLogger(__name__)
 

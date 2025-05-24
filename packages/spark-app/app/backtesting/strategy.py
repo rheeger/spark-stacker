@@ -111,13 +111,14 @@ def simple_moving_average_crossover_strategy(
         )
 
         # If we have a long position, close it
-        if has_position and current_positions[0].side == OrderSide.BUY:
+        if has_position and len(current_positions) > 0 and current_positions[0].side == OrderSide.BUY:
             # Place a market sell order with the same amount as our position
+            position = current_positions[0]
             simulation.place_order(
                 symbol=symbol,
                 side=OrderSide.SELL,
                 order_type=OrderType.MARKET,
-                amount=current_positions[0].amount,
+                amount=position.amount,
                 leverage=leverage,
                 timestamp=current_candle["timestamp"],
                 current_candle=current_candle,
@@ -208,13 +209,14 @@ def bollinger_bands_mean_reversion_strategy(
         )
 
         # If we have a long position, close it
-        if has_position and current_positions[0].side == OrderSide.BUY:
+        if has_position and len(current_positions) > 0 and current_positions[0].side == OrderSide.BUY:
             # Place a market sell order with the same amount as our position
+            position = current_positions[0]
             simulation.place_order(
                 symbol=symbol,
                 side=OrderSide.SELL,
                 order_type=OrderType.MARKET,
-                amount=current_positions[0].amount,
+                amount=position.amount,
                 leverage=leverage,
                 timestamp=current_candle["timestamp"],
                 current_candle=current_candle,
@@ -323,13 +325,14 @@ def rsi_strategy(
         )
 
         # If we have a long position, close it
-        if has_position and current_positions[0].side == OrderSide.BUY:
+        if has_position and len(current_positions) > 0 and current_positions[0].side == OrderSide.BUY:
             # Place a market sell order with the same amount as our position
+            position = current_positions[0]
             simulation.place_order(
                 symbol=symbol,
                 side=OrderSide.SELL,
                 order_type=OrderType.MARKET,
-                amount=current_positions[0].amount,
+                amount=position.amount,
                 leverage=leverage,
                 timestamp=current_candle["timestamp"],
                 current_candle=current_candle,
@@ -454,13 +457,14 @@ def macd_strategy(
         )
 
         # If we have a long position, close it
-        if has_position and current_positions[0].side == OrderSide.BUY:
+        if has_position and len(current_positions) > 0 and current_positions[0].side == OrderSide.BUY:
             # Place a market sell order with the same amount as our position
+            position = current_positions[0]
             simulation.place_order(
                 symbol=symbol,
                 side=OrderSide.SELL,
                 order_type=OrderType.MARKET,
-                amount=current_positions[0].amount,
+                amount=position.amount,
                 leverage=leverage,
                 timestamp=current_candle["timestamp"],
                 current_candle=current_candle,
@@ -636,13 +640,14 @@ def multi_indicator_strategy(
         )
 
         # If we have a long position, close it
-        if has_position and current_positions[0].side == OrderSide.BUY:
+        if has_position and len(current_positions) > 0 and current_positions[0].side == OrderSide.BUY:
             # Place a market sell order with the same amount as our position
+            position = current_positions[0]
             simulation.place_order(
                 symbol=symbol,
                 side=OrderSide.SELL,
                 order_type=OrderType.MARKET,
-                amount=current_positions[0].amount,
+                amount=position.amount,
                 leverage=leverage,
                 timestamp=current_candle["timestamp"],
                 current_candle=current_candle,

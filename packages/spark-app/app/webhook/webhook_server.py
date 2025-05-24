@@ -5,7 +5,7 @@ import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from flask import Flask, jsonify, request
-from indicators.base_indicator import Signal, SignalDirection
+from app.indicators.base_indicator import Signal, SignalDirection
 from waitress import serve
 from waitress.server import create_server
 

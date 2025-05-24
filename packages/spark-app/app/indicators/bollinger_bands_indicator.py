@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-from indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from app.indicators.base_indicator import (BaseIndicator, Signal,
+                                           SignalDirection)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,13 @@ class BollingerBandsIndicator(BaseIndicator):
         self.mean_reversion_threshold = self.params.get(
             "mean_reversion_threshold", 0.05
         )
+
+        # Update params with actual values being used (including defaults)
+        self.params.update({
+            "period": self.period,
+            "std_dev": self.std_dev,
+            "mean_reversion_threshold": self.mean_reversion_threshold
+        })
 
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """

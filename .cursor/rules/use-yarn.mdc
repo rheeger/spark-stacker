@@ -1,0 +1,29 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Package Management - Always Use Yarn
+
+This project uses Yarn as its package manager. Never use npm or pnpm commands.
+
+## Installation
+- Use `yarn install` to install dependencies
+- Use `yarn add <package>` to add a new dependency
+- Use `yarn add -D <package>` to add a development dependency
+- Use `yarn workspace <workspace-name> add <package>` to add a dependency to a specific workspace
+
+## Scripts
+- Use `yarn <script-name>` to run scripts defined in package.json
+- Use `yarn workspace <workspace-name> <script-name>` to run a script in a specific workspace
+
+## Monorepo Management
+- The project uses NX for monorepo management
+- Run NX commands with `yarn nx <command>`
+
+## Examples
+- Installing dependencies: `yarn install`
+- Adding a dependency: `yarn add lodash`
+- Adding a dev dependency: `yarn add -D jest`
+- Running a script: `yarn test`
+- Adding to workspace: `yarn workspace @spark-stacker/spark-app add axios`

@@ -1,0 +1,60 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Python Testing Practices for Spark Stacker
+
+## Virtual Environment Setup
+All tests must use the Python virtual environment located in [packages/spark-app/.venv](mdc:packages/spark-app/.venv).
+
+## Working Directory
+Always ensure you're in the correct working directory before running tests:
+- For most tests: `cd packages/spark-app`
+- For specific subpackage tests: verify location but still use the same `.venv`
+
+## Running Tests
+Always use the Python executable from the virtual environment:
+
+```bash
+# Activate the virtual environment first (if in an interactive shell)
+cd packages/spark-app
+source .venv/bin/activate  # On Unix/Mac
+# OR
+.venv\Scripts\activate     # On Windows
+
+# Run tests using the venv Python (even without activation)
+packages/spark-app/.venv/bin/python -m pytest tests/path/to/test_file.py
+
+# For quick tests
+packages/spark-app/.venv/bin/python -m pytest -m "not slow" --cov=app
+```
+
+## Test Locations
+All tests are located inside [packages/spark-app/tests/](mdc:packages/spark-app/tests) with the following structure:
+- `tests/_helpers/` - Test helpers and utilities
+- `tests/fixtures/` - Test fixtures
+- `tests/unit/` - Unit tests
+- `tests/integration/` - Integration tests
+- `tests/backtesting/` - Backtesting-specific tests
+
+## Common Test Commands
+
+```bash
+# Run from packages/spark-app directory with the venv
+cd packages/spark-app
+
+# Quick test run (recommended before commits)
+.venv/bin/python -m pytest -m "not slow" --cov=app
+
+# Run all tests with coverage
+.venv/bin/python -m pytest --cov=app
+
+# Generate HTML coverage report
+.venv/bin/python -m pytest --cov=app && .venv/bin/python -m coverage html
+
+# Clean test results
+make clean-results
+```
+
+Always verify test results before committing changes.

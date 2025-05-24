@@ -52,28 +52,49 @@ echo "HYPERLIQUID_RPC_URL: $HYPERLIQUID_RPC_URL"
 echo "WALLET_ADDRESS set: $(if [ -n "$WALLET_ADDRESS" ]; then echo "yes"; else echo "no"; fi)"
 echo "PRIVATE_KEY set: $(if [ -n "$PRIVATE_KEY" ]; then echo "yes"; else echo "no"; fi)"
 
+# Ensure we're using module import format
+args=()
+module_specified=false
+
+# Get the original command arguments
+for arg in "$@"; do
+  # Check if the command is already using 'python -m app.something'
+  if [[ "$arg" == "python" ]]; then
+    args+=("$arg")
+  elif [[ "$module_specified" == "false" && "$arg" == "-m" ]]; then
+    args+=("$arg")
+    module_specified=true
+  elif [[ "$module_specified" == "true" && ! "$arg" == app.* && "$arg" != --* && ! "$arg" =~ ^/ ]]; then
+    # Convert a direct script name to a module path if needed
+    args+=("app.$arg")
+    module_specified=false
+  else
+    args+=("$arg")
+  fi
+done
+
 # Modify the command to use the processed config
-if [[ "$@" == *"--config"* ]]; then
+if [[ "${args[*]}" == *"--config"* ]]; then
   # Replace the config path in the command
-  args=()
+  modified_args=()
   skip_next=false
-  for arg in "$@"; do
+  for arg in "${args[@]}"; do
     if $skip_next; then
       skip_next=false
       continue
     elif [ "$arg" == "--config" ]; then
-      args+=("$arg")
-      args+=("$PROCESSED_CONFIG")
+      modified_args+=("$arg")
+      modified_args+=("$PROCESSED_CONFIG")
       skip_next=true
     else
-      args+=("$arg")
+      modified_args+=("$arg")
     fi
   done
   # Execute with the modified arguments
-  echo "Starting Spark Stacker with processed config..."
-  exec "${args[@]}"
+  echo "Starting Spark Stacker with processed config: ${modified_args[*]}"
+  exec "${modified_args[@]}"
 else
   # Append the config argument if not present
-  echo "Starting Spark Stacker..."
-  exec "$@" --config "$PROCESSED_CONFIG"
+  echo "Starting Spark Stacker: ${args[*]} --config $PROCESSED_CONFIG"
+  exec "${args[@]}" --config "$PROCESSED_CONFIG"
 fi

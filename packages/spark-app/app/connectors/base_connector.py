@@ -6,7 +6,7 @@ import time
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from metrics.decorators import track_api_latency, update_rate_limit
+from app.metrics.decorators import track_api_latency, update_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +86,9 @@ class BaseConnector(abc.ABC):
             logger.debug(f"Skipping logger setup for {self.name} in test environment")
             return
 
-        from utils.logging_setup import (setup_connector_balance_logger,
-                                         setup_connector_markets_logger,
-                                         setup_connector_orders_logger)
+        from app.utils.logging_setup import (setup_connector_balance_logger,
+                                             setup_connector_markets_logger,
+                                             setup_connector_orders_logger)
 
         # Create dedicated loggers
         self.balance_logger = setup_connector_balance_logger(self.name)

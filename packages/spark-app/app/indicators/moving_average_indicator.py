@@ -3,7 +3,8 @@ from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 import pandas as pd
-from indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from app.indicators.base_indicator import (BaseIndicator, Signal,
+                                           SignalDirection)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,14 @@ class MovingAverageIndicator(BaseIndicator):
         if self.ma_type not in ["sma", "ema"]:
             logger.warning(f"Invalid MA type '{self.ma_type}', defaulting to 'sma'")
             self.ma_type = "sma"
+
+        # Update params with actual values being used (including defaults)
+        self.params.update({
+            "fast_period": self.fast_period,
+            "slow_period": self.slow_period,
+            "ma_type": self.ma_type,
+            "signal_threshold": self.signal_threshold
+        })
 
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """

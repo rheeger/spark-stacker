@@ -1,0 +1,336 @@
+---
+description:
+globs: **/tests/**
+alwaysApply: false
+---
+# Spark Stacker Testing Suite Guide
+
+## Overview & Philosophy
+
+The Spark Stacker testing suite is a comprehensive framework for validating trading algorithms, indicators, and system components. It follows modern testing principles with emphasis on reliability, speed, isolation, visibility, maintainability, and scalability.
+
+### Core Testing Principles
+- **Reliability**: Consistent results across environments using deterministic data
+- **Speed**: Fast feedback loops with quick test targets (<3 minutes)
+- **Isolation**: Clean separation between unit, integration, and system tests
+- **Visibility**: Rich reporting with HTML visualizations and performance metrics
+- **Maintainability**: Centralized fixtures and utilities to minimize duplication
+- **Scalability**: Easy onboarding of new indicators and test scenarios
+
+## Directory Structure
+
+Key testing directories in [packages/spark-app/tests/](mdc:packages/spark-app/tests):
+
+```
+tests/
+├── backtesting/          # Backtesting engine tests
+│   ├── unit/            # Fast, isolated tests
+│   ├── integration/     # End-to-end workflows
+│   ├── simulation/      # Strategy validation tests
+│   └── regression/      # Prevent regressions
+├── indicators/          # Indicator-specific tests
+│   ├── unit/            # Individual indicator tests
+│   └── test_harness.py  # Batch indicator validation
+├── connectors/          # Exchange connector tests
+│   ├── unit/            # Mock-based connector tests
+│   └── integration/     # Live API tests
+├── _fixtures/           # Test data and mocks
+├── _helpers/            # Test utilities and factories
+├── _utils/              # CLI tools and scripts
+├── __test_data__/       # Static test datasets
+├── __test_results__/    # Generated outputs (gitignored)
+├── conftest.py          # Pytest fixtures
+└── README.md            # Comprehensive testing guide
+```
+
+## Environment Setup
+
+### Prerequisites
+- Python 3.11+ with virtual environment at [packages/spark-app/.venv](mdc:packages/spark-app/.venv)
+- Always use the `.venv` virtual environment
+- Run Python scripts with explicit `python3` command
+- Use full pathnames when running via terminal
+
+### Quick Commands
+```bash
+# Navigate to spark-app package
+cd packages/spark-app
+
+# Quick test run (< 3 minutes, recommended before commits)
+make test-quick
+# OR
+.venv/bin/python -m pytest -m "not slow" --cov=app
+
+# Run all tests with coverage
+.venv/bin/python -m pytest --cov=app
+
+# Generate HTML coverage report
+.venv/bin/python -m pytest --cov=app --cov-report=html
+
+# Clean test artifacts
+make clean-results
+
+# Refresh market data cache
+python tests/_utils/refresh_test_market_data.py
+```
+
+## CLI Usage
+
+The testing suite includes a comprehensive CLI interface at [tests/_utils/cli.py](mdc:packages/spark-app/tests/_utils/cli.py):
+
+### Available Commands
+- `demo` - Run preset demos with synthetic data
+- `real-data` - Use live market data from exchanges
+- `backtest` - Custom backtest configuration
+- `demo-macd` - MACD demo shortcut
+- `list-indicators` - Show available indicators
+
+### Examples
+```bash
+# Quick MACD demo
+python tests/_utils/cli.py demo MACD
+
+# Real data backtest with RSI
+python tests/_utils/cli.py real-data RSI --symbol ETH-USD --days 10
+
+# Custom backtest
+python tests/_utils/cli.py backtest --symbol BTC/USD --indicator MACD
+```
+
+## Test Categories & Coverage
+
+### Test Types
+1. **Unit Tests** - Fast, isolated tests for single functions/methods
+2. **Integration Tests** - Multiple components working together
+3. **Simulation Tests** - Trading strategy validation
+4. **Regression Tests** - Prevent historical regressions
+
+### Current Coverage Status
+- **Backtesting Engine**: Complete (Unit ✅, Integration ✅, Simulation ✅, Reports ✅)
+- **Simulation Engine**: Complete (Unit ✅, Integration ✅, Simulation ✅, Reports ✅)
+- **Indicator Factory**: Good (Unit ✅, Integration ✅, Reports ✅)
+- **Connectors (Hyperliquid)**: Good (Unit ✅, Integration ✅)
+- **Connectors (Coinbase)**: Partial (Unit ✅)
+
+## Adding New Tests
+
+### Test Placement Guidelines
+- **Unit tests**: `tests/*/unit/` - Single function/method testing
+- **Integration tests**: `tests/*/integration/` - Multiple components
+- **Simulation tests**: `tests/backtesting/simulation/` - Trading strategies
+- **Regression tests**: `tests/backtesting/regression/` - Prevent regressions
+
+### Test Structure (AAA Pattern)
+```python
+def test_feature_with_specific_condition():
+    """Test description explaining what and why."""
+    # ARRANGE - Set up test data and dependencies
+    indicator = MyIndicator(period=14)
+    data = create_test_data()
+
+    # ACT - Execute the functionality being tested
+    result = indicator.calculate(data)
+
+    # ASSERT - Verify the expected outcomes
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == len(data)
+    assert 'indicator_value' in result.columns
+```
+
+### New Indicator Checklist
+1. Create indicator class in `app/indicators/`
+2. Register with factory in `IndicatorFactory.register_defaults()`
+3. Add unit tests in `tests/indicators/unit/`
+4. Update test harness (automatic discovery)
+5. Create demo script or add to CLI
+6. Add configuration in `app/indicators/configs/`
+
+## Fixtures & Utilities
+
+### Core Fixtures (from [conftest.py](mdc:packages/spark-app/tests/conftest.py))
+- `price_dataframe` - Standard OHLCV DataFrame with 100 candles
+- `temp_csv_dir` - Temporary directory with CSV data files
+- `backtest_env` - Complete backtesting environment setup
+- `results_dir` - Temporary directory for test output files
+- `mock_connector` - Mock exchange connector for offline testing
+- `live_connector` - Live connector for integration testing
+
+### Data Generation ([tests/_helpers/data_factory.py](mdc:packages/spark-app/tests/_helpers/data_factory.py))
+```python
+from tests._helpers.data_factory import make_price_dataframe
+
+# Generate different market patterns
+trending_data = make_price_dataframe(rows=100, pattern="trend", noise=0.02, seed=42)
+sideways_data = make_price_dataframe(rows=100, pattern="sideways", noise=0.01, seed=42)
+volatile_data = make_price_dataframe(rows=100, pattern="volatile", noise=0.05, seed=42)
+```
+
+### Available Data Patterns
+- `trend` - Consistent upward trend (bull market testing)
+- `downtrend` - Consistent downward trend (bear market testing)
+- `sideways` - Range-bound movement (consolidation testing)
+- `volatile` - High volatility with reversals (stress testing)
+- `mean_revert` - Mean-reverting behavior (counter-trend testing)
+
+## Data Management
+
+### Data Sources (Priority Order)
+1. **Cached Real Data** - Fetched from live exchanges, cached locally
+2. **Test Fixtures** - Curated datasets for specific scenarios
+3. **Synthetic Data** - Generated data for fallback scenarios
+
+### Cache Locations
+```
+tests/
+├── __test_data__/
+│   ├── market_data/           # Real market data cache
+│   │   ├── hyperliquid/      # Hyperliquid connector data
+│   │   ├── coinbase/         # Coinbase connector data
+│   │   └── demo/             # Demo/synthetic data
+│   └── market_scenarios/     # Curated test scenarios
+```
+
+### Cache Management
+```bash
+# Force refresh all cached data
+python tests/_utils/refresh_test_market_data.py
+
+# Check cache status
+python tests/_utils/cli.py cache-status
+
+# Clean old cache files
+python tests/_utils/cli.py clean-cache --older-than 7d
+```
+
+## Report Generation
+
+Reports are automatically generated for:
+- CLI demo commands
+- CLI real-data commands
+- Integration tests with `generate_report=True`
+- Indicator test harness
+
+### Manual Report Generation
+```bash
+# Generate report from backtest results
+python app/backtesting/reporting/generate_report.py \
+  --results ./path/to/results.json \
+  --market-data ./path/to/market_data.csv \
+  --output-dir ./reports
+
+# Generate comparison report
+python app/backtesting/reporting/generate_report.py \
+  --results ./rsi_results.json,./macd_results.json \
+  --comparison \
+  --output-dir ./comparison_reports
+```
+
+### Report Types
+- **Single Indicator Report** - Performance metrics, charts, trade analysis
+- **Comparison Report** - Side-by-side metrics, risk-return analysis
+- **Test Harness Report** - Indicator validation, coverage matrix
+
+## Performance Guidelines
+
+### Speed Targets
+- **Unit Tests**: < 50ms per test
+- **Integration Tests**: < 5s per test
+- **Quick Test Suite**: < 3 minutes total
+- **Full Test Suite**: < 15 minutes total
+
+### Test Markers
+```python
+@pytest.mark.slow          # Exclude from quick runs
+@pytest.mark.integration   # Requires external resources
+@pytest.mark.flaky(reruns=3)  # Occasionally fails due to timing
+```
+
+## Best Practices
+
+### Test Naming Convention
+```python
+# ✅ Good - Describes what is being tested and expected outcome
+def test_rsi_calculation_with_14_period_returns_normalized_values():
+def test_macd_signal_generation_when_lines_cross_returns_buy_signal():
+def test_backtest_engine_with_insufficient_data_raises_value_error():
+
+# ❌ Bad - Vague or unclear purpose
+def test_rsi():
+def test_signals():
+```
+
+### Parameterized Testing
+```python
+@pytest.mark.parametrize("period,expected_nan_count", [
+    (5, 4), (14, 13), (21, 20)
+])
+def test_indicator_warmup_period(price_dataframe, period, expected_nan_count):
+    indicator = RSIIndicator(period=period)
+    result = indicator.calculate(price_dataframe)
+    nan_count = result['rsi'].isna().sum()
+    assert nan_count == expected_nan_count
+```
+
+### Exception Testing
+```python
+def test_indicator_with_invalid_period_raises_value_error():
+    with pytest.raises(ValueError, match="Period must be positive"):
+        RSIIndicator(period=-5)
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Import Errors** - Ensure correct directory and virtual environment
+2. **Missing Test Data** - Run `python tests/_utils/refresh_test_market_data.py`
+3. **Fixture Import Issues** - Verify [conftest.py](mdc:packages/spark-app/tests/conftest.py) exists
+
+### Debug Commands
+```bash
+# Verbose testing
+python -m pytest -vvv --tb=long tests/path/to/test.py
+
+# Coverage debugging
+python -m pytest --cov=app --cov-report=term-missing
+
+# Performance profiling
+python -m pytest --durations=10
+```
+
+### Environment Fixes
+```bash
+# Clean test artifacts
+make clean-results
+
+# Clean Python cache
+find . -type d -name "__pycache__" -exec rm -rf {} +
+
+# Recreate virtual environment
+rm -rf .venv
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Integration with Development Workflow
+
+### Before Commits
+```bash
+# Quick test run (recommended before all commits)
+make test-quick
+```
+
+### Phase-Based Development
+The testing framework aligns with checklist phases:
+- phase3.5.1: Indicator Testing & Reporting
+- phase4: Monitoring & Control Interface
+- phase5: Deployment & Live Trading
+
+### Commit Message Convention
+```
+phase<X.Y.Z>: <type>(<scope>): <short description>
+```
+
+Example: `phase3.5.1: test(indicators): Add comprehensive RSI validation tests`
+
+This testing suite provides comprehensive validation for all trading system components with emphasis on reliability, maintainability, and developer productivity.
