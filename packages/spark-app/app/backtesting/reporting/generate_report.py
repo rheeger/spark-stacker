@@ -14,14 +14,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from packages.spark_app.app.backtesting.reporting.generator import (
-    generate_comparison_report, generate_indicator_report)
-from packages.spark_app.app.backtesting.reporting.metrics import \
-    calculate_performance_metrics
-from packages.spark_app.app.backtesting.reporting.transformer import \
-    transform_backtest_results
-from packages.spark_app.app.backtesting.reporting.visualizations import (
-    generate_drawdown_chart, generate_equity_curve, generate_price_chart)
+from app.backtesting.reporting.generator import (generate_comparison_report,
+                                                 generate_indicator_report)
+from app.backtesting.reporting.metrics import calculate_performance_metrics
+from app.backtesting.reporting.transformer import transform_backtest_results
+from app.backtesting.reporting.visualizations import (generate_drawdown_chart,
+                                                      generate_equity_curve,
+                                                      generate_price_chart)
 
 # Configure logging
 logging.basicConfig(

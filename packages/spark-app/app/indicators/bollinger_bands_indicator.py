@@ -35,6 +35,13 @@ class BollingerBandsIndicator(BaseIndicator):
             "mean_reversion_threshold", 0.05
         )
 
+        # Update params with actual values being used (including defaults)
+        self.params.update({
+            "period": self.period,
+            "std_dev": self.std_dev,
+            "mean_reversion_threshold": self.mean_reversion_threshold
+        })
+
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate Bollinger Bands values for the provided price data.

@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from app.indicators.base_indicator import (BaseIndicator, Signal,
+                                           SignalDirection)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,14 @@ class RSIIndicator(BaseIndicator):
         self.overbought = self.params.get("overbought", 70)
         self.oversold = self.params.get("oversold", 30)
         self.signal_period = self.params.get("signal_period", 1)
+
+        # Update params with actual values being used (including defaults)
+        self.params.update({
+            "period": self.period,
+            "overbought": self.overbought,
+            "oversold": self.oversold,
+            "signal_period": self.signal_period
+        })
 
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """

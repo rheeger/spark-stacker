@@ -47,6 +47,14 @@ class MovingAverageIndicator(BaseIndicator):
             logger.warning(f"Invalid MA type '{self.ma_type}', defaulting to 'sma'")
             self.ma_type = "sma"
 
+        # Update params with actual values being used (including defaults)
+        self.params.update({
+            "fast_period": self.fast_period,
+            "slow_period": self.slow_period,
+            "ma_type": self.ma_type,
+            "signal_threshold": self.signal_threshold
+        })
+
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate Moving Average values for the provided price data.

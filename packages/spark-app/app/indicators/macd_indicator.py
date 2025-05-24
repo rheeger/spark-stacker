@@ -48,6 +48,14 @@ class MACDIndicator(BaseIndicator):
         self.signal_period = signal_period or self.params.get("signal_period", 9)
         self.trigger_threshold = self.params.get("trigger_threshold", 0)
 
+        # Update params with actual values being used (including defaults)
+        self.params.update({
+            "fast_period": self.fast_period,
+            "slow_period": self.slow_period,
+            "signal_period": self.signal_period,
+            "trigger_threshold": self.trigger_threshold
+        })
+
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate MACD values for the provided price data using TA-Lib.

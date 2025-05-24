@@ -13,7 +13,8 @@
         <h1>Spark Stacker</h1>
         <div class="report-info">
           <h2>
-            {% block report_title %}Indicator Performance Report{% endblock %}
+            {% block report_title %}{{ indicator_name }} Indicator Performance
+            Report{% endblock %}
           </h2>
           <div class="metadata">
             <p>Generated: {{ generation_time }}</p>
@@ -27,32 +28,76 @@
 
     <main class="container">
       {% block content %}
-      <div class="summary-section">
-        <h3>Summary</h3>
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <h4>Win Rate</h4>
-            <div class="metric-value">{{ metrics.win_rate|round(2) }}%</div>
+      <div class="config-performance-section">
+        {% if indicator_config %}
+        <div class="config-column">
+          <h3>Configuration</h3>
+          <div class="settings-content">
+            <div class="settings-grid">
+              <div class="setting-item">
+                <span class="setting-label">Indicator Type:</span>
+                <span class="setting-value"
+                  >{{ indicator_config.type | upper }}</span
+                >
+              </div>
+              {% for key, value in indicator_config.parameters.items() %}
+              <div class="setting-item">
+                <span class="setting-label"
+                  >{{ key | replace('_', ' ') | title }}:</span
+                >
+                <span class="setting-value">{{ value }}</span>
+              </div>
+              {% endfor %}
+            </div>
           </div>
-          <div class="metric-card">
-            <h4>Profit Factor</h4>
-            <div class="metric-value">{{ metrics.profit_factor|round(2) }}</div>
-          </div>
-          <div class="metric-card">
-            <h4>Total Return</h4>
-            <div class="metric-value">{{ metrics.total_return|round(2) }}%</div>
-          </div>
-          <div class="metric-card">
-            <h4>Max Drawdown</h4>
-            <div class="metric-value">{{ metrics.max_drawdown|round(2) }}%</div>
-          </div>
-          <div class="metric-card">
-            <h4>Sharpe Ratio</h4>
-            <div class="metric-value">{{ metrics.sharpe|round(2) }}</div>
-          </div>
-          <div class="metric-card">
-            <h4>Total Trades</h4>
-            <div class="metric-value">{{ metrics.total_trades }}</div>
+        </div>
+        {% endif %}
+
+        <div class="performance-column">
+          <h3>Performance</h3>
+          <div class="metrics-grid">
+            <div
+              class="metric-card {% if metrics.win_rate >= 60 %}good{% elif metrics.win_rate >= 40 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Win Rate</h4>
+              <div class="metric-value">{{ metrics.win_rate|round(2) }}%</div>
+            </div>
+            <div
+              class="metric-card {% if metrics.profit_factor >= 1.5 %}good{% elif metrics.profit_factor >= 1.0 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Profit Factor</h4>
+              <div class="metric-value">
+                {{ metrics.profit_factor|round(2) }}
+              </div>
+            </div>
+            <div
+              class="metric-card {% if metrics.total_return >= 10 %}good{% elif metrics.total_return >= 0 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Total Return</h4>
+              <div class="metric-value">
+                {{ metrics.total_return|round(2) }}%
+              </div>
+            </div>
+            <div
+              class="metric-card {% if metrics.max_drawdown <= 5 %}good{% elif metrics.max_drawdown <= 15 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Max Drawdown</h4>
+              <div class="metric-value">
+                {{ metrics.max_drawdown|round(2) }}%
+              </div>
+            </div>
+            <div
+              class="metric-card {% if metrics.sharpe >= 1.5 %}good{% elif metrics.sharpe >= 0.5 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Sharpe Ratio</h4>
+              <div class="metric-value">{{ metrics.sharpe|round(2) }}</div>
+            </div>
+            <div
+              class="metric-card {% if metrics.total_trades >= 20 %}good{% elif metrics.total_trades >= 5 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Total Trades</h4>
+              <div class="metric-value">{{ metrics.total_trades }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -119,7 +164,7 @@
     </footer>
 
     <script>
-      // Simple JS for trade filtering
+      // Simple JS for trade filtering and settings toggle
       document.addEventListener('DOMContentLoaded', function () {
         const filterButtons = document.querySelectorAll('.filter-btn');
         const tradeRows = document.querySelectorAll('.trade-row');

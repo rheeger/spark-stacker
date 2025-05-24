@@ -242,7 +242,8 @@ def generate_indicator_report(
     indicator_results: Dict[str, Any],
     charts: Dict[str, Any],
     output_dir: Optional[str] = None,
-    output_filename: Optional[str] = None
+    output_filename: Optional[str] = None,
+    indicator_config: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Generate a report for a single indicator's backtest results.
@@ -252,6 +253,7 @@ def generate_indicator_report(
         charts: Dictionary of chart data (can be paths to pre-generated chart files)
         output_dir: Optional output directory override
         output_filename: Optional filename override
+        indicator_config: Configuration parameters for the indicator
 
     Returns:
         Path to the generated report file
@@ -276,7 +278,8 @@ def generate_indicator_report(
         "end_date": indicator_results.get("end_date", "Unknown End Date"),
         "metrics": indicator_results.get("metrics", {}),
         "trades": indicator_results.get("trades", []),
-        "charts": charts
+        "charts": charts,
+        "indicator_config": indicator_config
     }
 
     # Generate the report

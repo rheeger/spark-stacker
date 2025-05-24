@@ -67,7 +67,6 @@ main {
 }
 
 /* Section styles */
-.summary-section,
 .charts-section,
 .trades-section {
     background-color: var(--card-background);
@@ -75,6 +74,22 @@ main {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 20px;
     margin-bottom: 30px;
+}
+
+/* Two-column config and performance layout */
+.config-performance-section {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.config-column,
+.performance-column {
+    background-color: var(--card-background);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 20px;
 }
 
 h3 {
@@ -97,12 +112,53 @@ h3 {
     border-radius: 6px;
     padding: 15px;
     text-align: center;
+    position: relative;
+    border: 2px solid transparent;
+}
+
+.metric-card.good {
+    border-color: var(--positive-color);
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+.metric-card.bad {
+    border-color: var(--negative-color);
+    background-color: rgba(244, 67, 54, 0.05);
+}
+
+.metric-card.neutral {
+    border-color: #ffa726;
+    background-color: rgba(255, 167, 38, 0.05);
+}
+
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #ddd;
+}
+
+.metric-card.good::before {
+    background-color: var(--positive-color);
+}
+
+.metric-card.bad::before {
+    background-color: var(--negative-color);
+}
+
+.metric-card.neutral::before {
+    background-color: #ffa726;
 }
 
 .metric-card h4 {
     font-size: 14px;
     margin-bottom: 10px;
     color: #666;
+    position: relative;
 }
 
 .metric-value {
@@ -110,6 +166,20 @@ h3 {
     font-weight: 600;
     color: var(--primary-color);
 }
+
+.metric-card.good .metric-value {
+    color: var(--positive-color);
+}
+
+.metric-card.bad .metric-value {
+    color: var(--negative-color);
+}
+
+.metric-card.neutral .metric-value {
+    color: #f57c00;
+}
+
+
 
 /* Charts */
 .chart-container {
@@ -192,6 +262,45 @@ h3 {
     color: var(--negative-color);
 }
 
+/* Configuration and Settings */
+.settings-content {
+    margin-top: 0;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid var(--secondary-color);
+}
+
+.setting-label {
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.setting-value {
+    font-weight: 500;
+    color: var(--primary-color);
+    background-color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    font-size: 14px;
+    min-width: 80px;
+    text-align: center;
+}
+
 /* Footer */
 footer {
     background-color: var(--primary-color);
@@ -217,8 +326,17 @@ footer p {
 }
 
 @media (max-width: 767px) {
+    .config-performance-section {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
     .metrics-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .settings-grid {
+        grid-template-columns: 1fr;
     }
 
     .trades-table {
