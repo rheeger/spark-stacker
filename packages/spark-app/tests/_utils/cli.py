@@ -27,6 +27,8 @@ sys.path.insert(0, spark_app_dir)
 from app.backtesting.backtest_engine import BacktestEngine
 from app.backtesting.data_manager import CSVDataSource, DataManager
 from app.backtesting.indicator_backtest_manager import IndicatorBacktestManager
+from app.backtesting.reporting.generate_report import \
+    generate_charts_for_report
 from app.backtesting.reporting.generator import generate_indicator_report
 from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.indicators.indicator_factory import IndicatorFactory
@@ -60,28 +62,40 @@ def create_charts_for_report(results_dir, symbol="ETH-USD", trades=None, backtes
         dates = pd.to_datetime(backtest_data['timestamp'], unit='ms')
         prices = backtest_data['close'].values
 
-    # Generate equity data based on actual trades
+        # Generate equity data based on actual trades
     initial_balance = 10000
-    equity = [initial_balance]
-    running_pnl = 0
 
     if trades:
+        # Sort trades by exit time to build equity curve chronologically
+        sorted_trades = sorted(trades, key=lambda x: x.get('exit_time', 0))
+
         # Create equity curve based on actual trades
-        for i in range(1, len(dates)):
-            # Check if any trades completed at this time
-            for trade in trades:
-                trade_time = pd.to_datetime(trade.get('exit_time', 0), unit='ms')
-                if abs((dates.iloc[i] - trade_time).total_seconds()) < 86400:  # Within a day
-                    running_pnl += trade.get('realized_pnl', 0)
-            equity.append(initial_balance + running_pnl)
+        equity = []
+        running_balance = initial_balance
+        processed_trades = set()
+
+        for i, date in enumerate(dates):
+            # Add any completed trades up to this date
+            current_timestamp = date.timestamp() * 1000  # Convert to milliseconds
+
+            # Check for trades that completed by this date
+            for trade in sorted_trades:
+                trade_exit_time = trade.get('exit_time', 0)
+                trade_id = id(trade)  # Use object id as unique identifier
+
+                if trade_exit_time <= current_timestamp and trade_id not in processed_trades:
+                    running_balance += trade.get('realized_pnl', 0)
+                    processed_trades.add(trade_id)
+
+                    logger.info(f"At {date}, processed trade with PnL {trade.get('realized_pnl', 0):.2f}, new balance: {running_balance:.2f}")
+
+            equity.append(running_balance)
+
+        logger.info(f"Final equity curve: start {equity[0]:.2f}, end {equity[-1]:.2f}")
     else:
         # No trades, flat equity
         equity = [initial_balance] * len(dates)
-
-    # Ensure equity has same length as dates
-    while len(equity) < len(dates):
-        equity.append(equity[-1])
-    equity = equity[:len(dates)]
+        logger.info("No trades found, creating flat equity curve")
 
     # 1. Price Chart with Trade Markers
     plt.figure(figsize=(12, 6))
@@ -89,35 +103,83 @@ def create_charts_for_report(results_dir, symbol="ETH-USD", trades=None, backtes
 
     # Add trade markers if trades are provided
     if trades and backtest_data is not None:
+        entry_legend_added = False
+        exit_legend_added = False
+
+        logger.info(f"Adding {len(trades)} trade markers to price chart")
+        logger.info(f"Chart date range: {dates.min()} to {dates.max()}")
+
         for i, trade in enumerate(trades):
-            # Convert timestamps to dates for plotting
-            entry_time = pd.to_datetime(trade.get('entry_time', 0), unit='ms')
-            exit_time = pd.to_datetime(trade.get('exit_time', 0), unit='ms')
+            # Convert timestamps to dates for plotting with proper validation
+            entry_timestamp = trade.get('entry_time')
+            exit_timestamp = trade.get('exit_time')
+
+            # Skip trades with missing timestamps
+            if entry_timestamp is None or exit_timestamp is None or entry_timestamp == 0 or exit_timestamp == 0:
+                logger.warning(f"Trade {i+1} has invalid timestamps - Entry: {entry_timestamp}, Exit: {exit_timestamp}. Skipping.")
+                continue
+
+            entry_time = pd.to_datetime(entry_timestamp, unit='ms')
+            exit_time = pd.to_datetime(exit_timestamp, unit='ms')
+
+            logger.info(f"Trade {i+1}: Entry {entry_time}, Exit {exit_time}")
 
             # Check if trade times are within our chart data range
-            if entry_time >= dates.min() and entry_time <= dates.max():
+            entry_in_range = entry_time >= dates.min() and entry_time <= dates.max()
+            exit_in_range = exit_time >= dates.min() and exit_time <= dates.max()
+            logger.info(f"Trade {i+1} in range - Entry: {entry_in_range}, Exit: {exit_in_range}")
+
+            if entry_in_range:
                 # Find closest date index for entry
                 entry_idx = np.abs(dates - entry_time).argmin()
                 closest_entry_time = dates.iloc[entry_idx]
                 market_price_at_entry = prices[entry_idx]
 
-                # Plot entry marker using the market price
-                plt.scatter(closest_entry_time, market_price_at_entry,
-                           marker='^', s=100, c='green',
-                           label='Buy Entry' if i == 0 else "",
-                           zorder=5, edgecolors='darkgreen', linewidth=1)
+                # Determine marker color and shape based on trade side
+                trade_side = trade.get('side', 'LONG').upper()
+                if trade_side == 'LONG':
+                    entry_color = 'green'
+                    entry_marker = '^'  # Triangle up for buy
+                else:
+                    entry_color = 'red'
+                    entry_marker = 'v'  # Triangle down for sell short
 
-            if exit_time >= dates.min() and exit_time <= dates.max():
+                # Plot entry marker using the market price - only add label for first entry
+                plt.scatter(closest_entry_time, market_price_at_entry,
+                           marker=entry_marker, s=150, c=entry_color,
+                           label='Entry' if not entry_legend_added else "",
+                           zorder=10, edgecolors='black', linewidth=2, alpha=0.8)
+
+                entry_legend_added = True
+                logger.info(f"Added entry marker at {closest_entry_time}, price {market_price_at_entry:.2f}")
+
+            if exit_in_range:
                 # Find closest date index for exit
                 exit_idx = np.abs(dates - exit_time).argmin()
                 closest_exit_time = dates.iloc[exit_idx]
                 market_price_at_exit = prices[exit_idx]
 
-                # Plot exit marker using the market price
+                # Determine exit marker color (opposite of entry for long/short)
+                trade_side = trade.get('side', 'LONG').upper()
+                if trade_side == 'LONG':
+                    exit_color = 'red'     # Sell to close long
+                    exit_marker = 'v'      # Triangle down for sell
+                else:
+                    exit_color = 'green'   # Buy to close short
+                    exit_marker = '^'      # Triangle up for buy
+
+                # Plot exit marker using the market price - only add label for first exit
                 plt.scatter(closest_exit_time, market_price_at_exit,
-                           marker='v', s=100, c='red',
-                           label='Sell Exit' if i == 0 else "",
-                           zorder=5, edgecolors='darkred', linewidth=1)
+                           marker=exit_marker, s=150, c=exit_color,
+                           label='Exit' if not exit_legend_added else "",
+                           zorder=10, edgecolors='black', linewidth=2, alpha=0.8)
+
+                exit_legend_added = True
+                logger.info(f"Added exit marker at {closest_exit_time}, price {market_price_at_exit:.2f}")
+
+        entry_count = len([t for t in trades if t.get('entry_time') and entry_time >= dates.min() and entry_time <= dates.max()])
+        exit_count = len([t for t in trades if t.get('exit_time') and exit_time >= dates.min() and exit_time <= dates.max()])
+        logger.info(f"Added entry and exit markers for trades in range")
 
     plt.title(f'{symbol} Price Chart with Trading Signals')
     plt.xlabel('Date')
@@ -155,6 +217,20 @@ def create_charts_for_report(results_dir, symbol="ETH-USD", trades=None, backtes
     plt.figure(figsize=(12, 6))
     plt.fill_between(dates, drawdown, 0, color='red', alpha=0.3, label='Drawdown')
     plt.plot(dates, drawdown, 'r-', linewidth=1)
+
+    # Mark maximum drawdown point
+    max_dd_idx = np.argmax(drawdown)
+    max_dd_value = drawdown[max_dd_idx]
+    max_dd_date = dates.iloc[max_dd_idx]
+
+    plt.scatter(max_dd_date, max_dd_value, color='darkred', s=100, zorder=5,
+               label=f'Max DD: {max_dd_value:.2f}%')
+    plt.annotate(f'Max Drawdown\n{max_dd_value:.2f}%',
+                xy=(max_dd_date, max_dd_value),
+                xytext=(10, 10), textcoords='offset points',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+
     plt.title('Portfolio Drawdown')
     plt.xlabel('Date')
     plt.ylabel('Drawdown (%)')
@@ -168,7 +244,77 @@ def create_charts_for_report(results_dir, symbol="ETH-USD", trades=None, backtes
     plt.close()
     charts["drawdown_chart"] = drawdown_chart_path
 
+    logger.info(f"Generated drawdown chart with max drawdown: {max_dd_value:.2f}%")
+
     return charts
+
+
+def generate_charts_for_report_cli(
+    market_data: pd.DataFrame,
+    backtest_results: Dict[str, Any],
+    output_dir: str
+) -> Dict[str, str]:
+    """
+    Bridge function to convert CLI data format to standard chart generation format.
+
+    Args:
+        market_data: DataFrame containing OHLCV data
+        backtest_results: Dictionary containing backtest results with trades
+        output_dir: Directory to save chart files
+
+    Returns:
+        Dictionary with paths to generated chart files
+    """
+    try:
+        # Ensure the market data has the proper timestamp format
+        if 'timestamp' in market_data.columns:
+            # Convert timestamp to datetime if not already
+            market_data = market_data.copy()
+            if market_data['timestamp'].dtype in ['int64', 'float64']:
+                market_data['timestamp'] = pd.to_datetime(market_data['timestamp'], unit='ms')
+
+        # Fix trade data format for standard chart generation
+        trades = backtest_results.get("trades", [])
+        if trades:
+            # Convert CLI trade format to standard format
+            standardized_trades = []
+            for trade in trades:
+                std_trade = trade.copy()
+                # Map realized_pnl to pnl if needed
+                if 'realized_pnl' in std_trade and 'pnl' not in std_trade:
+                    std_trade['pnl'] = std_trade['realized_pnl']
+                standardized_trades.append(std_trade)
+
+            # Update backtest_results with standardized trades
+            backtest_results = backtest_results.copy()
+            backtest_results["trades"] = standardized_trades
+
+        # Use the standard chart generation function from the reporting system
+        charts = generate_charts_for_report(
+            market_data=market_data,
+            backtest_results=backtest_results,
+            output_dir=output_dir
+        )
+
+        logger.info(f"Generated charts using standard reporting system: {list(charts.keys())}")
+        return charts
+
+    except Exception as e:
+        logger.error(f"Error generating charts with standard system: {e}")
+        logger.error(f"Standard system error details: {str(e)}")
+        import traceback
+        logger.error(f"Standard system traceback: {traceback.format_exc()}")
+        logger.info("Falling back to CLI chart generation")
+
+        # Fallback to original CLI chart generation if the standard system fails
+        trades = backtest_results.get("trades", [])
+        symbol = backtest_results.get("market", "Unknown")
+
+        logger.info(f"Fallback chart generation - Symbol: {symbol}, Trades: {len(trades)}")
+        if trades:
+            logger.info(f"First trade in fallback: {trades[0]}")
+
+        return create_charts_for_report(output_dir, symbol, trades, market_data)
 
 
 def process_raw_trades_to_position_trades(raw_trades):
@@ -366,6 +512,61 @@ def calculate_profit_factor(trades):
     return gross_profit / gross_loss
 
 
+def calculate_max_drawdown_from_trades(trades, initial_balance=10000.0):
+    """Calculate maximum drawdown from a list of trades."""
+    if not trades:
+        return 0.0
+
+    # Sort trades by exit time
+    sorted_trades = sorted(trades, key=lambda x: x.get('exit_time', 0))
+
+    # Calculate equity curve
+    equity = [initial_balance]
+    running_balance = initial_balance
+
+    for trade in sorted_trades:
+        running_balance += trade.get('realized_pnl', 0)
+        equity.append(running_balance)
+
+    # Calculate drawdown
+    max_drawdown = 0.0
+    peak = equity[0]
+
+    for value in equity:
+        if value > peak:
+            peak = value
+        drawdown = (peak - value) / peak * 100
+        if drawdown > max_drawdown:
+            max_drawdown = drawdown
+
+    return max_drawdown
+
+
+def calculate_sharpe_ratio_from_trades(trades, initial_balance=10000.0, risk_free_rate=0.02):
+    """Calculate Sharpe ratio from a list of trades."""
+    if not trades or len(trades) < 2:
+        return 0.0
+
+    # Calculate returns from trades
+    returns = [trade.get('realized_pnl', 0) / initial_balance for trade in trades]
+
+    if not returns:
+        return 0.0
+
+    # Calculate mean return and standard deviation
+    mean_return = np.mean(returns)
+    std_return = np.std(returns)
+
+    if std_return == 0:
+        return 0.0
+
+    # Annualized Sharpe ratio (assuming daily trading)
+    excess_return = mean_return - (risk_free_rate / 252)  # Daily risk-free rate
+    sharpe = excess_return / std_return * np.sqrt(252)  # Annualized
+
+    return sharpe
+
+
 def extract_indicator_config(indicator_name: str, indicator_instance) -> Optional[Dict[str, Any]]:
     """
     Extract indicator configuration parameters from the indicator instance.
@@ -508,8 +709,19 @@ def generate_html_report_for_cli(
     win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
     profit_factor = calculate_profit_factor(trades)
 
+    # Calculate more accurate metrics
+    initial_balance = 10000.0
+    total_return = (total_pnl / initial_balance) * 100  # As percentage
+
+    # Calculate max drawdown from actual trades
+    max_drawdown = calculate_max_drawdown_from_trades(trades, initial_balance)
+
+    # Calculate Sharpe ratio from actual returns
+    sharpe_ratio = calculate_sharpe_ratio_from_trades(trades, initial_balance)
+
     # Debug: Log calculated metrics
     logger.info(f"Calculated metrics - Total PnL: {total_pnl}, Trades: {total_trades}, Win Rate: {win_rate:.2f}%")
+    logger.info(f"Max Drawdown: {max_drawdown:.2f}%, Sharpe: {sharpe_ratio:.2f}, Total Return: {total_return:.2f}%")
 
     # Create a dictionary with indicator results for the report
     indicator_results = {
@@ -525,14 +737,18 @@ def generate_html_report_for_cli(
             "losing_trades": losing_trades,
             "win_rate": win_rate,
             "profit_factor": profit_factor,
-            "max_drawdown": 5.0,  # As percentage
-            "sharpe": 1.2,  # Note: using 'sharpe' instead of 'sharpe_ratio' to match template
-            "total_return": total_pnl / 10000 * 100  # As percentage of initial balance
+            "max_drawdown": max_drawdown,  # Calculated from actual trades
+            "sharpe": sharpe_ratio,  # Calculated from actual returns
+            "total_return": total_return  # Calculated from actual PnL
         }
     }
 
-    # Create actual chart images with trade markers using real backtest data
-    charts = create_charts_for_report(results_dir, symbol, trades, backtest_data)
+    # Use the standard chart generation system instead of CLI-specific PNG generation
+    charts = generate_charts_for_report_cli(
+        market_data=backtest_data,
+        backtest_results=indicator_results,
+        output_dir=results_dir
+    )
 
     # Generate the HTML report
     output_filename = f"{indicator_name.lower()}_{symbol.replace('/', '_').replace('-', '_')}_{timeframe}_report.html"

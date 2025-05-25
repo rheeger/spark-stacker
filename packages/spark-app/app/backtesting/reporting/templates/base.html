@@ -106,13 +106,46 @@
         <h3>Performance Charts</h3>
         <div class="chart-container">
           <div class="chart" id="price-chart">
+            {% if charts.price_chart.endswith('.html') %}
+            <iframe
+              src="{{ charts.price_chart }}"
+              frameborder="0"
+              width="100%"
+              height="650"
+              style="border: none; overflow: hidden"
+              scrolling="no"
+            ></iframe>
+            {% else %}
             <img src="{{ charts.price_chart }}" alt="Price Chart with Trades" />
+            {% endif %}
           </div>
           <div class="chart" id="equity-curve">
+            {% if charts.equity_curve.endswith('.html') %}
+            <iframe
+              src="{{ charts.equity_curve }}"
+              frameborder="0"
+              width="100%"
+              height="650"
+              style="border: none; overflow: hidden"
+              scrolling="no"
+            ></iframe>
+            {% else %}
             <img src="{{ charts.equity_curve }}" alt="Equity Curve" />
+            {% endif %}
           </div>
           <div class="chart" id="drawdown-chart">
+            {% if charts.drawdown_chart.endswith('.html') %}
+            <iframe
+              src="{{ charts.drawdown_chart }}"
+              frameborder="0"
+              width="100%"
+              height="550"
+              style="border: none; overflow: hidden"
+              scrolling="no"
+            ></iframe>
+            {% else %}
             <img src="{{ charts.drawdown_chart }}" alt="Drawdown Chart" />
+            {% endif %}
           </div>
         </div>
       </div>

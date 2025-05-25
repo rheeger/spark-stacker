@@ -139,10 +139,20 @@ def create_sample_charts(results_dir, symbol="ETH-USD", trades=None, backtest_da
 
     # Add trade markers if trades are provided
     if trades and backtest_data is not None:
+        entry_legend_added = False
+        exit_legend_added = False
+
         for i, trade in enumerate(trades):
-            # Convert timestamps to dates for plotting
-            entry_time = pd.to_datetime(trade.get('entry_time', 0), unit='ms')
-            exit_time = pd.to_datetime(trade.get('exit_time', 0), unit='ms')
+            # Convert timestamps to dates for plotting with proper validation
+            entry_timestamp = trade.get('entry_time')
+            exit_timestamp = trade.get('exit_time')
+
+            # Skip trades with missing timestamps
+            if entry_timestamp is None or exit_timestamp is None or entry_timestamp == 0 or exit_timestamp == 0:
+                continue
+
+            entry_time = pd.to_datetime(entry_timestamp, unit='ms')
+            exit_time = pd.to_datetime(exit_timestamp, unit='ms')
 
             # Check if trade times are within our chart data range
             if entry_time >= dates.min() and entry_time <= dates.max():
@@ -155,8 +165,9 @@ def create_sample_charts(results_dir, symbol="ETH-USD", trades=None, backtest_da
                 # Note: Chart shows market prices; trade table shows execution prices (with slippage/fees)
                 plt.scatter(closest_entry_time, market_price_at_entry,
                            marker='^', s=100, c='green',
-                           label='Buy Entry' if i == 0 else "",
+                           label='Entry' if not entry_legend_added else "",
                            zorder=5, edgecolors='darkgreen', linewidth=1)
+                entry_legend_added = True
 
             if exit_time >= dates.min() and exit_time <= dates.max():
                 # Find closest date index for exit
@@ -168,8 +179,9 @@ def create_sample_charts(results_dir, symbol="ETH-USD", trades=None, backtest_da
                 # Note: Chart shows market prices; trade table shows execution prices (with slippage/fees)
                 plt.scatter(closest_exit_time, market_price_at_exit,
                            marker='v', s=100, c='red',
-                           label='Sell Exit' if i == 0 else "",
+                           label='Exit' if not exit_legend_added else "",
                            zorder=5, edgecolors='darkred', linewidth=1)
+                exit_legend_added = True
 
     plt.title(f'{symbol} Price Chart with Trading Signals')
     plt.xlabel('Date')

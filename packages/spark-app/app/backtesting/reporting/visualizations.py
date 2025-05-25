@@ -98,12 +98,23 @@ def generate_price_chart(
                     )
 
         # Add trade entries and exits
+        # Track whether we've already added legend entries
+        entry_legend_added = False
+        exit_legend_added = False
+
         for trade in trades:
             # Entry point
             if 'entry_time' in trade and 'entry_price' in trade:
+                # Handle timestamps properly - could be milliseconds or already datetime
+                entry_time = trade['entry_time']
+                if isinstance(entry_time, (int, float)):
+                    entry_datetime = pd.to_datetime(entry_time, unit='ms')
+                else:
+                    entry_datetime = pd.to_datetime(entry_time)
+
                 fig.add_trace(
                     go.Scatter(
-                        x=[pd.to_datetime(trade['entry_time'])],
+                        x=[entry_datetime],
                         y=[trade['entry_price']],
                         mode='markers',
                         marker=dict(
@@ -111,16 +122,26 @@ def generate_price_chart(
                             size=10,
                             color='green' if trade.get('side', 'long') == 'long' else 'red',
                         ),
-                        name='Entry'
+                        name='Entry',
+                        showlegend=not entry_legend_added,  # Only show legend for first entry
+                        legendgroup='entries'  # Group all entries together
                     ),
                     row=1, col=1
                 )
+                entry_legend_added = True
 
             # Exit point
             if 'exit_time' in trade and 'exit_price' in trade:
+                # Handle timestamps properly - could be milliseconds or already datetime
+                exit_time = trade['exit_time']
+                if isinstance(exit_time, (int, float)):
+                    exit_datetime = pd.to_datetime(exit_time, unit='ms')
+                else:
+                    exit_datetime = pd.to_datetime(exit_time)
+
                 fig.add_trace(
                     go.Scatter(
-                        x=[pd.to_datetime(trade['exit_time'])],
+                        x=[exit_datetime],
                         y=[trade['exit_price']],
                         mode='markers',
                         marker=dict(
@@ -128,26 +149,40 @@ def generate_price_chart(
                             size=10,
                             color='red' if trade.get('side', 'long') == 'long' else 'green',
                         ),
-                        name='Exit'
+                        name='Exit',
+                        showlegend=not exit_legend_added,  # Only show legend for first exit
+                        legendgroup='exits'  # Group all exits together
                     ),
                     row=1, col=1
                 )
+                exit_legend_added = True
 
         # Update layout for better visualization
         fig.update_layout(
             title="Price Chart with Trades",
             xaxis_title="Date",
             yaxis_title="Price",
-            height=800,
-            width=1200,
+            height=600,
+            autosize=True,
             legend_title="Legend",
             xaxis_rangeslider_visible=False,
-            template="plotly_white"
+            template="plotly_white",
+            margin=dict(l=50, r=50, t=50, b=50)
         )
 
-        # Save as HTML file
+        # Save as HTML file with responsive configuration
         output_path = Path(filename)
-        fig.write_html(output_path)
+        config = {
+            'displayModeBar': True,
+            'responsive': True,
+            'displaylogo': False,
+            'modeBarButtonsToRemove': ['pan2d', 'lasso2d']
+        }
+        fig.write_html(
+            output_path,
+            config=config,
+            include_plotlyjs='cdn'
+        )
         logger.info(f"Generated price chart: {output_path}")
 
         return str(output_path)
@@ -187,8 +222,15 @@ def generate_equity_curve(
                 logger.warning(f"Trade missing required fields: {trade}")
                 continue
 
+            # Handle timestamps properly - could be milliseconds or already datetime
+            exit_time = trade['exit_time']
+            if isinstance(exit_time, (int, float)):
+                exit_datetime = pd.to_datetime(exit_time, unit='ms')
+            else:
+                exit_datetime = pd.to_datetime(exit_time)
+
             trade_data.append({
-                'date': pd.to_datetime(trade['exit_time']),
+                'date': exit_datetime,
                 'pnl': float(trade['pnl']),
                 'cumulative_pnl': 0.0  # Will be calculated below
             })
@@ -237,14 +279,25 @@ def generate_equity_curve(
             xaxis_title="Date",
             yaxis_title="Equity ($)",
             height=600,
-            width=1200,
+            autosize=True,
             template="plotly_white",
-            hovermode="x unified"
+            hovermode="x unified",
+            margin=dict(l=50, r=50, t=50, b=50)
         )
 
-        # Save as HTML file
+        # Save as HTML file with responsive configuration
         output_path = Path(filename)
-        fig.write_html(output_path)
+        config = {
+            'displayModeBar': True,
+            'responsive': True,
+            'displaylogo': False,
+            'modeBarButtonsToRemove': ['pan2d', 'lasso2d']
+        }
+        fig.write_html(
+            output_path,
+            config=config,
+            include_plotlyjs='cdn'
+        )
         logger.info(f"Generated equity curve: {output_path}")
 
         return str(output_path), equity_df
@@ -330,15 +383,26 @@ def generate_drawdown_chart(
             xaxis_title="Date",
             yaxis_title="Drawdown (%)",
             height=500,
-            width=1200,
+            autosize=True,
             template="plotly_white",
             yaxis=dict(tickformat=".2f"),  # Format y-axis as percentage
-            hovermode="x unified"
+            hovermode="x unified",
+            margin=dict(l=50, r=50, t=50, b=50)
         )
 
-        # Save as HTML file
+        # Save as HTML file with responsive configuration
         output_path = Path(filename)
-        fig.write_html(output_path)
+        config = {
+            'displayModeBar': True,
+            'responsive': True,
+            'displaylogo': False,
+            'modeBarButtonsToRemove': ['pan2d', 'lasso2d']
+        }
+        fig.write_html(
+            output_path,
+            config=config,
+            include_plotlyjs='cdn'
+        )
         logger.info(f"Generated drawdown chart: {output_path}")
 
         return str(output_path)
