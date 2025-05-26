@@ -34,7 +34,7 @@ scrape_configs:
     metrics_path: /metrics
     scrape_interval: 5s
     static_configs:
-      - targets: ['spark-stacker:9000']
+      - targets: ['spark-app:9000']
         labels:
           app: 'spark-stacker'
           environment: 'production'

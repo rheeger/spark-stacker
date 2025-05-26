@@ -72,7 +72,7 @@
     {
       "name": "eth_rsi",
       "type": "rsi",
-      "enabled": false,
+      "enabled": true,
       "parameters": {
         "period": 14,
         "overbought": 70,
@@ -83,7 +83,7 @@
     {
       "name": "macd_eth_usd_1m",
       "type": "macd",
-      "enabled": true,
+      "enabled": false,
       "parameters": {
         "fast_period": 8,
         "slow_period": 21,

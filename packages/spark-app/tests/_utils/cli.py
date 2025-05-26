@@ -5,15 +5,20 @@ Spark-App CLI - Unified command line interface for backtest operations
 import logging
 import os
 import sys
+import threading
 import time
 import webbrowser
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 import click
+# Set matplotlib backend to prevent GUI hanging issues
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+matplotlib.use('Agg')  # Use non-interactive backend
 
 # Add the app directory to the path for proper imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -777,6 +782,57 @@ def get_default_output_dir() -> str:
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
 
+
+def safe_open_browser(url: str, timeout: float = 2.0) -> bool:
+    """
+    Safely open a browser with timeout to prevent hanging.
+
+    Args:
+        url: URL to open
+        timeout: Maximum time to wait for browser to open
+
+    Returns:
+        bool: True if browser opened successfully, False otherwise
+    """
+    def open_browser():
+        try:
+            webbrowser.open(url)
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to open browser: {e}")
+            return False
+
+    try:
+        # Use a daemon thread with timeout to prevent hanging
+        thread = threading.Thread(target=open_browser, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            logger.warning(f"Browser opening timed out after {timeout}s")
+            return False
+        return True
+    except Exception as e:
+        logger.warning(f"Error opening browser safely: {e}")
+        return False
+
+
+def cleanup_resources():
+    """
+    Cleanup any remaining resources and prepare for graceful shutdown.
+    """
+    try:
+        # Close all matplotlib figures to free memory
+        plt.close('all')
+
+        # Force garbage collection
+        import gc
+        gc.collect()
+
+        logger.debug("Resources cleaned up successfully")
+    except Exception as e:
+        logger.warning(f"Error during resource cleanup: {e}")
+
 @click.group()
 @click.option("--debug", is_flag=True, help="Enable debug logging")
 def cli(debug: bool):
@@ -853,10 +909,18 @@ def backtest(
         print(f"Win rate: {results.win_rate:.2f}%")
         print(f"Profit factor: {results.profit_factor:.2f}")
         print(f"Max drawdown: {results.max_drawdown:.2f}%")
+        print(f"\n✅ Backtest completed successfully! CLI will now exit.")
 
     except Exception as e:
         logger.error(f"Backtest failed: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        cleanup_resources()
         sys.exit(1)
+    finally:
+        # Ensure proper cleanup
+        cleanup_resources()
+        logger.debug("Backtest command cleanup completed")
 
 
 @cli.command()
@@ -952,17 +1016,29 @@ def demo(
         print(f"📈 Symbol: {symbol}")
         print(f"⏱️  Timeframe: {timeframe}")
         print(f"📋 HTML Report: {absolute_path}")
-        print(f"🌐 Opening report in browser...")
 
-        webbrowser.open(f"file://{absolute_path}")
+        # Safely open browser with timeout
+        print(f"🌐 Opening report in browser...")
+        browser_success = safe_open_browser(f"file://{absolute_path}")
+        if not browser_success:
+            print(f"⚠️  Browser failed to open automatically. Please open manually: {absolute_path}")
 
         # Also print basic results
         if result_paths:
             print(f"📄 JSON results: {result_paths.get('json_path')}")
 
+        print(f"\n🎉 Demo completed successfully! CLI will now exit.")
+
     except Exception as e:
         logger.error(f"Demo failed: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        cleanup_resources()
         sys.exit(1)
+    finally:
+        # Ensure proper cleanup
+        cleanup_resources()
+        logger.debug("Demo command cleanup completed")
 
 
 @cli.command(name="real-data")
@@ -1075,13 +1151,18 @@ def real_data(
             print(f"⏱️  Timeframe: {timeframe}")
             print(f"📅 Days of data: {days}")
             print(f"📋 HTML Report: {absolute_path}")
-            print(f"🌐 Opening report in browser...")
 
-            webbrowser.open(f"file://{absolute_path}")
+            # Safely open browser with timeout
+            print(f"🌐 Opening report in browser...")
+            browser_success = safe_open_browser(f"file://{absolute_path}")
+            if not browser_success:
+                print(f"⚠️  Browser failed to open automatically. Please open manually: {absolute_path}")
 
             if result_paths:
                 print(f"📄 JSON results: {result_paths.get('json_path')}")
             print(f"💾 Data file: {data_file_path}")
+
+            print(f"\n🎉 Real data backtest completed successfully! CLI will now exit.")
         else:
             print("❌ Backtest completed but no results generated")
 
@@ -1089,7 +1170,12 @@ def real_data(
         import traceback
         logger.error(f"Real data backtest failed: {str(e)}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        cleanup_resources()
         sys.exit(1)
+    finally:
+        # Ensure proper cleanup
+        cleanup_resources()
+        logger.debug("Real data command cleanup completed")
 
 
 def fetch_hyperliquid_data(
@@ -1112,6 +1198,7 @@ def fetch_hyperliquid_data(
     Returns:
         Path to the saved CSV file or None if failed
     """
+    connector = None
     try:
         logger.info(f"Initializing Hyperliquid connector (testnet={testnet})...")
 
@@ -1188,6 +1275,14 @@ def fetch_hyperliquid_data(
     except Exception as e:
         logger.error(f"Error fetching Hyperliquid data: {str(e)}")
         return None
+    finally:
+        # Ensure connector is properly disconnected
+        if connector:
+            try:
+                connector.disconnect()
+                logger.debug("Hyperliquid connector disconnected")
+            except Exception as e:
+                logger.warning(f"Error disconnecting Hyperliquid connector: {e}")
 
 
 def create_demo_data_file(data_dir: str, symbol: str, timeframe: str) -> str:
@@ -1291,21 +1386,56 @@ def demo_macd(
     output_dir: Optional[str],
 ):
     """Run a demonstration backtest with MACD indicator."""
-    # This is equivalent to calling demo with indicator_name=MACD
-    ctx = click.get_current_context()
-    ctx.invoke(demo, indicator_name="MACD", symbol=symbol, timeframe=timeframe, output_dir=output_dir)
+    try:
+        # This is equivalent to calling demo with indicator_name=MACD
+        ctx = click.get_current_context()
+        ctx.invoke(demo, indicator_name="MACD", symbol=symbol, timeframe=timeframe, output_dir=output_dir)
+    finally:
+        # Ensure proper cleanup
+        cleanup_resources()
+        logger.debug("Demo MACD command cleanup completed")
 
 
 @cli.command()
 def list_indicators():
     """List all available indicators from the factory."""
-    indicators = IndicatorFactory.get_available_indicators()
+    try:
+        indicators = IndicatorFactory.get_available_indicators()
 
-    print("\nAvailable Indicators:")
-    for idx, indicator_name in enumerate(indicators, 1):
-        # Display indicator name in uppercase to match the test expectation
-        print(f"{idx}. {indicator_name.upper()}")
+        print("\nAvailable Indicators:")
+        for idx, indicator_name in enumerate(indicators, 1):
+            # Display indicator name in uppercase to match the test expectation
+            print(f"{idx}. {indicator_name.upper()}")
+
+        print(f"\n✅ Listed {len(indicators)} available indicators. CLI will now exit.")
+
+    except Exception as e:
+        logger.error(f"Failed to list indicators: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        cleanup_resources()
+        sys.exit(1)
+    finally:
+        # Ensure proper cleanup
+        cleanup_resources()
+        logger.debug("List indicators command cleanup completed")
 
 
 if __name__ == "__main__":
-    cli()
+    try:
+        cli()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Operation interrupted by user")
+        cleanup_resources()
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Unexpected error in CLI: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        cleanup_resources()
+        sys.exit(1)
+    finally:
+        # Final cleanup and graceful exit
+        cleanup_resources()
+        logger.debug("CLI exiting gracefully")
+        sys.exit(0)
