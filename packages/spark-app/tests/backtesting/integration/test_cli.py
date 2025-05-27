@@ -20,9 +20,11 @@ def test_cli_help_commands(command):
     # Get root spark-app directory
     app_dir = Path(__file__).parent.parent.parent.parent.resolve()
 
-    # Construct the full command
-    # Note: We use sys.executable to ensure we run with the same Python interpreter as the test
-    full_command = [sys.executable, "-m", "app.cli"] + command
+    # Path to the CLI utility in tests/_utils/cli.py
+    cli_path = app_dir / "tests" / "_utils" / "cli.py"
+
+    # Construct the full command using the actual CLI location
+    full_command = [sys.executable, str(cli_path)] + command
 
     # Run the command with a timeout to ensure it completes quickly
     result = subprocess.run(
@@ -45,8 +47,11 @@ def test_cli_list_indicators_output(indicator):
     # Get root spark-app directory
     app_dir = Path(__file__).parent.parent.parent.parent.resolve()
 
-    # Construct the command
-    full_command = [sys.executable, "-m", "app.cli", "list-indicators"]
+    # Path to the CLI utility in tests/_utils/cli.py
+    cli_path = app_dir / "tests" / "_utils" / "cli.py"
+
+    # Construct the command using the actual CLI location
+    full_command = [sys.executable, str(cli_path), "list-indicators"]
 
     # Run the command
     result = subprocess.run(

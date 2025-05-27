@@ -252,6 +252,8 @@ make clean-results
 python tests/_utils/refresh_test_market_data.py
 ```
 
+> **⚠️ Important for Contributors**: Always run `make test-quick` before pushing changes to ensure your code doesn't break existing functionality. This quick test suite completes in under 3 minutes and provides essential validation.
+
 ---
 
 ## ⚡ CLI Usage

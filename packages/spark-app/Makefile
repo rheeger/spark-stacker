@@ -22,6 +22,7 @@ help:
 	@echo "  make test            : Run tests for spark-app"
 	@echo "  make test-quick      : Run quick tests (excluding slow tests) with coverage"
 	@echo "  make test-slow       : Run only slow tests"
+	@echo "  make test-extended   : Run extended test suite (slow tests) with full coverage report"
 	@echo "  make spark-app-clean : Clean up spark-app services and volumes"
 	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
 	@echo "  make test-cli        : Test the CLI commands"
@@ -105,6 +106,12 @@ test-slow:
 	@echo "Running only slow tests..."
 	@cd $(CURDIR) && .venv/bin/python -m pytest -m "slow" -v
 	@echo "Slow tests complete"
+
+# Run extended test suite with full coverage report
+test-extended:
+	@echo "Running extended test suite (slow tests) with coverage..."
+	@cd $(CURDIR) && .venv/bin/python -m pytest -m "slow" --cov=app --cov-report=html --cov-report=term-missing -v
+	@echo "Extended tests complete. Coverage report generated in htmlcov/"
 
 # Run Hyperliquid connector tests
 test-hyperliquid:
