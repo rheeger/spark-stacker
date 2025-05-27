@@ -1038,7 +1038,7 @@ python -m pytest --cov=app --cov-report=term-missing
 
 # Generate detailed HTML coverage report
 python -m pytest --cov=app --cov-report=html
-open htmlcov/index.html
+open _htmlcov/index.html
 
 # Coverage for specific module
 python -m pytest --cov=app.indicators --cov-report=term
@@ -1095,7 +1095,7 @@ find . -type d -name "__pycache__" -exec rm -rf {} +
 find . -name "*.pyc" -delete
 
 # Clean old coverage files
-rm -rf htmlcov/ .coverage
+rm -rf _htmlcov/ .coverage
 
 # Check disk usage
 du -sh tests/__test_results__/

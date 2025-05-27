@@ -111,7 +111,7 @@ test-slow:
 test-extended:
 	@echo "Running extended test suite (slow tests) with coverage..."
 	@cd $(CURDIR) && .venv/bin/python -m pytest -m "slow" --cov=app --cov-report=html --cov-report=term-missing -v
-	@echo "Extended tests complete. Coverage report generated in htmlcov/"
+	@echo "Extended tests complete. Coverage report generated in _htmlcov/"
 
 # Run Hyperliquid connector tests
 test-hyperliquid:
@@ -125,7 +125,7 @@ clean-results:
 	rm -rf tests/__test_results__
 	rm -rf tests/test_results
 	rm -rf test_results
-	rm -rf htmlcov
+	rm -rf _htmlcov
 	@echo "Test results cleaned up"
 
 # Clean old test results but keep the 5 most recent runs
@@ -148,7 +148,7 @@ clean:
 clean-logs:
 	@echo "Cleaning up all logs..."
 	@cd $(CURDIR) && .venv/bin/python -m tests.utils.cleanup_logs
-	@echo "Logs cleaned up. New logs will be stored in app/logs directory."
+	@echo "Logs cleaned up. New logs will be stored in app/_logs directory."
 
 # Restart command
 restart: stop start

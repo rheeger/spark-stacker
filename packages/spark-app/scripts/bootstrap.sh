@@ -2,7 +2,7 @@
 set -e
 
 # Create logs directory if it doesn't exist
-mkdir -p /app/logs
+mkdir -p /app/_logs
 
 # Process the config.json file and replace environment variables
 CONFIG_FILE=${CONFIG_FILE:-"/app/config.json"}

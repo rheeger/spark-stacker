@@ -86,7 +86,7 @@ Thumbs.db
 docker-compose.override.yml
 
 # Logs
-logs/
+_logs/
 *.log
 
 # Temporary files
@@ -95,7 +95,7 @@ logs/
 *~
 
 # Coverage reports
-htmlcov/
+_htmlcov/
 .coverage
 .coverage.*
 .cache

@@ -80,7 +80,7 @@ services:
     volumes:
       - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
       - /var/log:/var/log
-      - ../../../packages/spark-app/logs:/logs
+      - ../../../packages/spark-app/_logs:/logs
     command: -config.file=/etc/promtail/promtail-config.yml
     restart: unless-stopped
     depends_on:
@@ -137,7 +137,7 @@ services:
       dockerfile: monitoring/docker/log-metrics/Dockerfile
     container_name: log-metrics
     volumes:
-      - ../../../packages/spark-app/logs:/logs
+      - ../../../packages/spark-app/_logs:/logs
       - ../../../packages/shared:/config:ro
     environment:
       - LOG_DIR=/logs

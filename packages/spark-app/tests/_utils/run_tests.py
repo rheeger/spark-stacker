@@ -177,7 +177,7 @@ def run_tests(
         if process.returncode == 0:
             logger.info("Tests passed!")
             if coverage:
-                logger.info("Coverage report generated in htmlcov/ directory")
+                logger.info("Coverage report generated in _htmlcov/ directory")
             return True
         else:
             logger.error("Tests failed!")

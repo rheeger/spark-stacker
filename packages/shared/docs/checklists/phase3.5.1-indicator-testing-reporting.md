@@ -150,7 +150,7 @@ application.
 - [x] **4.8-A** Ensure the **quick-test run** (`pytest -m "not slow"`) completes in < 3 minutes on a
       typical dev laptop.
 - [x] **4.8-B** Document an extended test target (`pytest -m slow --cov=app`) that generates an
-      updated HTML coverage report in `htmlcov/`.
+      updated HTML coverage report in `_htmlcov/`.
 - [x] **4.8-C** Add a note in the README reminding contributors to execute `make test-quick` before
       pushing changes.
 

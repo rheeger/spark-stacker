@@ -6,10 +6,10 @@ Spark Stacker uses a unified logging system that captures detailed information a
 
 ## Log Directory Structure
 
-All logs are now stored centrally in the `packages/spark-app/logs` directory. Each application run creates a timestamped and uniquely identified subdirectory with the following structure:
+All logs are now stored centrally in the `packages/spark-app/_logs` directory. Each application run creates a timestamped and uniquely identified subdirectory with the following structure:
 
 ```
-packages/spark-app/logs/YYYY-MM-DD-HH-MM-SS_XXXXXXXX/
+packages/spark-app/_logs/YYYY-MM-DD-HH-MM-SS_XXXXXXXX/
 ├── spark_stacker.log         # Main application log
 ├── coinbase/                 # Connector specific directory
 │   ├── balance.log           # Balance operations log
@@ -24,6 +24,7 @@ packages/spark-app/logs/YYYY-MM-DD-HH-MM-SS_XXXXXXXX/
 ### Main Application Log (`spark_stacker.log`)
 
 Contains general application information including:
+
 - Startup and shutdown events
 - Configuration information
 - Exchange connections
@@ -41,6 +42,7 @@ Each connector (exchange) has its own set of logs:
 ## Log Format
 
 By default, logs use the following format:
+
 ```
 YYYY-MM-DD HH:MM:SS,ms - logger.name - LEVEL - Message
 ```
@@ -51,18 +53,18 @@ When structured logging is enabled, logs are output in JSON format for easier ma
 
 ### Via Local Filesystem
 
-Logs can be accessed directly in the `packages/spark-app/logs` directory.
+Logs can be accessed directly in the `packages/spark-app/_logs` directory.
 
 ### Via Docker
 
-If running in Docker, logs are mapped to the container at `/app/logs` and can be accessed using Docker commands:
+If running in Docker, logs are mapped to the container at `/app/_logs` and can be accessed using Docker commands:
 
 ```bash
 # View the main log file from the most recent run
-docker exec spark-stacker cat $(ls -t /app/logs | head -1)/spark_stacker.log
+docker exec spark-stacker cat $(ls -t /app/_logs | head -1)/spark_stacker.log
 
 # Tail the logs in real-time
-docker exec spark-stacker tail -f $(ls -t /app/logs | head -1)/spark_stacker.log
+docker exec spark-stacker tail -f $(ls -t /app/_logs | head -1)/spark_stacker.log
 ```
 
 ## Monitoring Integration
@@ -85,7 +87,7 @@ This removes all existing logs and ensures a clean start for the new logging sys
 
 ## Compatibility Notes
 
-For backward compatibility with monitoring tools, symbolic links are automatically created in the root `/logs` directory pointing to the corresponding log directories in `packages/spark-app/logs`.
+For backward compatibility with monitoring tools, symbolic links are automatically created in the root `/logs` directory pointing to the corresponding log directories in `packages/spark-app/_logs`.
 
 ## Configuring Logging
 

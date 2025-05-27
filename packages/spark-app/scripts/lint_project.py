@@ -25,7 +25,7 @@ EXCLUDE_DIRS = [
     ".venv",
     "__pycache__",
     ".pytest_cache",
-    "htmlcov",
+    "_htmlcov",
 ]
 
 

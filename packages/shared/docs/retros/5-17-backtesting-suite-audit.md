@@ -102,13 +102,13 @@ commits / checklist items. You should never tackle more than one checkpoint per 
 
 _Purpose: create a clean slate so later diffs are readable._
 
-| Checkpoint | Action                                                                                                                 | Acceptance Criteria                                               |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| 0-A        | Add `tests/test_results/` and `*.png` to `.gitignore`                                                                  | `git status` shows zero changes after running the harness locally |
-| 0-B        | Remove all committed artefacts (`git rm -r tests/test_results && git commit`)                                          | Repo size shrinks, `pytest` still passes                          |
-| 0-C        | Add `make clean-results` that deletes any stray artefacts in **developer** machines                                    | `make clean-results` removes the folder and exits with code 0     |
-| 0-D        | Generate a **baseline branch coverage report** (pytest-cov) and store it in `htmlcov/` (ignored) for future comparison | `coverage html` page renders locally                              |
-| 0-E        | **Quick test script:** create `make test-quick` that executes `pytest -m \"not slow\" --cov=app` on Python 3.11        | Script executes successfully and README documents its usage       |
+| Checkpoint | Action                                                                                                                  | Acceptance Criteria                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 0-A        | Add `tests/test_results/` and `*.png` to `.gitignore`                                                                   | `git status` shows zero changes after running the harness locally |
+| 0-B        | Remove all committed artefacts (`git rm -r tests/test_results && git commit`)                                           | Repo size shrinks, `pytest` still passes                          |
+| 0-C        | Add `make clean-results` that deletes any stray artefacts in **developer** machines                                     | `make clean-results` removes the folder and exits with code 0     |
+| 0-D        | Generate a **baseline branch coverage report** (pytest-cov) and store it in `_htmlcov/` (ignored) for future comparison | `coverage html` page renders locally                              |
+| 0-E        | **Quick test script:** create `make test-quick` that executes `pytest -m \"not slow\" --cov=app` on Python 3.11         | Script executes successfully and README documents its usage       |
 
 ---
 
@@ -205,11 +205,11 @@ _Purpose: scaffold everything needed for a new indicator with one command._
 
 _Purpose: codify expectations for fast feedback locally and thorough coverage on demand._
 
-| Checkpoint | Action                                                                                                                 | Acceptance Criteria                                     |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| 8-A        | Ensure the quick-test target (`pytest -m "not slow"`) completes in < 3 minutes on a typical developer machine.         | Stopwatch shows < 180 s.                                |
-| 8-B        | Document a full test target (`pytest -m slow --cov=app`) that generates an updated HTML coverage report in `htmlcov/`. | Coverage report refreshes without errors.               |
-| 8-C        | Add README guidance reminding contributors to run `make test-quick` before opening a PR.                               | README section "Testing" lists the command and purpose. |
+| Checkpoint | Action                                                                                                                  | Acceptance Criteria                                     |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 8-A        | Ensure the quick-test target (`pytest -m "not slow"`) completes in < 3 minutes on a typical developer machine.          | Stopwatch shows < 180 s.                                |
+| 8-B        | Document a full test target (`pytest -m slow --cov=app`) that generates an updated HTML coverage report in `_htmlcov/`. | Coverage report refreshes without errors.               |
+| 8-C        | Add README guidance reminding contributors to run `make test-quick` before opening a PR.                                | README section "Testing" lists the command and purpose. |
 
 ---
 
