@@ -28,15 +28,25 @@ class IndicatorFactory:
     """
 
     # Registry of available indicator types
-    _indicator_registry: Dict[str, Type[BaseIndicator]] = {
-        "rsi": RSIIndicator,
-        "macd": MACDIndicator,
-        "bollinger": BollingerBandsIndicator,
-        "ma": MovingAverageIndicator,
-        "adaptive_supertrend": AdaptiveSupertrendIndicator,
-        "adaptive_trend_finder": AdaptiveTrendFinderIndicator,
-        "ultimate_ma": UltimateMAIndicator,
-    }
+    _indicator_registry: Dict[str, Type[BaseIndicator]] = {}
+
+    @classmethod
+    def register_defaults(cls) -> None:
+        """
+        Register default indicator types.
+
+        This method is called automatically during module import to register
+        all the default indicators. New indicators should be added here.
+        """
+        cls._indicator_registry.update({
+            "rsi": RSIIndicator,
+            "macd": MACDIndicator,
+            "bollinger": BollingerBandsIndicator,
+            "ma": MovingAverageIndicator,
+            "adaptive_supertrend": AdaptiveSupertrendIndicator,
+            "adaptive_trend_finder": AdaptiveTrendFinderIndicator,
+            "ultimate_ma": UltimateMAIndicator,
+        })
 
     @classmethod
     def create_indicator(
@@ -160,3 +170,7 @@ class IndicatorFactory:
             List of indicator type names
         """
         return list(cls._indicator_registry.keys())
+
+
+# Register default indicators when module is imported
+IndicatorFactory.register_defaults()

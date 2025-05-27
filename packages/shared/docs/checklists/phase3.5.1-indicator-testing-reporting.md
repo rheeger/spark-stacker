@@ -141,9 +141,9 @@ application.
 
 #### 4.7 Indicator Onboarding Template
 
-- [ ] **4.7-A** Implement `scripts/new_indicator.sh <Name>` scaffolder
-- [ ] **4.7-B** Auto-insert import into `IndicatorFactory.register_defaults()`
-- [ ] **4.7-C** Update CONTRIBUTING.md with onboarding steps
+- [x] **4.7-A** Implement `scripts/new_indicator.sh <Name>` scaffolder
+- [x] **4.7-B** Auto-insert import into `IndicatorFactory.register_defaults()`
+- [x] **4.7-C** Update CONTRIBUTING.md with onboarding steps
 
 #### 4.8 Test-Suite Strategy
 
