@@ -120,7 +120,7 @@ def generate_price_chart(
                         marker=dict(
                             symbol='triangle-up' if trade.get('side', 'long') == 'long' else 'triangle-down',
                             size=10,
-                            color='green' if trade.get('side', 'long') == 'long' else 'red',
+                            color='orange',  # Changed to orange for better visibility
                         ),
                         name='Entry',
                         showlegend=not entry_legend_added,  # Only show legend for first entry
@@ -147,7 +147,7 @@ def generate_price_chart(
                         marker=dict(
                             symbol='circle',
                             size=10,
-                            color='red' if trade.get('side', 'long') == 'long' else 'green',
+                            color='purple',  # Changed to purple for better visibility
                         ),
                         name='Exit',
                         showlegend=not exit_legend_added,  # Only show legend for first exit
@@ -243,46 +243,61 @@ def generate_equity_curve(
         equity_df = pd.DataFrame(trade_data)
         equity_df = equity_df.sort_values('date')
 
-        # Calculate cumulative P&L and equity
+        # Calculate cumulative P&L and equity as percentage of initial capital
         equity_df['cumulative_pnl'] = equity_df['pnl'].cumsum()
-        equity_df['equity'] = initial_capital + equity_df['cumulative_pnl']
+        equity_df['equity_absolute'] = initial_capital + equity_df['cumulative_pnl']
+        equity_df['equity_percentage'] = (equity_df['equity_absolute'] / initial_capital) * 100
 
-        # Add maximum drawdown calculation
-        equity_df['peak'] = equity_df['equity'].cummax()
-        equity_df['drawdown'] = (equity_df['equity'] - equity_df['peak']) / equity_df['peak'] * 100
+        # Add maximum drawdown calculation using percentage equity
+        equity_df['peak_percentage'] = equity_df['equity_percentage'].cummax()
+        equity_df['drawdown'] = ((equity_df['equity_percentage'] - equity_df['peak_percentage']) / equity_df['peak_percentage']) * 100
+
+        # For backward compatibility, keep the absolute equity column as 'equity'
+        equity_df['equity'] = equity_df['equity_absolute']
 
         # Create the equity curve plot
         fig = go.Figure()
 
-        # Add equity curve line
+        # Add equity curve line using percentage values
         fig.add_trace(
             go.Scatter(
                 x=equity_df['date'],
-                y=equity_df['equity'],
+                y=equity_df['equity_percentage'],
                 mode='lines',
                 name='Equity',
-                line=dict(color='blue', width=2)
+                line=dict(color='blue', width=2),
+                hovertemplate='Date: %{x}<br>Account Value: %{y:.2f}%<extra></extra>'
             )
         )
 
-        # Add horizontal line for initial capital
+        # Add horizontal line for initial capital at 100%
         fig.add_hline(
-            y=initial_capital,
+            y=100,
             line_dash="dash",
             line_color="gray",
-            annotation_text=f"Initial Capital: ${initial_capital}"
+            annotation_text="Initial Capital: 100%"
         )
 
         # Update layout
         fig.update_layout(
             title="Equity Curve",
             xaxis_title="Date",
-            yaxis_title="Equity ($)",
+            yaxis_title="Account Value (%)",
             height=600,
             autosize=True,
             template="plotly_white",
             hovermode="x unified",
-            margin=dict(l=50, r=50, t=50, b=50)
+            margin=dict(l=50, r=50, t=50, b=50),
+            yaxis=dict(
+                tickformat=".1f",
+                ticksuffix="%",
+                # Always start from 0% (complete loss) and scale up as needed
+                range=[
+                    0,  # Always start from 0% (complete loss)
+                    max(120, equity_df['equity_percentage'].max() + 10)  # Scale up to at least 120% or 10% above max
+                ],
+                dtick=10  # Show tick marks every 10%
+            )
         )
 
         # Save as HTML file with responsive configuration
@@ -339,7 +354,8 @@ def generate_drawdown_chart(
                 mode='lines',
                 name='Drawdown',
                 line=dict(color='red', width=2),
-                fill='tozeroy'  # Fill area to the x-axis
+                fill='tozeroy',  # Fill area to the x-axis
+                hovertemplate='Date: %{x}<br>Drawdown: %{y:.2f}%<extra></extra>'
             )
         )
 
@@ -357,7 +373,8 @@ def generate_drawdown_chart(
                     marker=dict(size=10, color='black'),
                     text=[f"{max_drawdown_value:.2f}%"],
                     textposition="bottom center",
-                    name='Max Drawdown'
+                    name='Max Drawdown',
+                    hovertemplate='Date: %{x}<br>Max Drawdown: %{y:.2f}%<extra></extra>'
                 )
             )
 
@@ -367,14 +384,19 @@ def generate_drawdown_chart(
                 y=max_drawdown_value,
                 text=f"Max DD: {max_drawdown_value:.2f}%",
                 showarrow=True,
-                arrowhead=1
+                arrowhead=1,
+                arrowcolor="black",
+                bgcolor="white",
+                bordercolor="black",
+                borderwidth=1
             )
 
         # Add horizontal line at 0%
         fig.add_hline(
             y=0,
             line_dash="solid",
-            line_color="gray"
+            line_color="gray",
+            annotation_text="Break-even: 0%"
         )
 
         # Update layout
@@ -385,7 +407,16 @@ def generate_drawdown_chart(
             height=500,
             autosize=True,
             template="plotly_white",
-            yaxis=dict(tickformat=".2f"),  # Format y-axis as percentage
+            yaxis=dict(
+                tickformat=".1f",
+                ticksuffix="%",
+                # Always start from -100% (complete loss) and scale up
+                range=[
+                    -100,  # Always start from -100% (complete loss)
+                    5  # End at +5% to show clearly above the zero line
+                ],
+                dtick=10  # Show tick marks every 10%
+            ),
             hovermode="x unified",
             margin=dict(l=50, r=50, t=50, b=50)
         )

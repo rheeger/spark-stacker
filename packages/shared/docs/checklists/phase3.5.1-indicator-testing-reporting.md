@@ -200,3 +200,14 @@ After completing the reporting system:
 1. 🔜 Use reports to select top 3 most predictable indicator strategies for live testing
 2. 🔜 Consider automating regular report generation
 3. 🔜 Evaluate the need for more advanced visualizations based on user feedback
+
+## Additional Improvements Made
+
+- [x] **Converted equity and drawdown curves to percentage-based display**
+  - [x] Equity curve now shows account value as percentage starting at 100%
+  - [x] Drawdown chart enhanced with better percentage formatting
+  - [x] Updated hover templates and annotations for clarity
+  - [x] **Set proper y-axis scales for full context**
+    - [x] Equity curve: Always shows 0% to 120%+ scale (0% = complete loss, 100% = starting capital)
+    - [x] Drawdown chart: Always shows -100% to +5% scale (-100% = complete loss, 0% = break-even)
+  - [x] Verified all tests pass with the new percentage-based calculations

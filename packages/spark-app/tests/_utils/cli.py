@@ -70,6 +70,9 @@ from app.backtesting.reporting.generate_report import \
 from app.backtesting.reporting.generator import generate_indicator_report
 from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.indicators.indicator_factory import IndicatorFactory
+from app.risk_management.position_sizing import (PositionSizer,
+                                                 PositionSizingConfig)
+from app.utils.config import ConfigManager
 from app.utils.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -1543,6 +1546,48 @@ def compare(
         csv_data_source = CSVDataSource(data_dir=data_dir)
         data_manager.register_data_source("default", csv_data_source)
 
+        # Load configuration for position sizing
+        try:
+            # Try to load config from shared config path first
+            shared_config_path = os.path.join(spark_app_dir, "..", "shared", "config.json")
+            if os.path.exists(shared_config_path):
+                config_manager = ConfigManager(config_path=shared_config_path)
+            else:
+                # Fall back to app config path
+                app_config_path = os.path.join(spark_app_dir, "config.json")
+                config_manager = ConfigManager(config_path=app_config_path if os.path.exists(app_config_path) else None)
+
+            app_config = config_manager.load()
+
+            # Create position sizer from config
+            position_config = {}
+            if hasattr(app_config, 'position_sizing'):
+                position_config = app_config.position_sizing
+
+            # Override with CLI-specific defaults for comparison consistency
+            position_config.update({
+                'max_position_size_usd': getattr(app_config, 'max_position_size_usd', 1000.0),
+                'min_position_size_usd': 10.0,
+                'max_leverage': getattr(app_config, 'max_leverage', 1.0)
+            })
+
+            sizing_config = PositionSizingConfig.from_config_dict(position_config)
+            position_sizer = PositionSizer(sizing_config)
+
+            logger.info(f"Using position sizing method: {sizing_config.method.value}")
+            logger.info(f"Position sizing config: USD amount=${sizing_config.fixed_usd_amount}, Max=${sizing_config.max_position_size_usd}")
+
+        except Exception as e:
+            logger.warning(f"Failed to load position sizing config: {e}, using defaults")
+            # Fall back to default configuration
+            default_config = PositionSizingConfig.from_config_dict({
+                'position_sizing_method': 'fixed_usd',
+                'fixed_usd_amount': 1000.0,
+                'max_position_size_usd': 1000.0,
+                'min_position_size_usd': 10.0
+            })
+            position_sizer = PositionSizer(default_config)
+
         # Initialize backtest engine
         backtest_engine = BacktestEngine(
             data_manager=data_manager,
@@ -1551,8 +1596,11 @@ def compare(
             taker_fee=0.0005
         )
 
-        # Create manager
-        manager = IndicatorBacktestManager(backtest_engine=backtest_engine)
+        # Create manager with position sizer
+        manager = IndicatorBacktestManager(
+            backtest_engine=backtest_engine,
+            position_sizer=position_sizer
+        )
         manager.set_output_directory(output_dir)
 
         # Standardize symbol format for filename matching

@@ -9,6 +9,8 @@ from matplotlib.figure import Figure
 
 from ..connectors.base_connector import OrderSide, OrderType
 from ..indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from ..risk_management.position_sizing import (PositionSizer,
+                                               PositionSizingConfig)
 from .backtest_engine import BacktestEngine, BacktestResult
 from .indicator_config_loader import IndicatorConfigLoader
 
@@ -27,17 +29,33 @@ class IndicatorBacktestManager:
     with the backtesting engine, running tests, and analyzing results.
     """
 
-    def __init__(self, backtest_engine: BacktestEngine):
+    def __init__(self, backtest_engine: BacktestEngine, position_sizer: Optional[PositionSizer] = None):
         """
         Initialize the indicator backtest manager.
 
         Args:
             backtest_engine: Instance of the BacktestEngine
+            position_sizer: Optional position sizer. If None, uses default fixed USD sizing
         """
         self.backtest_engine = backtest_engine
         self.indicators: Dict[str, BaseIndicator] = {}
         self.results: Dict[str, BacktestResult] = {}
         self.output_dir: Path = Path("./backtest_results")  # Default output directory
+
+        # Set up position sizer
+        if position_sizer is None:
+            # Default configuration for backtesting
+            default_config = PositionSizingConfig.from_config_dict({
+                'position_sizing_method': 'fixed_usd',
+                'fixed_usd_amount': 1000.0,
+                'max_position_size_usd': 10000.0,
+                'min_position_size_usd': 50.0
+            })
+            self.position_sizer = PositionSizer(default_config)
+        else:
+            self.position_sizer = position_sizer
+
+        logger.info(f"Initialized IndicatorBacktestManager with position sizing method: {self.position_sizer.config.method.value}")
 
     def load_indicators_from_config(self, config_path: Union[str, Path]) -> None:
         """
@@ -159,19 +177,26 @@ class IndicatorBacktestManager:
                                 current_candle=current_candle
                             )
 
-                    # Calculate position size based on available balance
-                    balance = simulation_engine.get_balance("USD")
-                    position_size = (balance * 0.95) / current_candle["close"]  # Use 95% of available balance
-
-                    # Open long position
-                    simulation_engine.place_order(
-                        symbol=symbol,
-                        side=OrderSide.BUY,
-                        order_type=OrderType.MARKET,
-                        amount=position_size,
-                        timestamp=current_candle["timestamp"],
-                        current_candle=current_candle
+                    # Calculate position size using the configured position sizer
+                    current_equity = simulation_engine.calculate_equity({symbol: current_candle["close"]})
+                    current_price = current_candle["close"]
+                    position_size = self.position_sizer.calculate_position_size(
+                        current_equity=current_equity,
+                        current_price=current_price,
+                        signal_strength=signal.strength if hasattr(signal, 'strength') else 1.0
                     )
+
+                    if position_size > 0:
+                        # Open long position
+                        simulation_engine.place_order(
+                            symbol=symbol,
+                            side=OrderSide.BUY,
+                            order_type=OrderType.MARKET,
+                            amount=position_size,
+                            timestamp=current_candle["timestamp"],
+                            current_candle=current_candle
+                        )
+                        logger.debug(f"Opened LONG position: {position_size:.6f} units at ${current_price:.2f}")
 
                 elif signal.direction == SignalDirection.SELL and position_side != "SHORT":
                     # Close any existing long position
@@ -188,19 +213,26 @@ class IndicatorBacktestManager:
                                 current_candle=current_candle
                             )
 
-                    # Calculate position size based on available balance
-                    balance = simulation_engine.get_balance("USD")
-                    position_size = (balance * 0.95) / current_candle["close"]  # Use 95% of available balance
-
-                    # Open short position
-                    simulation_engine.place_order(
-                        symbol=symbol,
-                        side=OrderSide.SELL,
-                        order_type=OrderType.MARKET,
-                        amount=position_size,
-                        timestamp=current_candle["timestamp"],
-                        current_candle=current_candle
+                    # Calculate position size using the configured position sizer
+                    current_equity = simulation_engine.calculate_equity({symbol: current_candle["close"]})
+                    current_price = current_candle["close"]
+                    position_size = self.position_sizer.calculate_position_size(
+                        current_equity=current_equity,
+                        current_price=current_price,
+                        signal_strength=signal.strength if hasattr(signal, 'strength') else 1.0
                     )
+
+                    if position_size > 0:
+                        # Open short position
+                        simulation_engine.place_order(
+                            symbol=symbol,
+                            side=OrderSide.SELL,
+                            order_type=OrderType.MARKET,
+                            amount=position_size,
+                            timestamp=current_candle["timestamp"],
+                            current_candle=current_candle
+                        )
+                        logger.debug(f"Opened SHORT position: {position_size:.6f} units at ${current_price:.2f}")
 
         return indicator_strategy
 
