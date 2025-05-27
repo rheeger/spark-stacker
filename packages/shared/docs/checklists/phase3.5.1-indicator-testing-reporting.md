@@ -1,13 +1,3 @@
-Run cd packages/spark-app ImportError while loading conftest
-'/home/runner/work/spark-stacker/spark-stacker/packages/spark-app/tests/conftest.py'.
-tests/conftest.py:77: in <module> from app.core.trading_engine import TradingEngine
-app/core/trading_engine.py:21: in <module> from app.utils.config import AppConfig as Config E
-ModuleNotFoundError: No module named 'app.utils.config' Initializing logging_setup.py app_dir:
-/home/runner/work/spark-stacker/spark-stacker/packages/spark-app/app Logs directory path:
-/home/runner/work/spark-stacker/spark-stacker/packages/spark-app/logs In test mode - using dummy log
-directory: /tmp/test_logs Error: Process completed with exit code 4.# Phase 3.5.1: Simplified
-Indicator Performance Reporting
-
 ## Overview
 
 This phase focuses on building clear, digestible static HTML reports for our trading indicators
@@ -158,52 +148,50 @@ application.
 
 _Once **all** 4.x checkpoints are ✅ the original feature-work can resume._
 
-### 5. Add Comparative Analysis (BLOCKED — awaits 4.x)
+### 5. Add Comparative Analysis
 
-_No action until Back-Testing Suite Refactor completes._
+- [x] **Create multi-indicator report template**
+  - [x] `packages/spark-app/app/backtesting/reporting/templates/comparison.html`
+  - [x] Design comparison table for key metrics
+- [x] **Implement comparison generator**
+  - [x] `generate_comparison_report(indicator_results, output_file)`
+  - [x] `create_metrics_table(indicator_results)`
+  - [x] Market condition classifier (bull/bear/sideways)
 
-- [ ] **Create multi-indicator report template**
-  - [ ] `packages/spark-app/app/backtesting/reporting/templates/comparison.html`
-  - [ ] Design comparison table for key metrics
-- [ ] **Implement comparison generator**
-  - [ ] `generate_comparison_report(indicator_results, output_file)`
-  - [ ] `create_metrics_table(indicator_results)`
-  - [ ] Market condition classifier (bull/bear/sideways)
+### 6. Documentation
 
-### 6. Documentation (BLOCKED — awaits 4.x)
-
-- [ ] **Create minimal documentation**
-  - [ ] `packages/spark-app/app/backtesting/reporting/README.md`
-  - [ ] Document CLI usage / metrics / screenshots
+- [x] **Create minimal documentation**
+  - [x] `packages/spark-app/app/backtesting/reporting/README.md`
+  - [x] Document CLI usage / metrics / screenshots
 
 ## Validation Criteria
 
-- [ ] **Report generation works correctly**
+- [x] **Report generation works correctly**
 
-  - [ ] Reports generate without errors from backtesting results
-  - [ ] Visualizations accurately represent the data
-  - [ ] Reports display correctly in modern browsers
-  - [ ] Generation process is documented and repeatable
+  - [x] Reports generate without errors from backtesting results
+  - [x] Visualizations accurately represent the data
+  - [x] Reports display correctly in modern browsers
+  - [x] Generation process is documented and repeatable
 
-- [ ] **Reports contain all essential information**
-  - [ ] Key performance metrics are clearly presented
-  - [ ] Charts are readable and properly labeled
-  - [ ] Trade list provides useful filtering capabilities
-  - [ ] Reports are usable without interactive features
+- [x] **Reports contain all essential information**
+  - [x] Key performance metrics are clearly presented
+  - [x] Charts are readable and properly labeled
+  - [x] Trade list provides useful filtering capabilities
+  - [x] Reports are usable without interactive features
 
 ## Expected Outcomes
 
-1. [ ] Python-based static HTML report generation system
-2. [ ] Clean, readable reports with essential metrics and visualizations
-3. [ ] Ability to compare indicators using simple side-by-side reports
-4. [ ] Documentation for generating and interpreting reports
+1. [x] Python-based static HTML report generation system
+2. [x] Clean, readable reports with essential metrics and visualizations
+3. [x] Ability to compare indicators using simple side-by-side reports
+4. [x] Documentation for generating and interpreting reports
 
 ## Deliverables
 
-1. [ ] Python module for report generation in spark-app package
-2. [ ] HTML/CSS templates for standard reports
-3. [ ] Sample reports for all current indicators using real data
-4. [ ] User guide for generating and interpreting reports
+1. [x] Python module for report generation in spark-app package
+2. [x] HTML/CSS templates for standard reports
+3. [x] Sample reports for all current indicators using real data
+4. [x] User guide for generating and interpreting reports
 
 ## Next Steps
 

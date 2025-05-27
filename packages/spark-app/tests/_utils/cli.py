@@ -1,6 +1,39 @@
 #!/usr/bin/env python3
 """
 Spark-App CLI - Unified command line interface for backtest operations
+
+This CLI provides comprehensive backtesting and indicator comparison capabilities:
+
+Single Indicator Commands:
+    demo <indicator>           - Run demo with synthetic data
+    real-data <indicator>      - Run backtest with real market data
+    demo-macd                  - Quick MACD demo
+
+Multi-Indicator Comparison:
+    compare <indicators>       - Compare multiple indicators side-by-side
+    compare-popular           - Quick comparison of RSI, MACD, and Bollinger Bands
+
+Utility Commands:
+    list-indicators           - Show all available indicators
+    backtest                  - Custom backtest configuration
+
+Examples:
+    # Single indicator demo
+    python cli.py demo RSI
+
+    # Real data backtest
+    python cli.py real-data MACD --symbol BTC-USD --days 30
+
+    # Compare multiple indicators with demo data
+    python cli.py compare "RSI,MACD,BOLLINGER" --symbol ETH-USD
+
+    # Compare with real data
+    python cli.py compare "RSI,MACD,BOLLINGER" --use-real-data --days 14
+
+    # Quick popular comparison
+    python cli.py compare-popular --use-real-data
+
+All commands generate beautiful HTML reports and automatically open them in your browser.
 """
 import logging
 import os
@@ -1394,6 +1427,332 @@ def demo_macd(
         # Ensure proper cleanup
         cleanup_resources()
         logger.debug("Demo MACD command cleanup completed")
+
+
+@cli.command(name="compare-popular")
+@click.option("--symbol", default="ETH-USD", help="Trading symbol")
+@click.option("--timeframe", default="1h", help="Timeframe for analysis")
+@click.option("--output-dir", help="Directory to save comparison results")
+@click.option("--use-real-data", is_flag=True, help="Use real market data instead of synthetic demo data")
+@click.option("--testnet", is_flag=True, default=True, help="Use Hyperliquid testnet (when using real data)")
+def compare_popular(
+    symbol: str,
+    timeframe: str,
+    output_dir: Optional[str],
+    use_real_data: bool,
+    testnet: bool,
+):
+    """Quick comparison of popular indicators: RSI, MACD, and Bollinger Bands."""
+    try:
+        # This is equivalent to calling compare with popular indicators
+        ctx = click.get_current_context()
+        ctx.invoke(
+            compare,
+            indicator_names="RSI,MACD,BOLLINGER",
+            symbol=symbol,
+            timeframe=timeframe,
+            output_dir=output_dir,
+            use_real_data=use_real_data,
+            testnet=testnet,
+            days=10
+        )
+    finally:
+        # Ensure proper cleanup
+        cleanup_resources()
+        logger.debug("Compare popular command cleanup completed")
+
+
+@cli.command()
+@click.argument("indicator_names", required=True)
+@click.option("--symbol", default="ETH-USD", help="Trading symbol")
+@click.option("--timeframe", default="1h", help="Timeframe for analysis")
+@click.option("--days", default=10, help="Number of days of historical data (for real data)")
+@click.option("--output-dir", help="Directory to save comparison results")
+@click.option("--use-real-data", is_flag=True, help="Use real market data instead of synthetic demo data")
+@click.option("--testnet", is_flag=True, default=True, help="Use Hyperliquid testnet (when using real data)")
+def compare(
+    indicator_names: str,
+    symbol: str,
+    timeframe: str,
+    days: int,
+    output_dir: Optional[str],
+    use_real_data: bool,
+    testnet: bool,
+):
+    """Compare multiple indicators side-by-side with individual and comparison reports.
+
+    INDICATOR_NAMES should be comma-separated list, e.g., "RSI,MACD,BOLLINGER"
+    """
+    logger.info(f"Running comparison for indicators: {indicator_names}")
+
+    try:
+        # Parse indicator names
+        indicators = [name.strip().upper() for name in indicator_names.split(",")]
+        if len(indicators) < 2:
+            logger.error("At least 2 indicators are required for comparison")
+            print("❌ Error: At least 2 indicators are required for comparison")
+            sys.exit(1)
+
+        logger.info(f"Comparing {len(indicators)} indicators: {indicators}")
+
+        # Validate all indicators exist
+        available_indicators = [name.upper() for name in IndicatorFactory.get_available_indicators()]
+        invalid_indicators = [ind for ind in indicators if ind not in available_indicators]
+        if invalid_indicators:
+            logger.error(f"Invalid indicators: {invalid_indicators}")
+            print(f"❌ Error: Invalid indicators: {invalid_indicators}")
+            print(f"Available indicators: {', '.join(available_indicators)}")
+            sys.exit(1)
+
+        # Set output directory - use default if none provided
+        if not output_dir:
+            output_dir = get_default_output_dir()
+            logger.info(f"Using default output directory: {output_dir}")
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Prepare data source
+        if use_real_data:
+            logger.info(f"Using real market data from Hyperliquid (testnet={testnet})")
+            data_dir = os.path.join(spark_app_dir, "tests", "__test_data__", "market_data", "real")
+            os.makedirs(data_dir, exist_ok=True)
+
+            # Fetch real data
+            data_file_path = fetch_hyperliquid_data(
+                symbol=symbol,
+                timeframe=timeframe,
+                days=days,
+                data_dir=data_dir,
+                testnet=testnet
+            )
+
+            if not data_file_path or not os.path.exists(data_file_path):
+                logger.error("Failed to fetch real market data")
+                sys.exit(1)
+        else:
+            logger.info("Using synthetic demo data")
+            data_dir = os.path.join(spark_app_dir, "tests", "__test_data__", "market_data", "demo")
+            os.makedirs(data_dir, exist_ok=True)
+
+            # Create demo data
+            file_symbol = symbol.replace("/", "_").replace("-", "_")
+            data_file_path = create_demo_data_file(data_dir, file_symbol, timeframe)
+
+        # Initialize data manager
+        data_manager = DataManager(data_dir=data_dir)
+        csv_data_source = CSVDataSource(data_dir=data_dir)
+        data_manager.register_data_source("default", csv_data_source)
+
+        # Initialize backtest engine
+        backtest_engine = BacktestEngine(
+            data_manager=data_manager,
+            initial_balance={"USD": 10000.0},
+            maker_fee=0.0001,
+            taker_fee=0.0005
+        )
+
+        # Create manager
+        manager = IndicatorBacktestManager(backtest_engine=backtest_engine)
+        manager.set_output_directory(output_dir)
+
+        # Standardize symbol format for filename matching
+        file_symbol = symbol.replace("/", "_").replace("-", "_")
+
+        # Run backtests for all indicators
+        indicator_results = []
+        individual_report_paths = []
+
+        print(f"\n🚀 Running backtests for {len(indicators)} indicators...")
+
+        for i, indicator_name in enumerate(indicators, 1):
+            print(f"\n📊 [{i}/{len(indicators)}] Running backtest for {indicator_name}...")
+
+            try:
+                # Run indicator backtest
+                result_paths = manager.run_indicator_backtest(
+                    indicator_name=indicator_name,
+                    symbol=file_symbol,
+                    timeframe=timeframe,
+                    generate_report=False  # We'll generate our own reports
+                )
+
+                # Get backtest data and results
+                backtest_data = data_manager.get_data(source_name="default", symbol=file_symbol, interval=timeframe)
+                backtest_result = manager.results.get(indicator_name)
+
+                if not backtest_result:
+                    logger.error(f"No backtest result found for {indicator_name}")
+                    continue
+
+                # Get raw trades
+                raw_trades = backtest_result.trades
+
+                # Get indicator configuration
+                indicator_instance = manager.get_indicator(indicator_name)
+                indicator_config = extract_indicator_config(indicator_name, indicator_instance)
+
+                # Generate individual HTML report
+                html_report_path = generate_html_report_for_cli(
+                    indicator_name=indicator_name,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    backtest_data=backtest_data,
+                    raw_trades=raw_trades,
+                    results_dir=output_dir,
+                    indicator_config=indicator_config
+                )
+
+                individual_report_paths.append({
+                    "name": indicator_name,
+                    "path": html_report_path
+                })
+
+                # Prepare data for comparison report
+                trades = process_raw_trades_to_position_trades(raw_trades)
+
+                # Calculate metrics
+                total_trades = len(trades)
+                winning_trades = len([t for t in trades if t.get("realized_pnl", 0) > 0])
+                losing_trades = len([t for t in trades if t.get("realized_pnl", 0) <= 0])
+                total_pnl = sum(t.get("realized_pnl", 0) for t in trades)
+                win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+                profit_factor = calculate_profit_factor(trades)
+
+                initial_balance = 10000.0
+                total_return = (total_pnl / initial_balance) * 100
+                max_drawdown = calculate_max_drawdown_from_trades(trades, initial_balance)
+                sharpe_ratio = calculate_sharpe_ratio_from_trades(trades, initial_balance)
+
+                # Format dates
+                start_date = datetime.fromtimestamp(backtest_data['timestamp'].iloc[0] / 1000).strftime("%Y-%m-%d")
+                end_date = datetime.fromtimestamp(backtest_data['timestamp'].iloc[-1] / 1000).strftime("%Y-%m-%d")
+
+                # Create result dictionary for comparison
+                indicator_result = {
+                    "indicator_name": indicator_name,
+                    "name": indicator_name,  # Alias for template compatibility
+                    "market": symbol,
+                    "timeframe": timeframe,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "trades": trades,
+                    "config": indicator_config,
+                    "metrics": {
+                        "total_trades": total_trades,
+                        "winning_trades": winning_trades,
+                        "losing_trades": losing_trades,
+                        "win_rate": win_rate,
+                        "profit_factor": profit_factor,
+                        "max_drawdown": max_drawdown,
+                        "sharpe": sharpe_ratio,
+                        "total_return": total_return
+                    }
+                }
+
+                indicator_results.append(indicator_result)
+                print(f"✅ {indicator_name}: {total_trades} trades, {win_rate:.1f}% win rate, {total_return:.1f}% return")
+
+            except Exception as e:
+                logger.error(f"Failed to run backtest for {indicator_name}: {str(e)}")
+                print(f"❌ Failed to run backtest for {indicator_name}: {str(e)}")
+                import traceback
+                logger.error(f"Backtest error traceback:\n{traceback.format_exc()}")
+                continue
+
+        if not indicator_results:
+            logger.error("No successful backtests to compare")
+            print("❌ No successful backtests to compare")
+            sys.exit(1)
+
+        # Generate comparison report
+        print(f"\n📋 Generating comparison report...")
+
+        try:
+            # Extract price data for market condition analysis
+            price_data = backtest_data['close'].tolist() if 'close' in backtest_data.columns else None
+
+            # Import the comparison report generator
+            from app.backtesting.reporting.generator import \
+                generate_comparison_report
+
+            comparison_report_path = generate_comparison_report(
+                indicator_results=indicator_results,
+                output_dir=output_dir,
+                market_price_data=price_data
+            )
+
+            print(f"✅ Comparison report generated: {comparison_report_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to generate comparison report: {str(e)}")
+            print(f"❌ Failed to generate comparison report: {str(e)}")
+            import traceback
+            logger.error(f"Comparison report error traceback:\n{traceback.format_exc()}")
+            comparison_report_path = None
+
+        # Print results summary
+        print(f"\n🎯 Comparison completed successfully!")
+        print(f"📊 Data source: {'Hyperliquid ' + ('testnet' if testnet else 'mainnet') if use_real_data else 'Synthetic demo data'}")
+        print(f"📈 Symbol: {symbol}")
+        print(f"⏱️  Timeframe: {timeframe}")
+        if use_real_data:
+            print(f"📅 Days of data: {days}")
+        print(f"🔍 Indicators: {', '.join([r['indicator_name'] for r in indicator_results])}")
+
+        # Open all reports in browser
+        all_report_paths = []
+
+        # Add individual reports
+        for report in individual_report_paths:
+            absolute_path = os.path.abspath(report["path"])
+            all_report_paths.append(("Individual", report["name"], absolute_path))
+            print(f"📋 {report['name']} Report: {absolute_path}")
+
+        # Add comparison report
+        if comparison_report_path:
+            absolute_comparison_path = os.path.abspath(comparison_report_path)
+            all_report_paths.append(("Comparison", "All Indicators", absolute_comparison_path))
+            print(f"📊 Comparison Report: {absolute_comparison_path}")
+
+        # Open reports in browser with delays to prevent overwhelming
+        print(f"\n🌐 Opening {len(all_report_paths)} reports in browser...")
+
+        for i, (report_type, name, path) in enumerate(all_report_paths):
+            print(f"[{i+1}/{len(all_report_paths)}] Opening {report_type} - {name}...")
+
+            browser_success = safe_open_browser(f"file://{path}", timeout=3.0)
+            if not browser_success:
+                print(f"⚠️  Failed to open {report_type} report for {name} automatically")
+
+            # Small delay between browser opens to prevent issues
+            if i < len(all_report_paths) - 1:
+                time.sleep(1)
+
+        print(f"\n🎉 Comparison completed successfully! All reports generated and opened.")
+        print(f"💾 All files saved to: {output_dir}")
+
+        # Summary statistics
+        best_return = max(indicator_results, key=lambda x: x['metrics']['total_return'])
+        best_win_rate = max(indicator_results, key=lambda x: x['metrics']['win_rate'])
+        best_sharpe = max(indicator_results, key=lambda x: x['metrics']['sharpe'])
+
+        print(f"\n🏆 Top Performers:")
+        print(f"   📈 Best Return: {best_return['indicator_name']} ({best_return['metrics']['total_return']:.1f}%)")
+        print(f"   🎯 Best Win Rate: {best_win_rate['indicator_name']} ({best_win_rate['metrics']['win_rate']:.1f}%)")
+        print(f"   ⚡ Best Sharpe: {best_sharpe['indicator_name']} ({best_sharpe['metrics']['sharpe']:.2f})")
+
+        print(f"\n✨ CLI will now exit.")
+
+    except Exception as e:
+        logger.error(f"Comparison failed: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        cleanup_resources()
+        sys.exit(1)
+    finally:
+        # Ensure proper cleanup
+        cleanup_resources()
+        logger.debug("Compare command cleanup completed")
 
 
 @cli.command()

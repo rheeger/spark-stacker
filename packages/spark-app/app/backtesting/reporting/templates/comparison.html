@@ -275,8 +275,8 @@
                 <td
                   class="{% if metric.best_indicator == indicator.name %}best-value{% elif metric.worst_indicator == indicator.name %}worst-value{% endif %}"
                 >
-                  {{ metric.values[indicator.name] }} {% if metric.units %}{{
-                  metric.units }}{% endif %}
+                  {{ metric.indicator_values[indicator.name] }} {% if
+                  metric.units %}{{ metric.units }}{% endif %}
                 </td>
                 {% endfor %}
                 <td class="best-value">

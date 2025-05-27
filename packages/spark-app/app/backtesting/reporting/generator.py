@@ -483,7 +483,7 @@ def create_metrics_table(indicator_results: List[Dict[str, Any]]) -> Dict[str, A
             "key": metric_key,
             "display_name": metric_def["display_name"],
             "units": metric_def["units"],
-            "values": values,
+            "indicator_values": values,  # Changed from 'values' to avoid conflict with dict.values()
             "best_indicator": best_indicator,
             "worst_indicator": worst_indicator,
             "best_value": best_value_formatted
@@ -579,6 +579,8 @@ def generate_comparison_report(
         processed_result = result.copy()
         # Add ranking based on total return (simple ranking for now)
         processed_result["ranking"] = i + 1
+        # Ensure 'name' field exists for template compatibility
+        processed_result["name"] = processed_result.get("indicator_name", "Unknown")
         processed_indicators.append(processed_result)
 
     # Sort indicators by total return for ranking
