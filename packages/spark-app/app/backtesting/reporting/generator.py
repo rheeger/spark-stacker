@@ -292,10 +292,266 @@ def generate_indicator_report(
     return report_path
 
 
+def classify_market_conditions(price_data: List[float]) -> Dict[str, Any]:
+    """
+    Classify market conditions based on price movement.
+
+    Args:
+        price_data: List of price values over time
+
+    Returns:
+        Dictionary containing market condition analysis
+    """
+    if len(price_data) < 2:
+        return {
+            "description": "Insufficient data for market condition analysis",
+            "periods": []
+        }
+
+    import numpy as np
+
+    # Calculate price changes
+    prices = np.array(price_data)
+    returns = np.diff(prices) / prices[:-1]
+
+    # Calculate rolling statistics (using 20-period windows)
+    window_size = min(20, len(returns) // 4)
+    if window_size < 5:
+        window_size = len(returns)
+
+    # Simple trend classification
+    total_return = (prices[-1] - prices[0]) / prices[0]
+    volatility = np.std(returns)
+
+    # Classify overall market
+    if total_return > 0.1:  # 10% positive
+        primary_condition = "bull"
+        condition_description = "Strong upward trend"
+    elif total_return < -0.1:  # 10% negative
+        primary_condition = "bear"
+        condition_description = "Strong downward trend"
+    else:
+        primary_condition = "sideways"
+        condition_description = "Sideways/consolidating market"
+
+    # Estimate periods (simplified)
+    bull_periods = max(0, len([r for r in returns if r > 0.02]))  # 2% daily gains
+    bear_periods = max(0, len([r for r in returns if r < -0.02]))  # 2% daily losses
+    sideways_periods = len(returns) - bull_periods - bear_periods
+
+    total_periods = len(returns)
+
+    periods = []
+    if bull_periods > 0:
+        periods.append({
+            "type": "bull",
+            "label": "Bull Market",
+            "percentage": round((bull_periods / total_periods) * 100, 1)
+        })
+    if bear_periods > 0:
+        periods.append({
+            "type": "bear",
+            "label": "Bear Market",
+            "percentage": round((bear_periods / total_periods) * 100, 1)
+        })
+    if sideways_periods > 0:
+        periods.append({
+            "type": "sideways",
+            "label": "Sideways Market",
+            "percentage": round((sideways_periods / total_periods) * 100, 1)
+        })
+
+    return {
+        "description": f"{condition_description} with {volatility:.2%} volatility",
+        "periods": periods,
+        "primary_condition": primary_condition,
+        "total_return": total_return,
+        "volatility": volatility
+    }
+
+
+def create_metrics_table(indicator_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Create a structured metrics comparison table for multiple indicators.
+
+    Args:
+        indicator_results: List of indicator result dictionaries
+
+    Returns:
+        Dictionary containing structured comparison data
+    """
+    if not indicator_results:
+        return {"comparison_metrics": [], "rankings": {}}
+
+    # Define the metrics we want to compare
+    metric_definitions = [
+        {
+            "key": "win_rate",
+            "display_name": "Win Rate",
+            "units": "%",
+            "higher_is_better": True
+        },
+        {
+            "key": "total_return",
+            "display_name": "Total Return",
+            "units": "%",
+            "higher_is_better": True
+        },
+        {
+            "key": "profit_factor",
+            "display_name": "Profit Factor",
+            "units": "",
+            "higher_is_better": True
+        },
+        {
+            "key": "sharpe",
+            "display_name": "Sharpe Ratio",
+            "units": "",
+            "higher_is_better": True
+        },
+        {
+            "key": "max_drawdown",
+            "display_name": "Max Drawdown",
+            "units": "%",
+            "higher_is_better": False
+        },
+        {
+            "key": "total_trades",
+            "display_name": "Total Trades",
+            "units": "",
+            "higher_is_better": True
+        }
+    ]
+
+    comparison_metrics = []
+
+    # Process each metric
+    for metric_def in metric_definitions:
+        metric_key = metric_def["key"]
+
+        # Extract values for this metric from all indicators
+        values = {}
+        for result in indicator_results:
+            indicator_name = result.get("indicator_name", "Unknown")
+            metrics = result.get("metrics", {})
+
+            if metric_key in metrics:
+                value = metrics[metric_key]
+                # Format the value appropriately
+                if metric_def["units"] == "%":
+                    values[indicator_name] = f"{value:.1f}"
+                elif metric_key == "profit_factor" or metric_key == "sharpe":
+                    values[indicator_name] = f"{value:.2f}"
+                else:
+                    values[indicator_name] = str(int(value)) if isinstance(value, (int, float)) else str(value)
+            else:
+                values[indicator_name] = "N/A"
+
+        # Find best and worst performers
+        numeric_values = {}
+        for name, val in values.items():
+            try:
+                numeric_values[name] = float(val) if val != "N/A" else None
+            except ValueError:
+                numeric_values[name] = None
+
+        valid_values = {k: v for k, v in numeric_values.items() if v is not None}
+
+        if valid_values:
+            if metric_def["higher_is_better"]:
+                best_indicator = max(valid_values.keys(), key=lambda k: valid_values[k])
+                worst_indicator = min(valid_values.keys(), key=lambda k: valid_values[k])
+                best_value = max(valid_values.values())
+            else:
+                best_indicator = min(valid_values.keys(), key=lambda k: valid_values[k])
+                worst_indicator = max(valid_values.keys(), key=lambda k: valid_values[k])
+                best_value = min(valid_values.values())
+
+            # Format best value
+            if metric_def["units"] == "%":
+                best_value_formatted = f"{best_value:.1f}"
+            elif metric_key == "profit_factor" or metric_key == "sharpe":
+                best_value_formatted = f"{best_value:.2f}"
+            else:
+                best_value_formatted = str(int(best_value)) if isinstance(best_value, (int, float)) else str(best_value)
+        else:
+            best_indicator = None
+            worst_indicator = None
+            best_value_formatted = "N/A"
+
+        comparison_metrics.append({
+            "key": metric_key,
+            "display_name": metric_def["display_name"],
+            "units": metric_def["units"],
+            "values": values,
+            "best_indicator": best_indicator,
+            "worst_indicator": worst_indicator,
+            "best_value": best_value_formatted
+        })
+
+    # Create rankings
+    rankings = create_performance_rankings(indicator_results)
+
+    return {
+        "comparison_metrics": comparison_metrics,
+        "rankings": rankings
+    }
+
+
+def create_performance_rankings(indicator_results: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Create performance rankings for indicators across different metrics.
+
+    Args:
+        indicator_results: List of indicator result dictionaries
+
+    Returns:
+        Dictionary containing rankings by different criteria
+    """
+    rankings = {
+        "by_return": [],
+        "by_sharpe": [],
+        "by_win_rate": []
+    }
+
+    # Extract and sort by total return
+    return_data = []
+    for result in indicator_results:
+        name = result.get("indicator_name", "Unknown")
+        metrics = result.get("metrics", {})
+        total_return = metrics.get("total_return", 0)
+        return_data.append({"name": name, "value": total_return})
+
+    rankings["by_return"] = sorted(return_data, key=lambda x: x["value"], reverse=True)
+
+    # Extract and sort by Sharpe ratio
+    sharpe_data = []
+    for result in indicator_results:
+        name = result.get("indicator_name", "Unknown")
+        metrics = result.get("metrics", {})
+        sharpe = metrics.get("sharpe", 0)
+        sharpe_data.append({"name": name, "value": sharpe})
+
+    rankings["by_sharpe"] = sorted(sharpe_data, key=lambda x: x["value"], reverse=True)
+
+    # Extract and sort by win rate
+    win_rate_data = []
+    for result in indicator_results:
+        name = result.get("indicator_name", "Unknown")
+        metrics = result.get("metrics", {})
+        win_rate = metrics.get("win_rate", 0)
+        win_rate_data.append({"name": name, "value": win_rate})
+
+    rankings["by_win_rate"] = sorted(win_rate_data, key=lambda x: x["value"], reverse=True)
+
+    return rankings
+
+
 def generate_comparison_report(
     indicator_results: List[Dict[str, Any]],
     output_dir: Optional[str] = None,
-    output_filename: Optional[str] = None
+    output_filename: Optional[str] = None,
+    market_price_data: Optional[List[float]] = None
 ) -> str:
     """
     Generate a comparison report for multiple indicators.
@@ -304,6 +560,7 @@ def generate_comparison_report(
         indicator_results: List of dictionaries containing results for each indicator
         output_dir: Optional output directory override
         output_filename: Optional filename override
+        market_price_data: Optional price data for market condition analysis
 
     Returns:
         Path to the generated report file
@@ -316,20 +573,59 @@ def generate_comparison_report(
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d")
         output_filename = f"indicator_comparison_{timestamp}.html"
 
-    # Prepare context for the template
-    indicator_names = [res.get("indicator_name", "Unknown") for res in indicator_results]
-    market = indicator_results[0].get("market", "Unknown Market") if indicator_results else "Unknown"
+    # Process results and add rankings
+    processed_indicators = []
+    for i, result in enumerate(indicator_results):
+        processed_result = result.copy()
+        # Add ranking based on total return (simple ranking for now)
+        processed_result["ranking"] = i + 1
+        processed_indicators.append(processed_result)
 
+    # Sort indicators by total return for ranking
+    processed_indicators.sort(
+        key=lambda x: x.get("metrics", {}).get("total_return", 0),
+        reverse=True
+    )
+
+    # Update rankings
+    for i, result in enumerate(processed_indicators):
+        result["ranking"] = i + 1
+
+    # Create metrics comparison table
+    metrics_data = create_metrics_table(indicator_results)
+
+    # Analyze market conditions if price data provided
+    market_conditions = None
+    if market_price_data:
+        market_conditions = classify_market_conditions(market_price_data)
+
+    # Extract common metadata
+    if indicator_results:
+        first_result = indicator_results[0]
+        market = first_result.get("market", "Unknown Market")
+        timeframe = first_result.get("timeframe", "Unknown Timeframe")
+        start_date = first_result.get("start_date", "Unknown Start Date")
+        end_date = first_result.get("end_date", "Unknown End Date")
+    else:
+        market = timeframe = start_date = end_date = "Unknown"
+
+    # Prepare context for the template
     context = {
-        "title": "Indicator Comparison",
         "market": market,
-        "indicators": indicator_results,
-        "indicator_names": indicator_names
+        "timeframe": timeframe,
+        "start_date": start_date,
+        "end_date": end_date,
+        "indicator_count": len(indicator_results),
+        "indicators": processed_indicators,
+        "comparison_metrics": metrics_data["comparison_metrics"],
+        "rankings": metrics_data["rankings"],
+        "market_conditions": market_conditions,
+        "individual_reports": []  # Could be populated with links to individual reports
     }
 
-    # Generate the report (Note: This will require a comparison.html template)
+    # Generate the report
     report_path = generator.generate_report(
-        template_name="comparison.html",  # Will be created in a later task
+        template_name="comparison.html",
         output_filename=output_filename,
         context=context
     )
