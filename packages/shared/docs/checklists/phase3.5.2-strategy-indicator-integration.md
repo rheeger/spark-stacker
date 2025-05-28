@@ -32,40 +32,40 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 1.2 Strategy Manager Overhaul
 
-- [ ] **Update StrategyManager constructor** (`packages/spark-app/app/core/strategy_manager.py`)
+- [x] **Update StrategyManager constructor** (`packages/spark-app/app/core/strategy_manager.py`)
 
-  - [ ] Add `strategies: List[Dict[str, Any]]` parameter
-  - [ ] Add `strategy_indicators: Dict[str, List[str]]` mapping
-  - [ ] Create `_build_strategy_mappings()` method
-  - [ ] Update initialization to accept strategy configs
+  - [x] Add `strategies: List[Dict[str, Any]]` parameter
+  - [x] Add `strategy_indicators: Dict[str, List[str]]` mapping
+  - [x] Create `_build_strategy_mappings()` method
+  - [x] Update initialization to accept strategy configs
 
-- [ ] **Replace run_cycle() method** (`packages/spark-app/app/core/strategy_manager.py`)
+- [x] **Replace run_cycle() method** (`packages/spark-app/app/core/strategy_manager.py`)
 
-  - [ ] Remove indicator-driven execution
-  - [ ] Implement strategy-driven execution loop
-  - [ ] Add strategy validation (enabled, market, exchange)
-  - [ ] Add proper error handling per strategy
-  - [ ] Add logging for strategy execution flow
+  - [x] Remove indicator-driven execution
+  - [x] Implement strategy-driven execution loop
+  - [x] Add strategy validation (enabled, market, exchange)
+  - [x] Add proper error handling per strategy
+  - [x] Add logging for strategy execution flow
 
-- [ ] **Create run_strategy_indicators() method**
+- [x] **Create run_strategy_indicators() method**
       (`packages/spark-app/app/core/strategy_manager.py`)
 
-  - [ ] Accept strategy config, market, and indicator names
-  - [ ] Validate indicators exist for strategy
-  - [ ] **Use strategy timeframe for all indicators** (strategy dictates timeframe)
-  - [ ] Pass strategy timeframe to indicators during processing
-  - [ ] Prepare data per market/strategy-timeframe combination
-  - [ ] Add strategy context to generated signals (including timeframe)
-  - [ ] Return list of signals with strategy metadata
+  - [x] Accept strategy config, market, and indicator names
+  - [x] Validate indicators exist for strategy
+  - [x] **Use strategy timeframe for all indicators** (strategy dictates timeframe)
+  - [x] Pass strategy timeframe to indicators during processing
+  - [x] Prepare data per market/strategy-timeframe combination
+  - [x] Add strategy context to generated signals (including timeframe)
+  - [x] Return list of signals with strategy metadata
 
-- [ ] **Update \_prepare_indicator_data() method**
+- [x] **Update \_prepare_indicator_data() method**
       (`packages/spark-app/app/core/strategy_manager.py`)
-  - [ ] Accept market symbol (e.g., "ETH-USD") instead of indicator name
-  - [ ] **Use symbol conversion utilities** to convert market symbol for exchange
-  - [ ] Use market + timeframe for cache keys
-  - [ ] Fetch historical data using exchange-specific symbols
-  - [ ] Add error handling for data fetching failures
-  - [ ] Add logging for symbol conversion process
+  - [x] Accept market symbol (e.g., "ETH-USD") instead of indicator name
+  - [x] **Use symbol conversion utilities** to convert market symbol for exchange
+  - [x] Use market + timeframe for cache keys
+  - [x] Fetch historical data using exchange-specific symbols
+  - [x] Add error handling for data fetching failures
+  - [x] Add logging for symbol conversion process
 
 ### 1.3 Main Application Integration
 

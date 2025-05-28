@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from app.connectors.base_connector import BaseConnector
+from app.core.symbol_converter import convert_symbol_for_exchange
 from app.core.trading_engine import TradingEngine
 from app.indicators.base_indicator import (BaseIndicator, Signal,
                                            SignalDirection)
@@ -35,6 +36,7 @@ class StrategyManager:
         self,
         trading_engine: TradingEngine,
         indicators: Dict[str, BaseIndicator] = None,
+        strategies: List[Dict[str, Any]] = None,
         data_window_size: int = 100,
         config: Dict[str, Any] = None,
     ):
@@ -44,15 +46,21 @@ class StrategyManager:
         Args:
             trading_engine: Trading engine instance to forward signals to
             indicators: Dictionary of indicator instances
+            strategies: List of strategy configurations
             data_window_size: Size of the price data window to maintain
             config: Application configuration dictionary
         """
         self.trading_engine = trading_engine
         self.indicators = indicators or {}
+        self.strategies = strategies or []
         self.data_window_size = data_window_size
         self.price_data: Dict[str, pd.DataFrame] = {}
         self.historical_data_fetched: Dict[Tuple[str, str], bool] = {}
         self.config = config or {}
+
+        # Build strategy mappings
+        self.strategy_indicators: Dict[str, List[str]] = {}
+        self._build_strategy_mappings()
 
         # Check if publishing historical data to metrics is enabled
         self.publish_historical = self.config.get("metrics_publish_historical", False)
@@ -60,8 +68,31 @@ class StrategyManager:
             logger.info("Historical metrics publishing is enabled - will publish all candles to metrics")
 
         logger.info(
-            f"Strategy manager initialized with {len(self.indicators)} indicators"
+            f"Strategy manager initialized with {len(self.indicators)} indicators and {len(self.strategies)} strategies"
         )
+
+    def _build_strategy_mappings(self) -> None:
+        """
+        Build strategy-indicator mappings from strategy configurations.
+        """
+        self.strategy_indicators.clear()
+
+        for strategy in self.strategies:
+            strategy_name = strategy.get("name")
+            indicators = strategy.get("indicators", [])
+
+            if not strategy_name:
+                logger.warning("Strategy missing name field, skipping")
+                continue
+
+            if not indicators:
+                logger.warning(f"Strategy '{strategy_name}' has no indicators defined")
+                continue
+
+            self.strategy_indicators[strategy_name] = indicators
+            logger.debug(f"Mapped strategy '{strategy_name}' to indicators: {indicators}")
+
+        logger.info(f"Built strategy mappings for {len(self.strategy_indicators)} strategies")
 
     def add_indicator(self, name: str, indicator: BaseIndicator) -> None:
         """
@@ -434,6 +465,151 @@ class StrategyManager:
         except Exception as e:
             logger.error(f"Error while publishing historical data to metrics: {e}", exc_info=True)
 
+    def _prepare_indicator_data(self, market_symbol: str, timeframe: str, exchange: str, required_periods: int = 50) -> pd.DataFrame:
+        """
+        Prepare indicator data for a specific market symbol and timeframe.
+
+        Args:
+            market_symbol: Market symbol in standard format (e.g., "ETH-USD")
+            timeframe: Timeframe for the data (e.g., "1h", "4h")
+            exchange: Exchange name for symbol conversion
+            required_periods: Minimum number of periods needed
+
+        Returns:
+            DataFrame with prepared price data
+        """
+        try:
+            # Use market + timeframe for cache keys
+            cache_key = f"{market_symbol}_{timeframe}"
+            cache_tuple_key = (market_symbol, timeframe)
+
+            # Check if we've already fetched historical data for this market/timeframe
+            first_fetch_done = self.historical_data_fetched.get(cache_tuple_key, False)
+
+            # Get existing cached data if available
+            current_data = self.price_data.get(cache_key, pd.DataFrame()).copy()
+
+            # Convert market symbol for exchange-specific API calls
+            exchange_symbol = convert_symbol_for_exchange(market_symbol, exchange)
+            logger.debug(f"Converted market symbol '{market_symbol}' to '{exchange_symbol}' for exchange '{exchange}'")
+
+            # Fetch historical data if this is the first time or we don't have enough data
+            if not first_fetch_done or len(current_data) < required_periods:
+                logger.info(f"Fetching historical data for {market_symbol} ({timeframe}) - need {required_periods}, have {len(current_data)}")
+
+                historical_data = self._fetch_historical_data(
+                    symbol=exchange_symbol,  # Use exchange-specific symbol
+                    interval=timeframe,
+                    limit=self.data_window_size,
+                    periods=required_periods
+                )
+
+                if not historical_data.empty:
+                    # Update cache with historical data
+                    self.price_data[cache_key] = historical_data
+                    current_data = historical_data.copy()
+                    self.historical_data_fetched[cache_tuple_key] = True
+                    logger.info(f"Updated cache for {cache_key} with {len(historical_data)} periods")
+                else:
+                    logger.warning(f"Failed to fetch historical data for {market_symbol} ({timeframe})")
+
+            # If we still don't have enough data, try to fetch current market data as fallback
+            if current_data.empty:
+                logger.info(f"No cached data available for {market_symbol} ({timeframe}), fetching current market data")
+                current_data = self._fetch_current_market_data(exchange_symbol)  # Use exchange-specific symbol
+
+            # Verify we have sufficient data
+            if len(current_data) < required_periods:
+                logger.warning(f"Insufficient data for {market_symbol} ({timeframe}): need {required_periods}, have {len(current_data)}")
+
+            return current_data
+
+        except Exception as e:
+            logger.error(f"Error preparing indicator data for {market_symbol} ({timeframe}): {e}", exc_info=True)
+            return pd.DataFrame()
+
+    def run_strategy_indicators(self, strategy_config: Dict[str, Any], market: str, indicator_names: List[str]) -> List[Signal]:
+        """
+        Run indicators for a specific strategy on a market.
+
+        Args:
+            strategy_config: Strategy configuration dictionary
+            market: Market symbol in standard format (e.g., "ETH-USD")
+            indicator_names: List of indicator names to run
+
+        Returns:
+            List of signals with strategy metadata
+        """
+        signals = []
+        strategy_name = strategy_config.get("name", "unknown")
+        strategy_timeframe = strategy_config.get("timeframe", "1h")
+        exchange = strategy_config.get("exchange", "hyperliquid")
+
+        logger.info(f"Running strategy '{strategy_name}' indicators for {market} on {strategy_timeframe} timeframe")
+
+        # Validate indicators exist for strategy
+        missing_indicators = []
+        for indicator_name in indicator_names:
+            if indicator_name not in self.indicators:
+                missing_indicators.append(indicator_name)
+
+        if missing_indicators:
+            logger.error(f"Strategy '{strategy_name}' references missing indicators: {missing_indicators}")
+            return signals
+
+        # Prepare data for the market/strategy-timeframe combination
+        required_periods = 50  # Default, will be updated per indicator
+        for indicator_name in indicator_names:
+            indicator = self.indicators[indicator_name]
+            indicator_periods = getattr(indicator, 'required_periods', 50)
+            required_periods = max(required_periods, indicator_periods)
+
+        # Use strategy timeframe for data preparation
+        market_data = self._prepare_indicator_data(
+            market_symbol=market,
+            timeframe=strategy_timeframe,
+            exchange=exchange,
+            required_periods=required_periods
+        )
+
+        if market_data.empty:
+            logger.warning(f"No data available for strategy '{strategy_name}' on market {market}")
+            return signals
+
+        # Run each indicator with strategy timeframe
+        for indicator_name in indicator_names:
+            try:
+                indicator = self.indicators[indicator_name]
+
+                # Verify we have sufficient data for this indicator
+                indicator_required_periods = getattr(indicator, 'required_periods', 50)
+                if len(market_data) < indicator_required_periods:
+                    logger.warning(f"Insufficient data for indicator '{indicator_name}': need {indicator_required_periods}, have {len(market_data)}")
+                    continue
+
+                # Process indicator with strategy timeframe override
+                # The indicator should use the strategy timeframe instead of its default
+                logger.debug(f"Processing indicator '{indicator_name}' with strategy timeframe '{strategy_timeframe}'")
+
+                # Call indicator process method - the indicator should use strategy timeframe internally
+                processed_data, signal = indicator.process(market_data, strategy_timeframe)
+
+                if signal:
+                    # Add strategy context to signal
+                    signal.strategy_name = strategy_name
+                    signal.market = market
+                    signal.exchange = exchange
+                    signal.timeframe = strategy_timeframe
+
+                    signals.append(signal)
+                    logger.info(f"Signal generated by indicator '{indicator_name}' for strategy '{strategy_name}': {signal}")
+
+            except Exception as e:
+                logger.error(f"Error running indicator '{indicator_name}' for strategy '{strategy_name}': {e}", exc_info=True)
+
+        logger.debug(f"Strategy '{strategy_name}' generated {len(signals)} signals for {market}")
+        return signals
+
     def run_indicators(self, symbol: str) -> List[Signal]:
         """
         Run all indicators for a symbol and collect signals.
@@ -588,49 +764,77 @@ class StrategyManager:
 
     async def run_cycle(self, symbols: List[str] = None) -> int:
         """
-        Run a full cycle of the strategy for all or specified symbols.
+        Run a full cycle using strategy-driven execution.
 
         Args:
-            symbols: List of symbols to run for, or None for all
+            symbols: List of symbols to run for, or None to use strategies' markets
 
         Returns:
             Number of signals generated and processed
         """
-        if not self.indicators:
-            logger.warning("No indicators registered, skipping strategy cycle")
+        if not self.strategies:
+            logger.warning("No strategies configured, skipping strategy cycle")
             return 0
 
         signal_count = 0
-        run_symbols = symbols or list(self.price_data.keys())
 
-        # If no symbols specified and no price data, use unique symbols from indicators
-        if not run_symbols:
-            indicator_symbols = set()
-            for indicator in self.indicators.values():
-                # Extract symbol from indicator if available
-                if hasattr(indicator, "symbol"):
-                    indicator_symbols.add(indicator.symbol)
+        logger.info(f"Running strategy-driven cycle for {len(self.strategies)} strategies")
 
-            run_symbols = list(indicator_symbols)
-
-        logger.info(f"Running strategy cycle for {len(run_symbols)} symbols")
-
-        for symbol in run_symbols:
+        for strategy in self.strategies:
             try:
-                # Run indicators for this symbol
-                signals = self.run_indicators(symbol)
+                strategy_name = strategy.get("name", "unknown")
+
+                # Validate strategy configuration
+                if not strategy.get("enabled", True):
+                    logger.debug(f"Strategy '{strategy_name}' is disabled, skipping")
+                    continue
+
+                market = strategy.get("market")
+                exchange = strategy.get("exchange")
+
+                if not market:
+                    logger.error(f"Strategy '{strategy_name}' missing market configuration")
+                    continue
+
+                if not exchange:
+                    logger.error(f"Strategy '{strategy_name}' missing exchange configuration")
+                    continue
+
+                # Validate market format (must contain "-")
+                if "-" not in market:
+                    logger.error(f"Strategy '{strategy_name}' has invalid market format '{market}' - must contain '-' (e.g., 'ETH-USD')")
+                    continue
+
+                # Optional symbol filtering
+                if symbols and market not in symbols:
+                    logger.debug(f"Strategy '{strategy_name}' market '{market}' not in specified symbols, skipping")
+                    continue
+
+                # Get indicators for this strategy
+                indicator_names = self.strategy_indicators.get(strategy_name, [])
+                if not indicator_names:
+                    logger.warning(f"Strategy '{strategy_name}' has no indicators defined")
+                    continue
+
+                logger.info(f"Running strategy '{strategy_name}' for market '{market}' on exchange '{exchange}'")
+
+                # Run strategy indicators
+                signals = self.run_strategy_indicators(strategy, market, indicator_names)
 
                 # Process any signals generated
                 for signal in signals:
-                    success = await self.trading_engine.process_signal(signal)
-                    if success:
-                        signal_count += 1
-                        logger.info(f"Processed signal for {symbol}")
-                    else:
-                        logger.warning(f"Failed to process signal for {symbol}")
-            except Exception as e:
-                logger.error(
-                    f"Error in strategy cycle for {symbol}: {e}", exc_info=True
-                )
+                    try:
+                        success = await self.trading_engine.process_signal(signal)
+                        if success:
+                            signal_count += 1
+                            logger.info(f"Processed signal from strategy '{strategy_name}' for {market}")
+                        else:
+                            logger.warning(f"Failed to process signal from strategy '{strategy_name}' for {market}")
+                    except Exception as e:
+                        logger.error(f"Error processing signal from strategy '{strategy_name}': {e}", exc_info=True)
 
+            except Exception as e:
+                logger.error(f"Error in strategy cycle for strategy '{strategy.get('name', 'unknown')}': {e}", exc_info=True)
+
+        logger.info(f"Strategy cycle completed: processed {signal_count} signals from {len(self.strategies)} strategies")
         return signal_count
