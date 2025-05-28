@@ -1,9 +1,10 @@
-.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build rebuild force-rebuild clean-results clean-old-results test-cli
+.PHONY: help lint lint-python lint-markdown install-deps start stop clean test spark-app-start spark-app-stop spark-app-clean test-hyperliquid clean-logs restart reset build rebuild force-rebuild clean-results clean-old-results test-cli check-monitoring ensure-monitoring status
 
 # Default target
 help:
 	@echo "Available commands for spark-app package:"
 	@echo "  make help            : Show this help message"
+	@echo "  make status          : Show status of monitoring and spark-app services"
 	@echo "  make build           : Set up virtual environment and install dependencies"
 	@echo "  make lint            : Run all linters (Python and Markdown)"
 	@echo "  make lint-python     : Run Python linters only (black, pylint, mypy)"
@@ -24,14 +25,47 @@ help:
 	@echo "  make test-slow       : Run only slow tests"
 	@echo "  make test-extended   : Run extended test suite (slow tests) with full coverage report"
 	@echo "  make spark-app-clean : Clean up spark-app services and volumes"
-	@echo "  make test-hyperliquid: Run Hyperliquid connector tests"
-	@echo "  make test-cli        : Test the CLI commands"
-	@echo "  make demo-macd       : Run the MACD indicator demo via CLI"
+
+# Status command to show service states
+status:
+	@echo "=== Spark Stacker Service Status ==="
+	@echo "All services run under the 'spark-stacker' project"
+	@echo ""
+	@echo "Monitoring Services (should stay running):"
+	@docker ps --format "  {{.Names}}: {{.Status}}" | grep -E "(grafana|prometheus|loki|promtail|log-metrics|cadvisor|node-exporter)" || echo "  No monitoring services running"
+	@echo ""
+	@echo "Spark-App Service (affected by start/stop/restart):"
+	@docker ps --format "  {{.Names}}: {{.Status}}" | grep "spark-app" || echo "  spark-app: Not running"
+	@echo ""
+	@if docker network inspect spark-stacker_monitoring >/dev/null 2>&1; then \
+		echo "Monitoring Network: ✅ Available"; \
+	else \
+		echo "Monitoring Network: ❌ Not available"; \
+	fi
 
 # Build target
 build: install-deps
 	@echo "Building spark-app package..."
 	@echo "Build complete"
+
+# Check if monitoring services are running
+check-monitoring:
+	@if ! docker network inspect spark-stacker_monitoring >/dev/null 2>&1; then \
+		echo "Monitoring network not found. Monitoring services are not running."; \
+		exit 1; \
+	fi
+
+# Ensure monitoring services are running, start them if not
+ensure-monitoring:
+	@echo "Checking monitoring services..."
+	@if ! docker network inspect spark-stacker_monitoring >/dev/null 2>&1; then \
+		echo "Monitoring services not running. Starting them first..."; \
+		cd ../monitoring && make monitoring-start; \
+		echo "Waiting for monitoring network to be ready..."; \
+		sleep 5; \
+	else \
+		echo "Monitoring services are already running."; \
+	fi
 
 # Linting
 lint: lint-python lint-markdown
@@ -74,20 +108,20 @@ start: spark-app-start
 
 stop: spark-app-stop
 
-spark-app-start:
-	@echo "Starting spark-app services..."
-	cd docker && docker-compose --project-name spark-stacker up -d
-	@echo "Services started. Check logs with: docker logs -f spark-stacker"
+spark-app-start: ensure-monitoring
+	@echo "Starting spark-app service..."
+	cd docker && docker-compose --project-name spark-stacker up -d app
+	@echo "Spark-app service started. Check logs with: docker logs -f spark-app"
 
 spark-app-stop:
-	@echo "Stopping spark-app services..."
-	cd docker && docker-compose --project-name spark-stacker down
-	@echo "Services stopped"
+	@echo "Stopping spark-app service..."
+	cd docker && docker-compose --project-name spark-stacker stop app
+	@echo "Spark-app service stopped"
 
 spark-app-clean:
-	@echo "Cleaning up spark-app services..."
-	cd docker && docker-compose --project-name spark-stacker down -v
-	@echo "Services cleaned up"
+	@echo "Cleaning up spark-app service..."
+	cd docker && docker-compose --project-name spark-stacker rm -f app
+	@echo "Spark-app service cleaned up"
 
 # Run tests
 test:
@@ -113,17 +147,12 @@ test-extended:
 	@cd $(CURDIR) && .venv/bin/python -m pytest -m "slow" --cov=app --cov-report=html --cov-report=term-missing -v
 	@echo "Extended tests complete. Coverage report generated in _htmlcov/"
 
-# Run Hyperliquid connector tests
-test-hyperliquid:
-	@echo "Running Hyperliquid connector tests..."
-	@cd $(CURDIR) && .venv/bin/python -m pytest tests/integration/test_hyperliquid_*.py tests/unit/test_hyperliquid_*.py -v
-	@echo "Hyperliquid tests complete"
-
 # Clean test results
 clean-results:
 	@echo "Cleaning up test result artifacts..."
 	rm -rf tests/__test_results__
-	rm -rf tests/test_results
+	rm -rf tests/**/__test_results__
+	rm -rf tests/**/test_results
 	rm -rf test_results
 	rm -rf _htmlcov
 	@echo "Test results cleaned up"
@@ -151,8 +180,10 @@ clean-logs:
 	@echo "Logs cleaned up. New logs will be stored in app/_logs directory."
 
 # Restart command
-restart: stop start
-	@echo "Spark app services restarted"
+restart: ensure-monitoring
+	@echo "Restarting spark-app service..."
+	cd docker && docker-compose --project-name spark-stacker restart app
+	@echo "Spark app service restarted"
 
 # Reset command - full reset of the environment
 reset: spark-app-clean clean
@@ -161,30 +192,17 @@ reset: spark-app-clean clean
 	@echo "Spark app environment reset complete"
 
 # Rebuild Docker image and restart services
-rebuild:
-	@echo "Rebuilding Docker image and restarting services..."
-	cd docker && docker-compose --project-name spark-stacker down
-	cd docker && docker-compose --project-name spark-stacker build
-	cd docker && docker-compose --project-name spark-stacker up -d
-	@echo "Docker image rebuilt and services restarted"
+rebuild: ensure-monitoring
+	@echo "Rebuilding spark-app Docker image and restarting service..."
+	cd docker && docker-compose --project-name spark-stacker stop app
+	cd docker && docker-compose --project-name spark-stacker build app
+	cd docker && docker-compose --project-name spark-stacker up -d app
+	@echo "Spark-app Docker image rebuilt and service restarted"
 
 # Force rebuild Docker image without cache and restart services
-force-rebuild:
-	@echo "Force rebuilding Docker image without cache and restarting services..."
-	cd docker && docker-compose --project-name spark-stacker down
-	cd docker && docker-compose --project-name spark-stacker build --no-cache
-	cd docker && docker-compose --project-name spark-stacker up -d
-	@echo "Docker image force rebuilt and services restarted"
-
-# Test the CLI
-test-cli:
-	@echo "Testing CLI commands..."
-	@cd $(CURDIR) && .venv/bin/python -m tests._utils.cli --help
-	@cd $(CURDIR) && .venv/bin/python -m tests._utils.cli list-indicators
-	@echo "CLI test complete"
-
-# Run MACD demo
-demo-macd:
-	@echo "Running MACD demo using the CLI..."
-	@cd $(CURDIR) && .venv/bin/python -m tests._utils.cli demo-macd
-	@echo "MACD demo complete"
+force-rebuild: ensure-monitoring
+	@echo "Force rebuilding spark-app Docker image without cache and restarting service..."
+	cd docker && docker-compose --project-name spark-stacker stop app
+	cd docker && docker-compose --project-name spark-stacker build --no-cache app
+	cd docker && docker-compose --project-name spark-stacker up -d app
+	@echo "Spark-app Docker image force rebuilt and service restarted"

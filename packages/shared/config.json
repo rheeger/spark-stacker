@@ -7,7 +7,7 @@
     "show_market_details": false,
     "show_zero_balances": false
   },
-  "webhook_enabled": true,
+  "webhook_enabled": false,
   "webhook_port": 8080,
   "webhook_host": "0.0.0.0",
   "metrics_port": 9000,
