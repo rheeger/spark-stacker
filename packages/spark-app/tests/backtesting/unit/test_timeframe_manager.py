@@ -106,10 +106,12 @@ def populated_temp_dir(temp_data_dir, mock_data):
 
 def test_timeframe_manager_init():
     """Test TimeframeManager initialization."""
-    manager = TimeframeManager(data_dir="test_data_dir")
-    assert manager.data_dir == "test_data_dir"
-    assert hasattr(manager, "data_manager")
-    assert hasattr(manager, "timeframe_data")
+    # Use a temporary directory that gets cleaned up
+    with tempfile.TemporaryDirectory() as temp_dir:
+        manager = TimeframeManager(data_dir=temp_dir)
+        assert manager.data_dir == temp_dir
+        assert hasattr(manager, "data_manager")
+        assert hasattr(manager, "timeframe_data")
 
 
 def test_get_available_timeframes(populated_temp_dir):

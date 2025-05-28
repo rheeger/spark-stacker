@@ -24,7 +24,7 @@
   "enable_hedging": false,
   "position_sizing": {
     "method": "fixed_usd",
-    "fixed_usd_amount": 1.0,
+    "fixed_usd_amount": 100.0,
     "equity_percentage": 0.05,
     "risk_per_trade_pct": 0.02,
     "default_stop_loss_pct": 0.05,
