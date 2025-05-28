@@ -563,32 +563,7 @@ async def async_main():
                 "No hedge connector specified, using main connector for hedging"
             )
 
-        # Initialize risk manager with position sizing integration
-        risk_manager = RiskManager.from_config(config)
-
-        # Log the risk manager settings
-        logger.info(f"Risk Manager initialized with: max_account_risk_pct={risk_manager.max_account_risk_pct}%, "
-                    f"max_leverage={risk_manager.max_leverage}x, "
-                    f"max_position_size_usd=${risk_manager.max_position_size_usd}, "
-                    f"max_positions={risk_manager.max_positions}, "
-                    f"min_margin_buffer_pct={risk_manager.min_margin_buffer_pct}%")
-        logger.info(f"Position sizing method: {risk_manager.position_sizer.config.method.value}")
-        logger.info(f"Position sizing config: USD amount=${risk_manager.position_sizer.config.fixed_usd_amount}, "
-                    f"Max=${risk_manager.position_sizer.config.max_position_size_usd}, "
-                    f"Min=${risk_manager.position_sizer.config.min_position_size_usd}")
-
-        # Initialize trading engine with proper parameters
-        engine = TradingEngine(
-            main_connector=main_connector,
-            hedge_connector=hedge_connector,
-            risk_manager=risk_manager,
-            dry_run=config.get("dry_run", True),
-            polling_interval=config.get("polling_interval", 60),
-            max_parallel_trades=1,  # Limit to 1 trade at a time for testing
-            enable_hedging=config.get("enable_hedging", True),  # Use config setting for hedging
-        )
-
-        # Initialize indicators
+        # Initialize indicators first (needed for strategy validation)
         indicators = IndicatorFactory.create_indicators_from_config(
             config.get("indicators", [])
         )
@@ -604,15 +579,52 @@ async def async_main():
 
         # Load and validate strategies
         strategies = config.get("strategies", [])
+        strategy_configs = []
         if strategies:
             try:
                 _validate_strategy_indicators(strategies, indicators)
                 logger.info(f"Successfully loaded and validated {len(strategies)} strategies")
+
+                # Parse strategies into StrategyConfig objects for risk manager
+                from app.core.strategy_config import StrategyConfigLoader
+                strategy_configs = StrategyConfigLoader.load_strategies(strategies)
+                logger.info(f"Parsed {len(strategy_configs)} strategy configurations for position sizing")
+
             except ValueError as e:
                 logger.error(f"Strategy validation failed: {str(e)}")
                 sys.exit(1)
         else:
             logger.warning("No strategies configured in configuration file")
+
+        # Initialize risk manager with position sizing integration and strategy context
+        risk_manager = RiskManager.from_config(config, strategies=strategy_configs)
+
+        # Log the risk manager settings
+        logger.info(f"Risk Manager initialized with: max_account_risk_pct={risk_manager.max_account_risk_pct}%, "
+                    f"max_leverage={risk_manager.max_leverage}x, "
+                    f"max_position_size_usd=${risk_manager.max_position_size_usd}, "
+                    f"max_positions={risk_manager.max_positions}, "
+                    f"min_margin_buffer_pct={risk_manager.min_margin_buffer_pct}%")
+        logger.info(f"Default position sizing method: {risk_manager.position_sizer.config.method.value}")
+        logger.info(f"Default position sizing config: USD amount=${risk_manager.position_sizer.config.fixed_usd_amount}, "
+                    f"Max=${risk_manager.position_sizer.config.max_position_size_usd}, "
+                    f"Min=${risk_manager.position_sizer.config.min_position_size_usd}")
+
+        if risk_manager.strategy_position_sizers:
+            logger.info(f"Strategy-specific position sizers: {len(risk_manager.strategy_position_sizers)}")
+            for strategy_name, sizer in risk_manager.strategy_position_sizers.items():
+                logger.info(f"  {strategy_name}: {sizer.config.method.value}")
+
+        # Initialize trading engine with proper parameters
+        engine = TradingEngine(
+            main_connector=main_connector,
+            hedge_connector=hedge_connector,
+            risk_manager=risk_manager,
+            dry_run=config.get("dry_run", True),
+            polling_interval=config.get("polling_interval", 60),
+            max_parallel_trades=1,  # Limit to 1 trade at a time for testing
+            enable_hedging=config.get("enable_hedging", True),  # Use config setting for hedging
+        )
 
         # Initialize strategy manager with strategies and indicators
         strategy_manager = StrategyManager(

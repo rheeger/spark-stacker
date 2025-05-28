@@ -159,42 +159,42 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 2.2 Strategy-Specific Position Sizing Integration
 
-- [ ] **Update RiskManager for strategy context**
+- [x] **Update RiskManager for strategy context**
       (`packages/spark-app/app/risk_management/risk_manager.py`)
 
-  - [ ] Add `strategy_position_sizers: Dict[str, PositionSizer]` attribute
-  - [ ] Create `_create_strategy_position_sizers()` method
-  - [ ] Update `calculate_position_size()` to accept strategy name parameter
-  - [ ] Add strategy context routing to appropriate position sizer
-  - [ ] Update `from_config()` to handle strategy-specific position sizing configs
-  - [ ] Add fallback to default position sizer for strategies without specific config
+  - [x] Add `strategy_position_sizers: Dict[str, PositionSizer]` attribute
+  - [x] Add `_create_strategy_position_sizers()` method
+  - [x] Update `calculate_position_size()` to accept strategy name parameter
+  - [x] Add strategy context routing to appropriate position sizer
+  - [x] Update `from_config()` to handle strategy-specific position sizing configs
+  - [x] Add fallback to default position sizer for strategies without specific config
 
-- [ ] **Create strategy position sizer factory**
+- [x] **Create strategy position sizer factory**
       (`packages/spark-app/app/risk_management/risk_manager.py`)
 
-  - [ ] Add `_create_position_sizer_for_strategy()` method
-  - [ ] Merge strategy-specific config with global defaults
-  - [ ] Handle inheritance of global position sizing parameters
-  - [ ] Add validation for strategy position sizing configuration
-  - [ ] Log position sizer creation per strategy
+  - [x] Add `_create_position_sizer_for_strategy()` method
+  - [x] Merge strategy-specific config with global defaults
+  - [x] Handle inheritance of global position sizing parameters
+  - [x] Add validation for strategy position sizing configuration
+  - [x] Log position sizer creation per strategy
 
-- [ ] **Update TradingEngine for strategy context**
+- [x] **Update TradingEngine for strategy context**
       (`packages/spark-app/app/core/trading_engine.py`)
-  - [ ] Pass strategy name to risk manager methods
-  - [ ] Update `_execute_trade()` to include strategy context
-  - [ ] Update hedge parameter calculation with strategy context
-  - [ ] Add strategy-specific risk logging
+  - [x] Pass strategy name to risk manager methods
+  - [x] Update `_execute_trade()` to include strategy context
+  - [x] Update hedge parameter calculation with strategy context
+  - [x] Add strategy-specific risk logging
 
 ### 2.3 Configuration Validation
 
-- [ ] **Validate current config.json** (`packages/shared/config.json`)
-  - [ ] Ensure all strategies have proper market format ("ETH-USD")
-  - [ ] Ensure all strategies specify exchange
-  - [ ] Ensure all strategies list their indicators
-  - [ ] Ensure all referenced indicators exist in config
-  - [ ] Test configuration loading without errors
-  - [ ] Validate strategy-specific position sizing configurations
-  - [ ] Test position sizer creation for each strategy
+- [x] **Validate current config.json** (`packages/shared/config.json`)
+  - [x] Ensure all strategies have proper market format ("ETH-USD")
+  - [x] Ensure all strategies specify exchange
+  - [x] Ensure all strategies list their indicators
+  - [x] Ensure all referenced indicators exist in config
+  - [x] Test configuration loading without errors
+  - [x] Validate strategy-specific position sizing configurations
+  - [x] Test position sizer creation for each strategy
 
 ## 🧪 **3. Testing Infrastructure**
 

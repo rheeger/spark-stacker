@@ -600,6 +600,7 @@ class TradingEngine:
                     max_hedge_leverage=5.0
                     if self.hedge_connector.supports_derivatives
                     else 1.0,
+                    strategy_name=signal.strategy_name,  # Pass strategy context
                 )
                 logger.debug(
                     f"Hedge calculation result: size={hedge_position_size}, leverage={adjusted_hedge_leverage}"
@@ -1022,6 +1023,7 @@ class TradingEngine:
                 leverage=main_leverage,
                 stop_loss_pct=stop_loss_pct,
                 price=price,
+                strategy_name=signal.strategy_name if signal else None,  # Pass strategy context
             )
 
             if main_size <= 0:
@@ -1055,6 +1057,7 @@ class TradingEngine:
                     main_leverage=adjusted_main_leverage,
                     hedge_ratio=hedge_ratio,
                     max_hedge_leverage=hedge_leverage,
+                    strategy_name=signal.strategy_name if signal else None,  # Pass strategy context
                 )
 
                 # Check if the hedge connector has enough balance
