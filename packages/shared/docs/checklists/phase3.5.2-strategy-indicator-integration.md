@@ -256,32 +256,32 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 3.6 Unit Tests - Strategy-Specific Position Sizing
 
-- [ ] **Update test_risk_manager_integration.py**
+- [x] **Update test_risk_manager_integration.py**
       (`packages/spark-app/tests/risk_management/unit/test_risk_manager_integration.py`)
 
-  - [ ] Test RiskManager creation with strategy-specific position sizing
-  - [ ] Test `calculate_position_size()` with strategy context
-  - [ ] Test strategy position sizer routing
-  - [ ] Test fallback to default position sizer
-  - [ ] Test multiple strategies with different position sizing methods
-  - [ ] Test position sizer factory method
+  - [x] Test RiskManager creation with strategy-specific position sizing
+  - [x] Test `calculate_position_size()` with strategy context
+  - [x] Test strategy position sizer routing
+  - [x] Test fallback to default position sizer
+  - [x] Test multiple strategies with different position sizing methods
+  - [x] Test position sizer factory method
 
-- [ ] **Create test_strategy_position_sizing.py**
+- [x] **Create test_strategy_position_sizing.py**
       (`packages/spark-app/tests/risk_management/unit/test_strategy_position_sizing.py` - NEW FILE)
 
-  - [ ] Test strategy-specific fixed USD position sizing
-  - [ ] Test strategy-specific risk-based position sizing
-  - [ ] Test strategy-specific percent equity position sizing
-  - [ ] Test position sizing config inheritance
-  - [ ] Test invalid strategy position sizing configs
-  - [ ] Test strategy position sizer creation and validation
+  - [x] Test strategy-specific fixed USD position sizing
+  - [x] Test strategy-specific risk-based position sizing
+  - [x] Test strategy-specific percent equity position sizing
+  - [x] Test position sizing config inheritance
+  - [x] Test invalid strategy position sizing configs
+  - [x] Test strategy position sizer creation and validation
 
-- [ ] **Update test_trading_engine.py**
-      (`packages/spark-app/tests/core/unit/test_trading_engine.py`)
-  - [ ] Test strategy context passing to risk manager
-  - [ ] Test position size calculation with strategy names
-  - [ ] Test hedge parameter calculation with strategy context
-  - [ ] Test trade execution with strategy-specific position sizing
+- [x] **Update test_trading_engine.py**
+      (`packages/spark-app/tests/backtesting/unit/test_trading_engine.py`)
+  - [x] Test strategy context passing to risk manager
+  - [x] Test position size calculation with strategy names
+  - [x] Test hedge parameter calculation with strategy context
+  - [x] Test trade execution with strategy-specific position sizing
 
 ### 3.7 Integration Tests
 
