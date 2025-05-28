@@ -102,12 +102,14 @@ class IndicatorFactory:
                 indicator_type = config.type
                 enabled = getattr(config, "enabled", True)
                 params = getattr(config, "parameters", {}) or {}
+                timeframe = getattr(config, "timeframe", "1h")  # Default to 1h
             elif isinstance(config, dict):
                 # It's a dictionary
                 name = config.get("name")
                 indicator_type = config.get("type")
                 enabled = config.get("enabled", True)
                 params = config.get("parameters", {}) or config.get("params", {})
+                timeframe = config.get("timeframe", "1h")  # Default to 1h
             else:
                 logger.warning(
                     f"Skipping invalid indicator config type: {type(config)}"
@@ -115,7 +117,7 @@ class IndicatorFactory:
                 continue
 
             logger.debug(
-                f"Processing indicator config: name={name}, type={indicator_type}, enabled={enabled}"
+                f"Processing indicator config: name={name}, type={indicator_type}, enabled={enabled}, timeframe={timeframe}"
             )
 
             if not name or not indicator_type:
@@ -128,11 +130,22 @@ class IndicatorFactory:
                 logger.info(f"Skipping disabled indicator: {name}")
                 continue
 
+            # Add timeframe to params so it gets passed to the indicator constructor
+            params['timeframe'] = timeframe
+
             indicator = cls.create_indicator(
                 name=name, indicator_type=indicator_type, params=params
             )
 
             if indicator:
+                # Ensure timeframe is properly set on the indicator
+                indicator.set_timeframe(timeframe)
+
+                # Validate that the timeframe is supported
+                supported_timeframes = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w"]
+                if timeframe not in supported_timeframes:
+                    logger.warning(f"Timeframe '{timeframe}' for indicator '{name}' may not be supported. Supported timeframes: {supported_timeframes}")
+
                 indicators[name] = indicator
                 logger.info(f"Created indicator: {indicator}")
 

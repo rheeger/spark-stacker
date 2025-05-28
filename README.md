@@ -91,21 +91,23 @@ Example configuration:
   "exchanges": [
     {
       "name": "hyperliquid",
-      "wallet_address": "YOUR_WALLET_ADDRESS",
-      "private_key": "YOUR_PRIVATE_KEY",
+      "exchange_type": "hyperliquid",
+      "wallet_address": "${WALLET_ADDRESS}",
+      "private_key": "${PRIVATE_KEY}",
       "testnet": true,
-      "use_as_main": true,
-      "use_as_hedge": true
+      "enabled": true,
+      "use_as_main": true
     }
   ],
   "strategies": [
     {
-      "name": "rsi_eth_strategy",
-      "market": "ETH",
+      "name": "eth_momentum_strategy",
+      "market": "ETH-USD", // ← Use full exchange symbol
+      "exchange": "hyperliquid", // ← Specify which exchange
       "enabled": true,
+      "timeframe": "4h", // ← Default timeframe
+      "indicators": ["eth_rsi_4h", "eth_macd_1h"], // ← Which indicators to use
       "main_leverage": 5.0,
-      "hedge_leverage": 2.0,
-      "hedge_ratio": 0.2,
       "stop_loss_pct": 10.0,
       "take_profit_pct": 20.0,
       "max_position_size": 100.0
@@ -113,19 +115,38 @@ Example configuration:
   ],
   "indicators": [
     {
-      "name": "eth_rsi",
-      "type": "rsi",
+      "name": "eth_rsi_4h", // ← Unique identifier
+      "type": "rsi", // ← Algorithm type
       "enabled": true,
+      "timeframe": "4h", // ← Data timeframe
       "parameters": {
         "period": 14,
         "overbought": 70,
         "oversold": 30,
         "signal_period": 1
       }
+    },
+    {
+      "name": "eth_macd_1h",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "1h", // ← Different timeframe
+      "parameters": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
+      }
     }
   ]
 }
 ```
+
+### Key Configuration Principles
+
+- **Strategies define WHAT to trade**: Market symbol ("ETH-USD"), which indicators to use, risk parameters
+- **Indicators define HOW to analyze**: Algorithm type, timeframe, and parameters
+- **Use full market symbols**: "ETH-USD", "BTC-USD", not just "ETH"
+- **Connect strategies to indicators**: Use the `indicators` array in strategy config
 
 ### Local Development
 

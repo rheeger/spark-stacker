@@ -106,6 +106,36 @@ class BaseIndicator(abc.ABC):
         self.name = name
         self.params = params or {}
 
+        # Set timeframe attributes with fallbacks
+        # Priority: explicit timeframe > interval > default to '1h'
+        self.timeframe = self.params.get('timeframe', '1h')
+        self.interval = self.params.get('interval', self.timeframe)
+
+        # For backward compatibility, ensure both attributes are available
+        if 'timeframe' in self.params and 'interval' not in self.params:
+            self.interval = self.timeframe
+        elif 'interval' in self.params and 'timeframe' not in self.params:
+            self.timeframe = self.interval
+
+    def get_effective_timeframe(self) -> str:
+        """
+        Get the effective timeframe for this indicator.
+
+        Returns:
+            The timeframe string (e.g., '1m', '1h', '4h', '1d')
+        """
+        return getattr(self, 'timeframe', getattr(self, 'interval', '1h'))
+
+    def set_timeframe(self, timeframe: str) -> None:
+        """
+        Set the timeframe for this indicator.
+
+        Args:
+            timeframe: Timeframe string (e.g., '1m', '1h', '4h', '1d')
+        """
+        self.timeframe = timeframe
+        self.interval = timeframe  # Keep interval in sync for backward compatibility
+
     @abc.abstractmethod
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -147,3 +177,7 @@ class BaseIndicator(abc.ABC):
         processed_data = self.calculate(data)
         signal = self.generate_signal(processed_data)
         return processed_data, signal
+
+    def __str__(self) -> str:
+        """String representation of the indicator."""
+        return f"{self.__class__.__name__}(name={self.name}, timeframe={self.get_effective_timeframe()})"

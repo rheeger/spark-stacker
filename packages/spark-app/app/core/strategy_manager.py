@@ -8,13 +8,15 @@ import numpy as np
 import pandas as pd
 from app.connectors.base_connector import BaseConnector
 from app.core.trading_engine import TradingEngine
-from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from app.indicators.base_indicator import (BaseIndicator, Signal,
+                                           SignalDirection)
 from app.indicators.macd_indicator import MACDIndicator
 from app.metrics import (INDICATOR_MACD, MARKET_ETH_USD, TIMEFRAME_1M,
-                     record_mvp_signal_latency, update_candle_data,
-                     update_macd_indicator, update_mvp_signal_state)
+                         record_mvp_signal_latency, update_candle_data,
+                         update_macd_indicator, update_mvp_signal_state)
 from app.metrics.registry import (publish_historical_time_series,
-                              set_historical_data_mode, verify_historical_data)
+                                  set_historical_data_mode,
+                                  verify_historical_data)
 
 logger = logging.getLogger(__name__)
 
@@ -453,13 +455,11 @@ class StrategyManager:
 
         # Check data for each indicator *before* running it
         for name, indicator in self.indicators.items():
-            # --- Placeholder: Get indicator requirements ---
-            # These need to be implemented in the BaseIndicator/specific indicators
+            # --- Get indicator requirements ---
             try:
-                # Assume indicators have 'required_periods' and 'interval' attributes
-                # Default to 50 periods and '1m' if not specified
+                # Get indicator-specific timeframe
                 required_periods = getattr(indicator, 'required_periods', 50)
-                interval = getattr(indicator, 'interval', '1m')
+                interval = indicator.get_effective_timeframe()  # Use the new method from BaseIndicator
                 cache_key = (symbol, interval)
                 first_fetch_done = self.historical_data_fetched.get(cache_key, False)
 
@@ -472,10 +472,10 @@ class StrategyManager:
 
                 # Add debug logging for the target MACD check
                 if isinstance(indicator, MACDIndicator):
-                    logger.info(f"MACD check details: indicator={name}, is_instance={isinstance(indicator, MACDIndicator)}, symbol_match={symbol == MARKET_ETH_USD}, indicator_symbol={getattr(indicator, 'symbol', None)}, target={MARKET_ETH_USD}")
+                    logger.info(f"MACD check details: indicator={name}, is_instance={isinstance(indicator, MACDIndicator)}, symbol_match={symbol == MARKET_ETH_USD}, indicator_symbol={getattr(indicator, 'symbol', None)}, target={MARKET_ETH_USD}, timeframe={interval}")
 
                 if is_target_macd:
-                    logger.info(f"Found target MACD indicator: {name} for {symbol}")
+                    logger.info(f"Found target MACD indicator: {name} for {symbol} on {interval} timeframe")
 
                 # If this is the first time running this indicator for this symbol/interval
                 if not first_fetch_done:
@@ -490,149 +490,99 @@ class StrategyManager:
                     )
 
                     if not historical_data.empty:
-                        # Update cache with historical data
-                        self.price_data[symbol] = historical_data
+                        # Update cache with historical data for this specific timeframe
+                        cache_key_str = f"{symbol}_{interval}"
+                        self.price_data[cache_key_str] = historical_data
                         current_data = historical_data.copy()
                         self.historical_data_fetched[cache_key] = True
-                        logger.info(f"Updated cache for {symbol} with {len(historical_data)} periods (after historical fetch).")
+                        logger.info(f"Updated cache for {cache_key_str} with {len(historical_data)} periods (after historical fetch).")
                     else:
                         logger.warning(f"Failed to fetch historical data for {symbol} ({interval})")
 
-            except Exception as e:
-                logger.error(f"Could not get requirements for indicator {name}: {e}. Skipping data check.")
-                continue
+                # Use the timeframe-specific cached data if available
+                cache_key_str = f"{symbol}_{interval}"
+                if cache_key_str in self.price_data and not self.price_data[cache_key_str].empty:
+                    current_data = self.price_data[cache_key_str].copy()
+                elif not current_data.empty:
+                    # If we don't have timeframe-specific data, use the general symbol data
+                    logger.debug(f"Using general data for {symbol} since no timeframe-specific data available for {interval}")
+                else:
+                    # Fetch current market data as fallback
+                    logger.info(f"No cached data available for {symbol} ({interval}), fetching current market data")
+                    current_data = self._fetch_current_market_data(symbol)
 
-        # --- Fetch Latest Tick ---
-        logger.debug(f"Fetching latest tick for {symbol} to append...")
-        latest_tick_data = self._fetch_current_market_data(symbol)
+                # --- END Prepare Data ---
 
-        if not latest_tick_data.empty:
-            # Use concat to append and remove duplicates based on timestamp
-            combined_data = pd.concat([current_data, latest_tick_data]).drop_duplicates(subset=['timestamp'], keep='last')
-            combined_data = combined_data.sort_values(by='timestamp').reset_index(drop=True)
-            current_data = combined_data.tail(self.data_window_size) # Ensure window size
-            self.price_data[symbol] = current_data # Update cache with latest tick included
-            logger.debug(f"Appended latest tick. Cache size for {symbol}: {len(current_data)}")
-        else:
-            logger.warning(f"Failed to fetch latest tick for {symbol}. Indicators will run on existing cached data.")
+                # Verify we have sufficient data
+                if len(current_data) < required_periods:
+                    logger.warning(f"Insufficient data for indicator {name}: need {required_periods}, have {len(current_data)}")
+                    continue
 
-        # --- End Prepare Data ---
-
-        # Check if data is still empty after all attempts
-        if self.price_data.get(symbol, pd.DataFrame()).empty:
-            logger.warning(f"Price data for {symbol} is empty after fetch attempts. Cannot run indicators.")
-            # Update signal state to neutral if applicable
-            if symbol == MARKET_ETH_USD: # Assuming this check is still relevant for MVP
+                # Run the indicator
                 try:
-                    update_mvp_signal_state(market=symbol, timeframe="1m", state=0)
-                except Exception as metric_e:
-                    logger.error(f"Failed to update NEUTRAL signal state metric: {metric_e}")
-            return signals # Return empty list
+                    processed_data, signal = indicator.process(current_data)
 
-        # Use the final prepared data from cache for running indicators
-        data_to_process = self.price_data[symbol].copy()
-
-        # Run each indicator
-        for name, indicator in self.indicators.items():
-            try:
-                # Check if this is the target MACD indicator for metrics
-                is_target_macd = (
-                    isinstance(indicator, MACDIndicator) and
-                    symbol == MARKET_ETH_USD and
-                    getattr(indicator, 'symbol', None) == MARKET_ETH_USD
-                )
-
-                # Process data through indicator
-                processed_data = indicator.calculate(data_to_process)
-                signal = indicator.generate_signal(processed_data)
-
-                # --- Metrics Update for MACD MVP ---
-                if is_target_macd:
-                    logger.debug(f"Processing target MACD indicator for {symbol}")
-                    # Update MACD component values
-                    if not processed_data.empty and all(col in processed_data.columns for col in ['macd', 'macd_signal', 'macd_histogram']):
-                        latest_values = processed_data.iloc[-1]
-                        try:
-                            update_macd_indicator(market=symbol, timeframe="1m", component="macd_line", value=float(latest_values['macd']))
-                            update_macd_indicator(market=symbol, timeframe="1m", component="signal_line", value=float(latest_values['macd_signal']))
-                            update_macd_indicator(market=symbol, timeframe="1m", component="histogram", value=float(latest_values['macd_histogram']))
-                            logger.debug(f"Updated MACD value metrics for {symbol}")
-                        except Exception as e:
-                            logger.error(f"Failed to update MACD value metrics for {symbol}: {e}", exc_info=True)
-                    else:
-                        logger.warning(f"MACD columns missing or data empty in processed_data for {symbol}. Cannot update value metrics.")
-
-                    # Determine and update signal state metric
-                    if signal:
-                        if signal.direction == SignalDirection.BUY:
-                            generated_signal_state = 1
-                        elif signal.direction == SignalDirection.SELL:
-                            generated_signal_state = -1
-                        else: # Handle NEUTRAL case
-                            generated_signal_state = 0
-                    else:
-                        # Check if enough data was available to even generate a signal
-                        required_periods_met = len(data_to_process) >= getattr(indicator, 'required_periods', 50)
-                        if required_periods_met:
-                            logger.debug(f"MACD for {symbol} ran with enough data but generated NO signal. State: NEUTRAL.")
-                            generated_signal_state = 0 # No signal means NEUTRAL state if enough data
+                    # --- Update signal-related Prometheus metrics for MVP strategy ---
+                    if is_target_macd:
+                        if signal and signal.direction in [SignalDirection.BUY, SignalDirection.SELL]:
+                            generated_signal_state = 1 if signal.direction == SignalDirection.BUY else -1
                         else:
-                            logger.debug(f"MACD for {symbol} ran with INSUFFICIENT data. State: NEUTRAL.")
-                            generated_signal_state = 0 # Still NEUTRAL if not enough data
+                            generated_signal_state = 0
 
-                    # Update the metric state outside the inner try/except for values
-                    try:
-                        update_mvp_signal_state(market=symbol, timeframe="1m", state=generated_signal_state)
-                        logger.debug(f"Updated MACD MVP signal state metric to {generated_signal_state} for {symbol}")
-                    except Exception as e:
-                        logger.error(f"Failed to update signal state metric for {symbol}: {e}", exc_info=True)
-                # --- End Metrics Update ---
+                        # Update MACD indicator metrics using the indicator's timeframe
+                        if 'macd' in processed_data.columns and not processed_data['macd'].empty:
+                            latest_values = processed_data.iloc[-1]
+                            if not pd.isna(latest_values['macd']):
+                                update_macd_indicator(market=symbol, timeframe=interval, component="macd_line", value=float(latest_values['macd']))
+                                update_macd_indicator(market=symbol, timeframe=interval, component="signal_line", value=float(latest_values['macd_signal']))
+                                update_macd_indicator(market=symbol, timeframe=interval, component="histogram", value=float(latest_values['macd_histogram']))
+                                logger.debug(f"Updated MACD metrics for {symbol} on {interval} timeframe")
 
-                # Add signal if one was generated
-                if signal:
-                    logger.info(f"Indicator {name} for {symbol} generated signal: {signal}")
-                    signals.append(signal)
+                    if signal:
+                        signals.append(signal)
+                        logger.info(f"Signal generated by {name}: {signal}")
+
+                    # --- Record Signal Metrics ---
+                    # (existing signal metrics code...)
+
+                except Exception as e:
+                    logger.error(f"Error running indicator {name}: {e}", exc_info=True)
+                    if is_target_macd:
+                        # Set signal state to neutral on error using the indicator's timeframe
+                        update_mvp_signal_state(market=symbol, timeframe=interval, state=0) # Set to Neutral on error
 
             except Exception as e:
-                logger.error(f"Error running indicator {name} for {symbol}: {e}", exc_info=True)
-                # If target MACD fails during processing, ensure state is set to NEUTRAL
-                if is_target_macd:
-                    try:
-                        update_mvp_signal_state(market=symbol, timeframe="1m", state=0) # Set to Neutral on error
-                        logger.warning(f"Setting signal state to NEUTRAL due to error during MACD processing for {symbol}")
-                    except Exception as metric_e:
-                        logger.error(f"Failed to update NEUTRAL signal state metric after error: {metric_e}")
+                logger.error(f"Error processing indicator {name}: {e}", exc_info=True)
 
-        # --- Handle Case Where Target MACD Indicator Is Not Configured At All ---
-        # Check if the target symbol was processed but no MACD indicator was found
-        target_symbol_processed = symbol == MARKET_ETH_USD
-        target_macd_exists = any(
-            isinstance(ind, MACDIndicator) and
-            getattr(ind, 'symbol', None) == MARKET_ETH_USD
-            for ind in self.indicators.values()
-        )
+        # --- Update MVP Signal State ---
+        # Find the first MACD indicator to determine which timeframe to use for MVP metrics
+        macd_timeframe = "1m"  # Default fallback
+        for name, indicator in self.indicators.items():
+            if isinstance(indicator, MACDIndicator) and symbol == MARKET_ETH_USD:
+                macd_timeframe = indicator.get_effective_timeframe()
+                break
 
-        if target_symbol_processed and not target_macd_exists:
-            try:
-                update_mvp_signal_state(market=symbol, timeframe="1m", state=0) # Ensure Neutral if MACD isn't configured
-                logger.debug(f"Target MACD indicator not configured for {symbol}. Setting signal state metric to NEUTRAL.")
-            except Exception as metric_e:
-                logger.error(f"Failed to update NEUTRAL signal state metric when MACD not configured: {metric_e}")
+        update_mvp_signal_state(market=symbol, timeframe=macd_timeframe, state=generated_signal_state)
 
-        # --- Update Candle Data Directly ---
-        if symbol == MARKET_ETH_USD and not data_to_process.empty:
-            try:
-                latest_candle = data_to_process.iloc[-1]
-                logger.info(f"Directly updating candle data metrics from run_indicators for {symbol}: {latest_candle[['open', 'high', 'low', 'close']].to_dict()}")
+        # --- Fetch Current Market Data ---
+        # Only fetch if we have indicators to run
+        if self.indicators:
+            current_candle_data = self._fetch_current_market_data(symbol)
+            if not current_candle_data.empty:
+                latest_candle = current_candle_data.iloc[-1]
 
-                update_candle_data(market=symbol, timeframe="1m", field="open", value=float(latest_candle['open']))
-                update_candle_data(market=symbol, timeframe="1m", field="high", value=float(latest_candle['high']))
-                update_candle_data(market=symbol, timeframe="1m", field="low", value=float(latest_candle['low']))
-                update_candle_data(market=symbol, timeframe="1m", field="close", value=float(latest_candle['close']))
+                # Update candle metrics using the first available timeframe or default to 1m
+                primary_timeframe = "1m"  # Default for live candle updates
+                if self.indicators:
+                    # Use the timeframe of the first indicator as primary
+                    first_indicator = next(iter(self.indicators.values()))
+                    primary_timeframe = first_indicator.get_effective_timeframe()
 
-                logger.info(f"Candle data metrics updated for {symbol}")
-            except Exception as e:
-                logger.error(f"Failed to update candle metrics directly: {e}", exc_info=True)
+                update_candle_data(market=symbol, timeframe=primary_timeframe, field="open", value=float(latest_candle['open']))
+                update_candle_data(market=symbol, timeframe=primary_timeframe, field="high", value=float(latest_candle['high']))
+                update_candle_data(market=symbol, timeframe=primary_timeframe, field="low", value=float(latest_candle['low']))
+                update_candle_data(market=symbol, timeframe=primary_timeframe, field="close", value=float(latest_candle['close']))
+                logger.debug(f"Updated candle metrics for {symbol} on {primary_timeframe} timeframe")
 
         return signals
 

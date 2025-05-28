@@ -902,7 +902,10 @@ def backtest(
 
     try:
         # Create indicator from factory
-        indicator_instance = IndicatorFactory.create(indicator)
+        indicator_instance = IndicatorFactory.create_indicator(
+            name=indicator,
+            indicator_type=indicator.lower()
+        )
 
         if config_file and os.path.exists(config_file):
             logger.info(f"Loading config from {config_file}")

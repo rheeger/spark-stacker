@@ -255,7 +255,7 @@ class MACDIndicator(BaseIndicator):
 
     def __str__(self) -> str:
         """String representation of the indicator."""
-        return f"MACD(fast={self.fast_period}, slow={self.slow_period}, signal={self.signal_period})"
+        return f"MACD(fast={self.fast_period}, slow={self.slow_period}, signal={self.signal_period}, timeframe={self.get_effective_timeframe()})"
 
     def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
         """
