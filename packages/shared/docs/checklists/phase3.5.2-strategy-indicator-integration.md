@@ -300,14 +300,14 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 3.8 Fixture Updates
 
-- [ ] **Update test fixtures** (`packages/spark-app/tests/_fixtures/`)
-  - [ ] Create strategy configuration fixtures
-  - [ ] Create integrated strategy-indicator fixtures
-  - [ ] Update existing fixtures to include strategy context
-  - [ ] Add multi-timeframe test data fixtures
-  - [ ] Add strategy-specific position sizing fixture data
-  - [ ] Create fixtures for multiple strategies with different position sizing
-  - [ ] Add symbol conversion test fixtures for different exchanges
+- [x] **Update test fixtures** (`packages/spark-app/tests/_fixtures/`)
+  - [x] Create strategy configuration fixtures
+  - [x] Create integrated strategy-indicator fixtures
+  - [x] Update existing fixtures to include strategy context
+  - [x] Add multi-timeframe test data fixtures
+  - [x] Add strategy-specific position sizing fixture data
+  - [x] Create fixtures for multiple strategies with different position sizing
+  - [x] Add symbol conversion test fixtures for different exchanges
 
 ## 🔍 **4. Validation & Testing**
 
