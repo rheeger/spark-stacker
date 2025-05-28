@@ -376,29 +376,29 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 4.2 Unit Test Execution
 
-- [ ] **Run all unit tests with coverage**
+- [x] **Run all unit tests with coverage**
 
   ```bash
   cd packages/spark-app
-  .venv/bin/python -m pytest tests/unit/ --cov=app --cov-report=html
+  .venv/bin/python -m pytest tests/*/unit/ --cov=app --cov-report=html
   ```
 
-- [ ] **Verify coverage for new code**
-  - [ ] StrategyManager changes: >90% coverage
-  - [ ] Signal enhancements: >95% coverage
-  - [ ] Trading engine updates: >90% coverage
-  - [ ] Strategy configuration: >95% coverage
+- [x] **Verify coverage for new code**
+  - [x] StrategyManager changes: >90% coverage
+  - [x] Signal enhancements: >95% coverage
+  - [x] Trading engine updates: >90% coverage
+  - [x] Strategy configuration: >95% coverage
 
 ### 4.3 Integration Test Execution
 
-- [ ] **Run integration tests**
+- [x] **Run integration tests**
 
   ```bash
   cd packages/spark-app
   .venv/bin/python -m pytest tests/integration/test_strategy_indicator_integration.py -v
   ```
 
-- [ ] **Test end-to-end strategy execution**
+- [x] **Test end-to-end strategy execution**
 
   ```bash
   cd packages/spark-app
@@ -407,11 +407,11 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 4.4 Performance Testing
 
-- [ ] **Test multi-strategy performance**
-  - [ ] Measure strategy execution time
-  - [ ] Verify no memory leaks with multiple strategies
-  - [ ] Test concurrent strategy execution
-  - [ ] Validate data caching efficiency
+- [x] **Test multi-strategy performance**
+  - [x] Measure strategy execution time
+  - [x] Verify no memory leaks with multiple strategies
+  - [x] Test concurrent strategy execution
+  - [x] Validate data caching efficiency
 
 ## 📚 **5. Documentation Updates**
 
@@ -437,7 +437,9 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 5.2 Architecture Documentation
 
-- [ ] **Update architectural-fixes.md** with implementation status
+- [ ] **Update architectural-fixes.md** with implementation status, move to Retro folder with
+      updated name
+- [ ] **Remove the IMMEDIATE-FIXES-SUMMARY.md file**
 - [ ] **Update configuration.md** with new strategy schema
 - [ ] **Update userguide.md** with strategy setup instructions
 - [ ] **Create strategy-development.md** guide for adding new strategies
