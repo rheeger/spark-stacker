@@ -19,16 +19,16 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 1.1 Exchange Symbol Conversion Utilities
 
-- [ ] **Create symbol conversion utilities** (`packages/spark-app/app/core/symbol_converter.py` -
+- [x] **Create symbol conversion utilities** (`packages/spark-app/app/core/symbol_converter.py` -
       NEW FILE)
 
-  - [ ] Add `convert_symbol_for_exchange()` function
-  - [ ] Handle Hyperliquid format ("ETH" from "ETH-USD")
-  - [ ] Handle Coinbase format ("ETH-USD" unchanged)
-  - [ ] Add support for additional exchanges
-  - [ ] Add validation for symbol formats
-  - [ ] Add error handling for unknown exchanges
-  - [ ] Create reverse conversion utilities (exchange → standard format)
+  - [x] Add `convert_symbol_for_exchange()` function
+  - [x] Handle Hyperliquid format ("ETH" from "ETH-USD")
+  - [x] Handle Coinbase format ("ETH-USD" unchanged)
+  - [x] Add support for additional exchanges
+  - [x] Add validation for symbol formats
+  - [x] Add error handling for unknown exchanges
+  - [x] Create reverse conversion utilities (exchange → standard format)
 
 ### 1.2 Strategy Manager Overhaul
 
