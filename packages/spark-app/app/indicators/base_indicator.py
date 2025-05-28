@@ -25,6 +25,10 @@ class Signal:
         confidence: A value between 0 and 1 indicating the confidence in the signal
         timestamp: The timestamp when the signal was generated
         params: Additional parameters specific to the signal
+        strategy_name: Optional strategy name that generated this signal
+        market: Optional market symbol in standard format (e.g., 'ETH-USD')
+        exchange: Optional exchange name
+        timeframe: Optional timeframe used for signal generation
     """
 
     def __init__(
@@ -35,6 +39,10 @@ class Signal:
         confidence: float = 0.5,
         timestamp: Optional[int] = None,
         params: Optional[Dict[str, Any]] = None,
+        strategy_name: Optional[str] = None,
+        market: Optional[str] = None,
+        exchange: Optional[str] = None,
+        timeframe: Optional[str] = None,
     ):
         """
         Initialize a new Signal.
@@ -46,6 +54,10 @@ class Signal:
             confidence: A value between 0 and 1 indicating the confidence in the signal
             timestamp: The timestamp when the signal was generated (milliseconds since epoch)
             params: Additional parameters specific to the signal
+            strategy_name: Optional strategy name that generated this signal
+            market: Optional market symbol in standard format (e.g., 'ETH-USD')
+            exchange: Optional exchange name
+            timeframe: Optional timeframe used for signal generation
         """
         self.direction = direction
         self.symbol = symbol
@@ -57,9 +69,15 @@ class Signal:
         self.timestamp = timestamp or int(time.time() * 1000)
         self.params = params or {}
 
+        # Strategy context
+        self.strategy_name = strategy_name
+        self.market = market
+        self.exchange = exchange
+        self.timeframe = timeframe
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert the signal to a dictionary."""
-        return {
+        result = {
             "direction": self.direction,
             "symbol": self.symbol,
             "indicator": self.indicator,
@@ -67,6 +85,18 @@ class Signal:
             "timestamp": self.timestamp,
             "params": self.params,
         }
+
+        # Add strategy context if available
+        if self.strategy_name:
+            result["strategy_name"] = self.strategy_name
+        if self.market:
+            result["market"] = self.market
+        if self.exchange:
+            result["exchange"] = self.exchange
+        if self.timeframe:
+            result["timeframe"] = self.timeframe
+
+        return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Signal":
@@ -78,14 +108,26 @@ class Signal:
             confidence=data.get("confidence", 0.5),
             timestamp=data.get("timestamp"),
             params=data.get("params", {}),
+            strategy_name=data.get("strategy_name"),
+            market=data.get("market"),
+            exchange=data.get("exchange"),
+            timeframe=data.get("timeframe"),
         )
 
     def __str__(self) -> str:
         """String representation of the signal."""
-        return (
+        base = (
             f"Signal({self.direction.value}, {self.symbol}, {self.indicator}, "
-            f"confidence={self.confidence:.2f}, timestamp={self.timestamp})"
+            f"confidence={self.confidence:.2f}, timestamp={self.timestamp}"
         )
+
+        # Add strategy context if available
+        if self.strategy_name:
+            base += f", strategy={self.strategy_name}"
+        if self.timeframe:
+            base += f", timeframe={self.timeframe}"
+
+        return base + ")"
 
 
 class BaseIndicator(abc.ABC):
@@ -106,35 +148,63 @@ class BaseIndicator(abc.ABC):
         self.name = name
         self.params = params or {}
 
-        # Set timeframe attributes with fallbacks
+        # Set default timeframe attributes with fallbacks
         # Priority: explicit timeframe > interval > default to '1h'
-        self.timeframe = self.params.get('timeframe', '1h')
-        self.interval = self.params.get('interval', self.timeframe)
+        self._default_timeframe = self.params.get('timeframe', '1h')
+        self._default_interval = self.params.get('interval', self._default_timeframe)
 
         # For backward compatibility, ensure both attributes are available
         if 'timeframe' in self.params and 'interval' not in self.params:
-            self.interval = self.timeframe
+            self._default_interval = self._default_timeframe
         elif 'interval' in self.params and 'timeframe' not in self.params:
-            self.timeframe = self.interval
+            self._default_timeframe = self._default_interval
 
-    def get_effective_timeframe(self) -> str:
+        # Current active timeframe (can be overridden by strategy)
+        self._active_timeframe = None
+
+    def get_effective_timeframe(self, strategy_timeframe: Optional[str] = None) -> str:
         """
         Get the effective timeframe for this indicator.
+
+        Strategy-provided timeframe takes precedence over indicator's default timeframe.
+
+        Args:
+            strategy_timeframe: Timeframe provided by the strategy
 
         Returns:
             The timeframe string (e.g., '1m', '1h', '4h', '1d')
         """
-        return getattr(self, 'timeframe', getattr(self, 'interval', '1h'))
+        if strategy_timeframe:
+            return strategy_timeframe
+        if self._active_timeframe:
+            return self._active_timeframe
+        return self._default_timeframe
 
     def set_timeframe(self, timeframe: str) -> None:
         """
-        Set the timeframe for this indicator.
+        Set the active timeframe for this indicator.
 
         Args:
             timeframe: Timeframe string (e.g., '1m', '1h', '4h', '1d')
         """
-        self.timeframe = timeframe
-        self.interval = timeframe  # Keep interval in sync for backward compatibility
+        self._active_timeframe = timeframe
+
+    def validate_timeframe(self, timeframe: str) -> bool:
+        """
+        Validate if this indicator supports the given timeframe.
+
+        Override this method in specific indicators to add timeframe restrictions.
+
+        Args:
+            timeframe: Timeframe to validate
+
+        Returns:
+            True if timeframe is supported, False otherwise
+        """
+        # Basic timeframe format validation
+        import re
+        pattern = r'^(\d+)([mhd]|min)$'
+        return bool(re.match(pattern, timeframe.lower()))
 
     @abc.abstractmethod
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -162,22 +232,69 @@ class BaseIndicator(abc.ABC):
         """
         pass
 
-    def process(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[Signal]]:
+    def process(self, data: pd.DataFrame, strategy_timeframe: Optional[str] = None) -> Tuple[pd.DataFrame, Optional[Signal]]:
         """
         Process price data and generate a signal if conditions are met.
 
         This method combines calculate() and generate_signal().
+        If a strategy_timeframe is provided, it takes precedence over the indicator's default timeframe.
 
         Args:
             data: Price data as a pandas DataFrame
+            strategy_timeframe: Optional timeframe provided by strategy (takes precedence)
 
         Returns:
             Tuple of (processed_data, signal)
         """
-        processed_data = self.calculate(data)
-        signal = self.generate_signal(processed_data)
-        return processed_data, signal
+        # Determine effective timeframe
+        effective_timeframe = self.get_effective_timeframe(strategy_timeframe)
+
+        # Validate timeframe if provided by strategy
+        if strategy_timeframe and not self.validate_timeframe(strategy_timeframe):
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Indicator '{self.name}' does not support timeframe '{strategy_timeframe}', using default '{self._default_timeframe}'")
+            effective_timeframe = self._default_timeframe
+
+        # Store the effective timeframe for the calculation
+        previous_timeframe = self._active_timeframe
+        self._active_timeframe = effective_timeframe
+
+        try:
+            processed_data = self.calculate(data)
+            signal = self.generate_signal(processed_data)
+
+            # Add timeframe context to signal if generated
+            if signal and effective_timeframe:
+                signal.timeframe = effective_timeframe
+
+            return processed_data, signal
+        finally:
+            # Restore previous active timeframe
+            self._active_timeframe = previous_timeframe
 
     def __str__(self) -> str:
         """String representation of the indicator."""
-        return f"{self.__class__.__name__}(name={self.name}, timeframe={self.get_effective_timeframe()})"
+        effective_timeframe = self.get_effective_timeframe()
+        return f"{self.__class__.__name__}(name={self.name}, timeframe={effective_timeframe})"
+
+    # Backward compatibility properties
+    @property
+    def timeframe(self) -> str:
+        """Backward compatibility property for timeframe access."""
+        return self.get_effective_timeframe()
+
+    @timeframe.setter
+    def timeframe(self, value: str) -> None:
+        """Backward compatibility setter for timeframe."""
+        self.set_timeframe(value)
+
+    @property
+    def interval(self) -> str:
+        """Backward compatibility property for interval access."""
+        return self.get_effective_timeframe()
+
+    @interval.setter
+    def interval(self, value: str) -> None:
+        """Backward compatibility setter for interval."""
+        self.set_timeframe(value)

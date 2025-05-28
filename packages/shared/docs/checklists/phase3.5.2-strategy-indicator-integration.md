@@ -92,12 +92,12 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 1.4 Indicator Timeframe Integration
 
-- [ ] **Update BaseIndicator class** (`packages/spark-app/app/indicators/base_indicator.py`)
-  - [ ] **Remove fixed timeframe from indicators** - indicators should not have hardcoded timeframes
-  - [ ] **Update process() method** to accept timeframe parameter from strategy
-  - [ ] **Add get_effective_timeframe() override** to use strategy-provided timeframe when available
-  - [ ] Update indicator data preparation to use strategy timeframe
-  - [ ] Add validation for supported timeframes per indicator type
+- [x] **Update BaseIndicator class** (`packages/spark-app/app/indicators/base_indicator.py`)
+  - [x] **Remove fixed timeframe from indicators** - indicators should not have hardcoded timeframes
+  - [x] **Update process() method** to accept timeframe parameter from strategy
+  - [x] **Add get_effective_timeframe() override** to use strategy-provided timeframe when available
+  - [x] Update indicator data preparation to use strategy timeframe
+  - [x] Add validation for supported timeframes per indicator type
 
 ### 1.5 Signal Enhancement
 
