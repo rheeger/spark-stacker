@@ -233,26 +233,26 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 3.4 Unit Tests - Trading Engine
 
-- [ ] **Update test_trading_engine.py**
-      (`packages/spark-app/tests/unit/core/test_trading_engine.py`)
-  - [ ] Test `process_signal()` with strategy context
-  - [ ] Test symbol conversion utilities integration
-  - [ ] Test `_get_connector_by_name()` method
-  - [ ] Test connector routing based on signal exchange
-  - [ ] Test fallback behavior for unknown exchanges
+- [x] **Update test_trading_engine.py**
+      (`packages/spark-app/tests/backtesting/unit/test_trading_engine.py`)
+  - [x] Test `process_signal()` with strategy context
+  - [x] Test symbol conversion utilities integration
+  - [x] Test `_get_connector_by_name()` method
+  - [x] Test connector routing based on signal exchange
+  - [x] Test fallback behavior for unknown exchanges
 
 ### 3.5 Unit Tests - Configuration
 
-- [ ] **Create test_strategy_config.py**
-      (`packages/spark-app/tests/unit/core/test_strategy_config.py` - NEW FILE)
-  - [ ] Test StrategyConfig validation
-  - [ ] Test invalid market format handling
-  - [ ] Test missing exchange handling
-  - [ ] Test empty indicators list handling
-  - [ ] Test StrategyConfigLoader functionality
-  - [ ] Test strategy-indicator relationship validation
-  - [ ] Test strategy-specific position sizing configuration validation
-  - [ ] Test position sizing inheritance from global config
+- [x] **Create test_strategy_config.py**
+      (`packages/spark-app/tests/core/unit/test_strategy_config.py` - NEW FILE)
+  - [x] Test StrategyConfig validation
+  - [x] Test invalid market format handling
+  - [x] Test missing exchange handling
+  - [x] Test empty indicators list handling
+  - [x] Test StrategyConfigLoader functionality
+  - [x] Test strategy-indicator relationship validation
+  - [x] Test strategy-specific position sizing configuration validation
+  - [x] Test position sizing inheritance from global config
 
 ### 3.6 Unit Tests - Strategy-Specific Position Sizing
 
@@ -277,7 +277,7 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Test strategy position sizer creation and validation
 
 - [ ] **Update test_trading_engine.py**
-      (`packages/spark-app/tests/unit/core/test_trading_engine.py`)
+      (`packages/spark-app/tests/core/unit/test_trading_engine.py`)
   - [ ] Test strategy context passing to risk manager
   - [ ] Test position size calculation with strategy names
   - [ ] Test hedge parameter calculation with strategy context
