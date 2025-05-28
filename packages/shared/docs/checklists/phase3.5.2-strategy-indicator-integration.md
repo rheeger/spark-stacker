@@ -101,36 +101,36 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 1.5 Signal Enhancement
 
-- [ ] **Expand Signal class** (`packages/spark-app/app/indicators/base_indicator.py`)
-  - [ ] Add `strategy_name: Optional[str]` field
-  - [ ] Add `market: Optional[str]` field
-  - [ ] Add `exchange: Optional[str]` field
-  - [ ] **Add `timeframe: Optional[str]` field** to capture strategy timeframe
-  - [ ] Update `__str__()` method to include strategy context
-  - [ ] Ensure backward compatibility
+- [x] **Expand Signal class** (`packages/spark-app/app/indicators/base_indicator.py`)
+  - [x] Add `strategy_name: Optional[str]` field
+  - [x] Add `market: Optional[str]` field
+  - [x] Add `exchange: Optional[str]` field
+  - [x] **Add `timeframe: Optional[str]` field** to capture strategy timeframe
+  - [x] Update `__str__()` method to include strategy context
+  - [x] Ensure backward compatibility
 
 ### 1.6 Trading Engine Updates
 
-- [ ] **Update process_signal() method** (`packages/spark-app/app/core/trading_engine.py`)
+- [x] **Update process_signal() method** (`packages/spark-app/app/core/trading_engine.py`)
 
-  - [ ] Use signal's exchange context for connector routing
-  - [ ] Use signal's market field instead of symbol
-  - [ ] Add error handling for missing signal context
-  - [ ] Add logging for signal processing flow
+  - [x] Use signal's exchange context for connector routing
+  - [x] Use signal's market field instead of symbol
+  - [x] Add error handling for missing signal context
+  - [x] Add logging for signal processing flow
 
-- [ ] **Import and use symbol conversion utilities**
+- [x] **Import and use symbol conversion utilities**
       (`packages/spark-app/app/core/trading_engine.py`)
 
-  - [ ] Import `convert_symbol_for_exchange()` from symbol_converter
-  - [ ] Use symbol conversion utilities instead of local methods
-  - [ ] Update `_execute_trade()` to use standardized symbol conversion
-  - [ ] Remove duplicate symbol conversion code
+  - [x] Import `convert_symbol_for_exchange()` from symbol_converter
+  - [x] Use symbol conversion utilities instead of local methods
+  - [x] Update `_execute_trade()` to use standardized symbol conversion
+  - [x] Remove duplicate symbol conversion code
 
-- [ ] **Enhance connector selection** (`packages/spark-app/app/core/trading_engine.py`)
-  - [ ] Add `_get_connector_by_name()` method
-  - [ ] Route to correct connector based on signal's exchange
-  - [ ] Add fallback to main connector
-  - [ ] Add error handling for unknown exchanges
+- [x] **Enhance connector selection** (`packages/spark-app/app/core/trading_engine.py`)
+  - [x] Add `_get_connector_by_name()` method
+  - [x] Route to correct connector based on signal's exchange
+  - [x] Add fallback to main connector
+  - [x] Add error handling for unknown exchanges
 
 ## 🏗️ **2. Configuration Schema & Validation**
 
