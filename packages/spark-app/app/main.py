@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 from app.connectors.connector_factory import ConnectorFactory
 from app.core.strategy_manager import StrategyManager
 from app.core.trading_engine import TradingEngine
+from app.indicators.base_indicator import Signal, SignalDirection
 from app.indicators.indicator_factory import IndicatorFactory
 from app.metrics import start_metrics_server, update_mvp_signal_state
 from app.metrics.registry import start_historical_data_api
@@ -48,6 +49,48 @@ def signal_handler(sig, frame):
     global is_running
     logger.info("Shutdown signal received, stopping services...")
     is_running = False
+
+
+def _validate_strategy_indicators(strategies: List[Dict[str, Any]], indicators: Dict[str, Any]) -> None:
+    """
+    Validate strategy-indicator relationships and configuration requirements.
+
+    Args:
+        strategies: List of strategy configurations
+        indicators: Dictionary of loaded indicators
+
+    Raises:
+        ValueError: If validation fails
+    """
+    logger.info("Validating strategy-indicator relationships...")
+
+    for strategy in strategies:
+        strategy_name = strategy.get("name", "unknown")
+        logger.debug(f"Validating strategy: {strategy_name}")
+
+        # Validate market symbol format (must contain "-")
+        market = strategy.get("market", "")
+        if not market or "-" not in market:
+            raise ValueError(f"Strategy '{strategy_name}' has invalid market format: '{market}'. Must contain '-' (e.g., 'ETH-USD')")
+
+        # Validate exchange field is present
+        exchange = strategy.get("exchange", "")
+        if not exchange:
+            raise ValueError(f"Strategy '{strategy_name}' missing required 'exchange' field")
+
+        # Validate indicators list exists and is not empty
+        strategy_indicators = strategy.get("indicators", [])
+        if not strategy_indicators:
+            raise ValueError(f"Strategy '{strategy_name}' has no indicators specified")
+
+        # Validate all strategy indicators exist in loaded indicators
+        for indicator_name in strategy_indicators:
+            if indicator_name not in indicators:
+                raise ValueError(f"Strategy '{strategy_name}' references unknown indicator: '{indicator_name}'")
+
+        logger.debug(f"Strategy '{strategy_name}' validation passed: market={market}, exchange={exchange}, indicators={strategy_indicators}")
+
+    logger.info(f"Successfully validated {len(strategies)} strategies")
 
 
 def initialize_logging(config: Dict[str, Any]) -> None:
@@ -545,7 +588,7 @@ async def async_main():
             enable_hedging=config.get("enable_hedging", True),  # Use config setting for hedging
         )
 
-        # Initialize strategy manager with indicators
+        # Initialize indicators
         indicators = IndicatorFactory.create_indicators_from_config(
             config.get("indicators", [])
         )
@@ -559,31 +602,24 @@ async def async_main():
                 f"Loaded {len(indicators)} indicator(s): {', '.join(indicators.keys())}"
             )
 
-            # --- Add Symbol to Indicators ---
-            logger.info("Attempting to assign symbols to indicators based on their names...")
-            for name, indicator in indicators.items():
-                # Try to parse symbol from name like type_SYMBOL_timeframe or type_SYMBOL
-                # Example: macd_ETH_USD_1m -> ETH-USD, rsi_BTC_USD -> BTC-USD
-                # Updated regex to handle multiple parts and timeframe suffix
-                match = re.match(r"^([^_]+)_([^_]+)_([^_]+)(?:_([^_]+))?$", name)
-                if match:
-                    # Group 2 is the base currency, Group 3 is the quote currency
-                    base_currency = match.group(2)
-                    quote_currency = match.group(3)
-                    # Combine and format as BASE-QUOTE
-                    symbol_str = f"{base_currency}-{quote_currency}".upper()
-                    setattr(indicator, 'symbol', symbol_str)
-                    logger.info(f"  Assigned symbol '{symbol_str}' to indicator '{name}'")
-                else:
-                    logger.warning(
-                        f"Could not parse symbol from indicator name '{name}'. Indicator might not run unless price data is explicitly provided."
-                    )
-            # --- End Add Symbol ---
+        # Load and validate strategies
+        strategies = config.get("strategies", [])
+        if strategies:
+            try:
+                _validate_strategy_indicators(strategies, indicators)
+                logger.info(f"Successfully loaded and validated {len(strategies)} strategies")
+            except ValueError as e:
+                logger.error(f"Strategy validation failed: {str(e)}")
+                sys.exit(1)
+        else:
+            logger.warning("No strategies configured in configuration file")
 
+        # Initialize strategy manager with strategies and indicators
         strategy_manager = StrategyManager(
             trading_engine=engine,
             indicators=indicators,
-            config=config
+            config=config,
+            strategies=strategies
         )
 
         # Start the trading engine

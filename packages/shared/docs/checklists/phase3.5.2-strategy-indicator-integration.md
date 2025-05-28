@@ -69,26 +69,26 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 1.3 Main Application Integration
 
-- [ ] **Remove legacy symbol parsing** (`packages/spark-app/app/main.py`)
+- [x] **Remove legacy symbol parsing** (`packages/spark-app/app/main.py`)
 
-  - [ ] Delete regex symbol parsing block (lines ~561-581)
-  - [ ] Remove symbol assignment to indicators
-  - [ ] Clean up related comments and logging
+  - [x] Delete regex symbol parsing block (lines ~561-581)
+  - [x] Remove symbol assignment to indicators
+  - [x] Clean up related comments and logging
 
-- [ ] **Add strategy initialization** (`packages/spark-app/app/main.py`)
+- [x] **Add strategy initialization** (`packages/spark-app/app/main.py`)
 
-  - [ ] Load strategies from config
-  - [ ] Create `_validate_strategy_indicators()` function
-  - [ ] Validate strategy-indicator relationships
-  - [ ] Validate market symbol formats (must contain "-")
-  - [ ] Validate exchange fields are present
-  - [ ] Pass strategies to StrategyManager constructor
+  - [x] Load strategies from config
+  - [x] Create `_validate_strategy_indicators()` function
+  - [x] Validate strategy-indicator relationships
+  - [x] Validate market symbol formats (must contain "-")
+  - [x] Validate exchange fields are present
+  - [x] Pass strategies to StrategyManager constructor
 
-- [ ] **Update async_main() function** (`packages/spark-app/app/main.py`)
-  - [ ] Add strategy loading after indicator loading
-  - [ ] Add strategy-indicator validation call
-  - [ ] Update StrategyManager initialization with strategies
-  - [ ] Add comprehensive error handling
+- [x] **Update async_main() function** (`packages/spark-app/app/main.py`)
+  - [x] Add strategy loading after indicator loading
+  - [x] Add strategy-indicator validation call
+  - [x] Update StrategyManager initialization with strategies
+  - [x] Add comprehensive error handling
 
 ### 1.4 Indicator Timeframe Integration
 
