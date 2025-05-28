@@ -211,16 +211,16 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 3.2 Unit Tests - Strategy Manager
 
-- [ ] **Create test_strategy_manager_integration.py**
+- [x] **Create test_strategy_manager_integration.py**
       (`packages/spark-app/tests/unit/core/test_strategy_manager_integration.py` - NEW FILE)
-  - [ ] Test StrategyManager with strategy configs
-  - [ ] Test `_build_strategy_mappings()` method
-  - [ ] Test strategy-driven `run_cycle()` execution
-  - [ ] Test `run_strategy_indicators()` method
-  - [ ] Test signal generation with strategy context
-  - [ ] Test error handling for missing indicators
-  - [ ] Test error handling for invalid strategies
-  - [ ] Test symbol conversion in `_prepare_indicator_data()` method
+  - [x] Test StrategyManager with strategy configs
+  - [x] Test `_build_strategy_mappings()` method
+  - [x] Test strategy-driven `run_cycle()` execution
+  - [x] Test `run_strategy_indicators()` method
+  - [x] Test signal generation with strategy context
+  - [x] Test error handling for missing indicators
+  - [x] Test error handling for invalid strategies
+  - [x] Test symbol conversion in `_prepare_indicator_data()` method
 
 ### 3.3 Unit Tests - Signal Enhancement
 
