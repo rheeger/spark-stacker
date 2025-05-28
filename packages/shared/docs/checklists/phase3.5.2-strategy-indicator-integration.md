@@ -17,7 +17,20 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ## 🏗️ **1. Core Architecture Fixes**
 
-### 1.1 Strategy Manager Overhaul
+### 1.1 Exchange Symbol Conversion Utilities
+
+- [ ] **Create symbol conversion utilities** (`packages/spark-app/app/core/symbol_converter.py` -
+      NEW FILE)
+
+  - [ ] Add `convert_symbol_for_exchange()` function
+  - [ ] Handle Hyperliquid format ("ETH" from "ETH-USD")
+  - [ ] Handle Coinbase format ("ETH-USD" unchanged)
+  - [ ] Add support for additional exchanges
+  - [ ] Add validation for symbol formats
+  - [ ] Add error handling for unknown exchanges
+  - [ ] Create reverse conversion utilities (exchange → standard format)
+
+### 1.2 Strategy Manager Overhaul
 
 - [ ] **Update StrategyManager constructor** (`packages/spark-app/app/core/strategy_manager.py`)
 
@@ -39,19 +52,22 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
   - [ ] Accept strategy config, market, and indicator names
   - [ ] Validate indicators exist for strategy
-  - [ ] Get indicator-specific timeframes
-  - [ ] Prepare data per market/timeframe combination
-  - [ ] Add strategy context to generated signals
+  - [ ] **Use strategy timeframe for all indicators** (strategy dictates timeframe)
+  - [ ] Pass strategy timeframe to indicators during processing
+  - [ ] Prepare data per market/strategy-timeframe combination
+  - [ ] Add strategy context to generated signals (including timeframe)
   - [ ] Return list of signals with strategy metadata
 
 - [ ] **Update \_prepare_indicator_data() method**
       (`packages/spark-app/app/core/strategy_manager.py`)
   - [ ] Accept market symbol (e.g., "ETH-USD") instead of indicator name
+  - [ ] **Use symbol conversion utilities** to convert market symbol for exchange
   - [ ] Use market + timeframe for cache keys
-  - [ ] Fetch historical data using proper market symbols
+  - [ ] Fetch historical data using exchange-specific symbols
   - [ ] Add error handling for data fetching failures
+  - [ ] Add logging for symbol conversion process
 
-### 1.2 Main Application Integration
+### 1.3 Main Application Integration
 
 - [ ] **Remove legacy symbol parsing** (`packages/spark-app/app/main.py`)
 
@@ -74,16 +90,26 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Update StrategyManager initialization with strategies
   - [ ] Add comprehensive error handling
 
-### 1.3 Signal Enhancement
+### 1.4 Indicator Timeframe Integration
+
+- [ ] **Update BaseIndicator class** (`packages/spark-app/app/indicators/base_indicator.py`)
+  - [ ] **Remove fixed timeframe from indicators** - indicators should not have hardcoded timeframes
+  - [ ] **Update process() method** to accept timeframe parameter from strategy
+  - [ ] **Add get_effective_timeframe() override** to use strategy-provided timeframe when available
+  - [ ] Update indicator data preparation to use strategy timeframe
+  - [ ] Add validation for supported timeframes per indicator type
+
+### 1.5 Signal Enhancement
 
 - [ ] **Expand Signal class** (`packages/spark-app/app/indicators/base_indicator.py`)
   - [ ] Add `strategy_name: Optional[str]` field
   - [ ] Add `market: Optional[str]` field
   - [ ] Add `exchange: Optional[str]` field
+  - [ ] **Add `timeframe: Optional[str]` field** to capture strategy timeframe
   - [ ] Update `__str__()` method to include strategy context
   - [ ] Ensure backward compatibility
 
-### 1.4 Trading Engine Updates
+### 1.6 Trading Engine Updates
 
 - [ ] **Update process_signal() method** (`packages/spark-app/app/core/trading_engine.py`)
 
@@ -92,12 +118,13 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Add error handling for missing signal context
   - [ ] Add logging for signal processing flow
 
-- [ ] **Create symbol conversion utilities** (`packages/spark-app/app/core/trading_engine.py`)
+- [ ] **Import and use symbol conversion utilities**
+      (`packages/spark-app/app/core/trading_engine.py`)
 
-  - [ ] Add `_convert_symbol_for_exchange()` method
-  - [ ] Handle Hyperliquid format ("ETH" from "ETH-USD")
-  - [ ] Handle Coinbase format ("ETH-USD" unchanged)
-  - [ ] Add support for additional exchanges
+  - [ ] Import `convert_symbol_for_exchange()` from symbol_converter
+  - [ ] Use symbol conversion utilities instead of local methods
+  - [ ] Update `_execute_trade()` to use standardized symbol conversion
+  - [ ] Remove duplicate symbol conversion code
 
 - [ ] **Enhance connector selection** (`packages/spark-app/app/core/trading_engine.py`)
   - [ ] Add `_get_connector_by_name()` method
@@ -116,6 +143,11 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Validate market format (must contain "-")
   - [ ] Validate exchange is specified
   - [ ] Validate indicators list is not empty
+  - [ ] **Add timeframe field** (`timeframe: str = "1h"`) - strategy dictates timeframe for all
+        indicators
+  - [ ] Add position sizing configuration field (`position_sizing: Optional[Dict[str, Any]]`)
+  - [ ] Add risk management fields (stop_loss_pct, take_profit_pct, max_position_size_usd)
+  - [ ] **Validate timeframe format** (e.g., "1m", "5m", "1h", "4h", "1d")
 
 - [ ] **Create StrategyConfigLoader class** (`packages/spark-app/app/core/strategy_config.py`)
   - [ ] Add `load_strategies()` static method
@@ -123,8 +155,37 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Add `validate_indicators()` static method
   - [ ] Verify all strategy indicators exist
   - [ ] Add detailed logging for validation steps
+  - [ ] Validate position sizing configurations per strategy
 
-### 2.2 Configuration Validation
+### 2.2 Strategy-Specific Position Sizing Integration
+
+- [ ] **Update RiskManager for strategy context**
+      (`packages/spark-app/app/risk_management/risk_manager.py`)
+
+  - [ ] Add `strategy_position_sizers: Dict[str, PositionSizer]` attribute
+  - [ ] Create `_create_strategy_position_sizers()` method
+  - [ ] Update `calculate_position_size()` to accept strategy name parameter
+  - [ ] Add strategy context routing to appropriate position sizer
+  - [ ] Update `from_config()` to handle strategy-specific position sizing configs
+  - [ ] Add fallback to default position sizer for strategies without specific config
+
+- [ ] **Create strategy position sizer factory**
+      (`packages/spark-app/app/risk_management/risk_manager.py`)
+
+  - [ ] Add `_create_position_sizer_for_strategy()` method
+  - [ ] Merge strategy-specific config with global defaults
+  - [ ] Handle inheritance of global position sizing parameters
+  - [ ] Add validation for strategy position sizing configuration
+  - [ ] Log position sizer creation per strategy
+
+- [ ] **Update TradingEngine for strategy context**
+      (`packages/spark-app/app/core/trading_engine.py`)
+  - [ ] Pass strategy name to risk manager methods
+  - [ ] Update `_execute_trade()` to include strategy context
+  - [ ] Update hedge parameter calculation with strategy context
+  - [ ] Add strategy-specific risk logging
+
+### 2.3 Configuration Validation
 
 - [ ] **Validate current config.json** (`packages/shared/config.json`)
   - [ ] Ensure all strategies have proper market format ("ETH-USD")
@@ -132,10 +193,23 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Ensure all strategies list their indicators
   - [ ] Ensure all referenced indicators exist in config
   - [ ] Test configuration loading without errors
+  - [ ] Validate strategy-specific position sizing configurations
+  - [ ] Test position sizer creation for each strategy
 
 ## 🧪 **3. Testing Infrastructure**
 
-### 3.1 Unit Tests - Strategy Manager
+### 3.1 Unit Tests - Symbol Conversion
+
+- [ ] **Create test_symbol_converter.py**
+      (`packages/spark-app/tests/unit/core/test_symbol_converter.py` - NEW FILE)
+  - [ ] Test `convert_symbol_for_exchange()` with Hyperliquid format
+  - [ ] Test `convert_symbol_for_exchange()` with Coinbase format
+  - [ ] Test symbol conversion with unknown exchanges
+  - [ ] Test reverse symbol conversion utilities
+  - [ ] Test symbol validation
+  - [ ] Test error handling for invalid symbols
+
+### 3.2 Unit Tests - Strategy Manager
 
 - [ ] **Create test_strategy_manager_integration.py**
       (`packages/spark-app/tests/unit/core/test_strategy_manager_integration.py` - NEW FILE)
@@ -146,8 +220,9 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Test signal generation with strategy context
   - [ ] Test error handling for missing indicators
   - [ ] Test error handling for invalid strategies
+  - [ ] Test symbol conversion in `_prepare_indicator_data()` method
 
-### 3.2 Unit Tests - Signal Enhancement
+### 3.3 Unit Tests - Signal Enhancement
 
 - [ ] **Update test_base_indicator.py**
       (`packages/spark-app/tests/unit/indicators/test_base_indicator.py`)
@@ -156,17 +231,17 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Test backward compatibility with existing signals
   - [ ] Test signal metadata preservation
 
-### 3.3 Unit Tests - Trading Engine
+### 3.4 Unit Tests - Trading Engine
 
 - [ ] **Update test_trading_engine.py**
       (`packages/spark-app/tests/unit/core/test_trading_engine.py`)
   - [ ] Test `process_signal()` with strategy context
-  - [ ] Test `_convert_symbol_for_exchange()` method
+  - [ ] Test symbol conversion utilities integration
   - [ ] Test `_get_connector_by_name()` method
   - [ ] Test connector routing based on signal exchange
   - [ ] Test fallback behavior for unknown exchanges
 
-### 3.4 Unit Tests - Configuration
+### 3.5 Unit Tests - Configuration
 
 - [ ] **Create test_strategy_config.py**
       (`packages/spark-app/tests/unit/core/test_strategy_config.py` - NEW FILE)
@@ -176,8 +251,39 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Test empty indicators list handling
   - [ ] Test StrategyConfigLoader functionality
   - [ ] Test strategy-indicator relationship validation
+  - [ ] Test strategy-specific position sizing configuration validation
+  - [ ] Test position sizing inheritance from global config
 
-### 3.5 Integration Tests
+### 3.6 Unit Tests - Strategy-Specific Position Sizing
+
+- [ ] **Update test_risk_manager_integration.py**
+      (`packages/spark-app/tests/risk_management/unit/test_risk_manager_integration.py`)
+
+  - [ ] Test RiskManager creation with strategy-specific position sizing
+  - [ ] Test `calculate_position_size()` with strategy context
+  - [ ] Test strategy position sizer routing
+  - [ ] Test fallback to default position sizer
+  - [ ] Test multiple strategies with different position sizing methods
+  - [ ] Test position sizer factory method
+
+- [ ] **Create test_strategy_position_sizing.py**
+      (`packages/spark-app/tests/risk_management/unit/test_strategy_position_sizing.py` - NEW FILE)
+
+  - [ ] Test strategy-specific fixed USD position sizing
+  - [ ] Test strategy-specific risk-based position sizing
+  - [ ] Test strategy-specific percent equity position sizing
+  - [ ] Test position sizing config inheritance
+  - [ ] Test invalid strategy position sizing configs
+  - [ ] Test strategy position sizer creation and validation
+
+- [ ] **Update test_trading_engine.py**
+      (`packages/spark-app/tests/unit/core/test_trading_engine.py`)
+  - [ ] Test strategy context passing to risk manager
+  - [ ] Test position size calculation with strategy names
+  - [ ] Test hedge parameter calculation with strategy context
+  - [ ] Test trade execution with strategy-specific position sizing
+
+### 3.7 Integration Tests
 
 - [ ] **Create test_strategy_indicator_integration.py**
       (`packages/spark-app/tests/integration/test_strategy_indicator_integration.py` - NEW FILE)
@@ -187,14 +293,20 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Test multi-timeframe support
   - [ ] Test error propagation through the pipeline
   - [ ] Test configuration loading and validation
+  - [ ] Test strategy-specific position sizing in full pipeline
+  - [ ] Test multiple strategies with different position sizing methods
+  - [ ] Test symbol conversion integration across the pipeline
 
-### 3.6 Fixture Updates
+### 3.8 Fixture Updates
 
 - [ ] **Update test fixtures** (`packages/spark-app/tests/_fixtures/`)
   - [ ] Create strategy configuration fixtures
   - [ ] Create integrated strategy-indicator fixtures
   - [ ] Update existing fixtures to include strategy context
   - [ ] Add multi-timeframe test data fixtures
+  - [ ] Add strategy-specific position sizing fixture data
+  - [ ] Create fixtures for multiple strategies with different position sizing
+  - [ ] Add symbol conversion test fixtures for different exchanges
 
 ## 🔍 **4. Validation & Testing**
 
@@ -232,6 +344,32 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
   _validate_strategy_indicators(config['strategies'], config['indicators'])
   print('✅ Strategy-indicator validation passed')
+  "
+  ```
+
+- [ ] **Test strategy-specific position sizing validation**
+
+  ```bash
+  cd packages/spark-app
+  .venv/bin/python -c "
+  import json
+  from app.risk_management.risk_manager import RiskManager
+  from app.core.strategy_config import StrategyConfigLoader
+
+  with open('../shared/config.json') as f:
+      config = json.load(f)
+
+  # Test RiskManager creation with strategy configs
+  strategies = StrategyConfigLoader.load_strategies(config['strategies'])
+  risk_manager = RiskManager.from_config(config)
+
+  # Test position sizer creation for each strategy
+  for strategy in strategies:
+      print(f'Testing position sizing for strategy: {strategy.name}')
+      position_sizer = risk_manager._create_position_sizer_for_strategy(strategy)
+      print(f'✅ Created position sizer for {strategy.name}: {position_sizer.config.method.value}')
+
+  print('✅ Strategy-specific position sizing validation passed')
   "
   ```
 
@@ -280,16 +418,21 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 - [ ] **Update docstrings** for all modified methods
 
+  - [ ] Symbol conversion utilities
   - [ ] StrategyManager class and methods
   - [ ] Signal class enhancements
   - [ ] Trading engine updates
   - [ ] Strategy configuration classes
+  - [ ] RiskManager strategy-specific methods
+  - [ ] Position sizing strategy integration
 
 - [ ] **Add inline comments** for complex logic
+  - [ ] Symbol conversion logic and exchange mappings
   - [ ] Strategy mapping logic
-  - [ ] Symbol conversion logic
   - [ ] Signal routing logic
   - [ ] Error handling flows
+  - [ ] Strategy-specific position sizer creation
+  - [ ] Position sizing inheritance logic
 
 ### 5.2 Architecture Documentation
 
@@ -297,12 +440,17 @@ This phase addresses the core architectural problems identified in the Spark Sta
 - [ ] **Update configuration.md** with new strategy schema
 - [ ] **Update userguide.md** with strategy setup instructions
 - [ ] **Create strategy-development.md** guide for adding new strategies
+- [ ] **Create symbol-conversion.md** guide for exchange symbol handling
+- [ ] **Create strategy-position-sizing.md** guide for configuring position sizing per strategy
+- [ ] **Update risk-management.md** with strategy-specific position sizing documentation
 
 ### 5.3 README Updates
 
 - [ ] **Update main README.md** with strategy-indicator relationship explanation
 - [ ] **Update packages/spark-app/README.md** with configuration examples
 - [ ] **Add troubleshooting section** for common strategy configuration errors
+- [ ] **Add section on strategy-specific position sizing** with configuration examples
+- [ ] **Update configuration examples** to show position sizing per strategy
 
 ## 🚀 **6. Deployment Preparation**
 
@@ -368,6 +516,9 @@ This phase addresses the core architectural problems identified in the Spark Sta
   - [ ] Multiple strategies with shared indicators
   - [ ] Multiple strategies with different exchanges
   - [ ] Multiple strategies with different timeframes
+  - [ ] Multiple strategies with different position sizing methods
+  - [ ] Strategy with custom position sizing vs global defaults
+  - [ ] Strategy position sizing inheritance and override scenarios
 
 ## 🎯 **Success Criteria**
 
@@ -376,8 +527,10 @@ Upon completion of this phase:
 ✅ **No more "Market RSI-4H not found" errors** ✅ **Clear strategy → indicator → signal → trade
 flow** ✅ **Proper symbol handling ("ETH-USD" → "ETH" for Hyperliquid)** ✅ **Multi-timeframe
 support (RSI on 4h, MACD on 1h)** ✅ **Strategy-driven execution instead of indicator-driven** ✅
-**Easy addition of new strategies and indicators** ✅ **Comprehensive test coverage (>90%)** ✅
-**Clear documentation and examples**
+**Strategy-specific position sizing (each strategy can have different sizing methods)** ✅
+**Position sizing inheritance from global config with strategy-specific overrides** ✅ **Risk
+management integration with strategy context** ✅ **Easy addition of new strategies and indicators**
+✅ **Comprehensive test coverage (>90%)** ✅ **Clear documentation and examples**
 
 ## 🔄 **Next Phase**
 
@@ -386,9 +539,10 @@ strategy-indicator architecture that supports:
 
 - Real-time strategy performance monitoring
 - Dynamic strategy enabling/disabling
-- Strategy-specific risk management
-- Multi-exchange strategy execution
-- Strategy backtesting and optimization
+- Strategy-specific risk management and position sizing
+- Multi-exchange strategy execution with different position sizing per exchange
+- Strategy backtesting and optimization with configurable position sizing
+- Strategy-specific position sizing monitoring and adjustment
 
 ---
 
