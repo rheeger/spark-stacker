@@ -21,6 +21,11 @@ EXCHANGE_SYMBOL_FORMATS = {
         "separator": "-",
         "base_only": False,  # Coinbase uses full pair (e.g., "ETH-USD")
         "case": "upper"
+    },
+    "kraken": {
+        "separator": "",
+        "base_only": False,  # Kraken uses concatenated pairs (e.g., "ETHUSD")
+        "case": "upper",
     }
 }
 
@@ -34,7 +39,7 @@ def convert_symbol_for_exchange(symbol: str, exchange: str) -> str:
 
     Args:
         symbol: Standard symbol format (e.g., "ETH-USD", "BTC-USD")
-        exchange: Target exchange name (e.g., "hyperliquid", "coinbase")
+        exchange: Target exchange name (e.g., "hyperliquid", "coinbase", "kraken")
 
     Returns:
         str: Exchange-specific symbol format
@@ -47,6 +52,10 @@ def convert_symbol_for_exchange(symbol: str, exchange: str) -> str:
         "ETH"
         >>> convert_symbol_for_exchange("ETH-USD", "coinbase")
         "ETH-USD"
+        >>> convert_symbol_for_exchange("ETH-USD", "kraken")
+        "ETHUSD"
+        >>> convert_symbol_for_exchange("BTC-USD", "kraken")
+        "BTCUSD"
     """
     exchange_lower = exchange.lower()
 
@@ -83,8 +92,8 @@ def convert_symbol_from_exchange(symbol: str, exchange: str, quote_symbol: str =
     Convert an exchange-specific symbol back to standard format.
 
     Args:
-        symbol: Exchange-specific symbol (e.g., "ETH", "ETH-USD")
-        exchange: Source exchange name (e.g., "hyperliquid", "coinbase")
+        symbol: Exchange-specific symbol (e.g., "ETH", "ETH-USD", "ETHUSD")
+        exchange: Source exchange name (e.g., "hyperliquid", "coinbase", "kraken")
         quote_symbol: Quote symbol to use for base-only exchanges (default: "USD")
 
     Returns:
@@ -97,6 +106,8 @@ def convert_symbol_from_exchange(symbol: str, exchange: str, quote_symbol: str =
         >>> convert_symbol_from_exchange("ETH", "hyperliquid")
         "ETH-USD"
         >>> convert_symbol_from_exchange("ETH-USD", "coinbase")
+        "ETH-USD"
+        >>> convert_symbol_from_exchange("ETHUSD", "kraken")
         "ETH-USD"
     """
     exchange_lower = exchange.lower()
@@ -113,6 +124,18 @@ def convert_symbol_from_exchange(symbol: str, exchange: str, quote_symbol: str =
         # For base-only exchanges, we need to add the quote symbol
         base_symbol = symbol.upper()
         result = f"{base_symbol}-{quote_symbol.upper()}"
+    elif exchange_lower == "kraken":
+        # Handle Kraken's concatenated format and legacy mappings
+        if format_config["separator"] == "":
+            # Kraken concatenated format - need to split the symbol
+            result = _parse_kraken_symbol(symbol, format_config)
+        else:
+            # Shouldn't happen for Kraken, but handle just in case
+            parts = symbol.split(format_config["separator"])
+            if len(parts) == 2:
+                result = f"{parts[0].upper()}-{parts[1].upper()}"
+            else:
+                raise ValueError(f"Invalid symbol format for {exchange}: {symbol}")
     else:
         # For full pair exchanges, return as-is (but standardize separator)
         if format_config["separator"] in symbol:
@@ -190,6 +213,42 @@ def _parse_standard_symbol(symbol: str) -> tuple[str, str]:
 
     # If no separator found, this might be an invalid format
     raise ValueError(f"Invalid symbol format: {symbol}. Expected format like 'ETH-USD', 'BTC_USDT', or 'ETH/USD'")
+
+
+def _parse_kraken_symbol(symbol: str, format_config: Dict[str, any]) -> str:
+    """
+    Parse a Kraken concatenated symbol back to standard format.
+
+    Kraken uses concatenated symbols like "ETHUSD", "BTCUSD", "ADAEUR".
+
+    Args:
+        symbol: Kraken symbol (e.g., "ETHUSD", "BTCUSD")
+        format_config: Kraken format configuration
+
+    Returns:
+        str: Standard format symbol (e.g., "ETH-USD")
+
+    Raises:
+        ValueError: If symbol cannot be parsed
+    """
+    symbol = symbol.upper()
+
+    # Common quote currencies (in order of length for proper matching)
+    quote_currencies = ["USDT", "USDC", "PYUSD", "USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF"]
+
+    # Sort by length (longest first) to match USDT before USD, etc.
+    quote_currencies.sort(key=len, reverse=True)
+
+    # Try to find a quote currency at the end of the symbol
+    for quote in quote_currencies:
+        if symbol.endswith(quote):
+            base_part = symbol[:-len(quote)]
+            quote_part = quote
+
+            return f"{base_part}-{quote_part}"
+
+    # If no quote currency found, this might be an error or unusual symbol
+    raise ValueError(f"Cannot parse Kraken symbol: {symbol}. No recognized quote currency found.")
 
 
 def get_exchange_format_info(exchange: str) -> Optional[Dict[str, any]]:
