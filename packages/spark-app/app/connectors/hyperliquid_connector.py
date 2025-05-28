@@ -1,13 +1,18 @@
+import asyncio
 import json
 import logging
+import threading
 import time
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
+from enum import Enum
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
 import urllib3.exceptions
+import websockets
 # Import the BaseConnector interface
 from app.connectors.base_connector import (BaseConnector, ConnectorError,
                                            MarketType, OrderSide, OrderStatus,
@@ -25,6 +30,264 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class ConnectionState(Enum):
+    """Connection state enumeration"""
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    FAILED = "failed"
+
+
+@dataclass
+class ConnectionMetrics:
+    """Connection metrics tracking"""
+    connection_attempts: int = 0
+    successful_connections: int = 0
+    failed_connections: int = 0
+    last_connection_time: Optional[datetime] = None
+    last_failure_time: Optional[datetime] = None
+    total_downtime: timedelta = timedelta()
+    average_response_time: float = 0.0
+    rate_limit_hits: int = 0
+    websocket_disconnects: int = 0
+    reconnection_attempts: int = 0
+
+
+class ConnectionHealthMonitor:
+    """Monitors connection health and provides reconnection logic"""
+
+    def __init__(self, connector):
+        self.connector = connector
+        self.metrics = ConnectionMetrics()
+        self.state = ConnectionState.DISCONNECTED
+        self.health_check_interval = 30  # seconds
+        self.health_check_timeout = 5    # seconds
+        self._health_thread = None
+        self._stop_health_check = threading.Event()
+        self._last_health_check = None
+        self._consecutive_failures = 0
+        self.max_consecutive_failures = 3
+
+    def start_monitoring(self):
+        """Start health monitoring in a background thread"""
+        if self._health_thread and self._health_thread.is_alive():
+            return
+
+        self._stop_health_check.clear()
+        self._health_thread = threading.Thread(target=self._health_check_loop, daemon=True)
+        self._health_thread.start()
+        logger.info("Connection health monitoring started")
+
+    def stop_monitoring(self):
+        """Stop health monitoring"""
+        self._stop_health_check.set()
+        if self._health_thread:
+            self._health_thread.join(timeout=5.0)
+        logger.info("Connection health monitoring stopped")
+
+    def _health_check_loop(self):
+        """Main health checking loop"""
+        while not self._stop_health_check.wait(self.health_check_interval):
+            try:
+                self._perform_health_check()
+            except Exception as e:
+                logger.error(f"Error in health check loop: {e}")
+
+    def _perform_health_check(self):
+        """Perform a single health check"""
+        start_time = time.time()
+
+        try:
+            # Simple connectivity test
+            if self.connector.info:
+                meta = self.connector.info.meta()
+                if meta and "universe" in meta:
+                    # Health check passed
+                    response_time = time.time() - start_time
+                    self._update_response_time(response_time)
+                    self._consecutive_failures = 0
+                    self._last_health_check = datetime.now()
+
+                    if self.state != ConnectionState.CONNECTED:
+                        self.state = ConnectionState.CONNECTED
+                        logger.info("Connection health check passed - connection restored")
+                else:
+                    self._handle_health_check_failure("Invalid metadata response")
+            else:
+                self._handle_health_check_failure("No info client available")
+
+        except Exception as e:
+            self._handle_health_check_failure(f"Health check failed: {e}")
+
+    def _handle_health_check_failure(self, reason: str):
+        """Handle health check failure"""
+        self._consecutive_failures += 1
+        self.metrics.failed_connections += 1
+        self.metrics.last_failure_time = datetime.now()
+
+        logger.warning(f"Health check failed ({self._consecutive_failures}/{self.max_consecutive_failures}): {reason}")
+
+        if self._consecutive_failures >= self.max_consecutive_failures:
+            if self.state == ConnectionState.CONNECTED:
+                self.state = ConnectionState.FAILED
+                logger.error("Connection marked as failed after consecutive health check failures")
+
+                # Attempt reconnection
+                self._attempt_reconnection()
+
+    def _attempt_reconnection(self):
+        """Attempt to reconnect"""
+        if self.state == ConnectionState.RECONNECTING:
+            return  # Already reconnecting
+
+        self.state = ConnectionState.RECONNECTING
+        self.metrics.reconnection_attempts += 1
+
+        logger.info("Attempting to reconnect...")
+
+        try:
+            if self.connector.connect():
+                self.state = ConnectionState.CONNECTED
+                self._consecutive_failures = 0
+                logger.info("Reconnection successful")
+            else:
+                self.state = ConnectionState.FAILED
+                logger.error("Reconnection failed")
+        except Exception as e:
+            self.state = ConnectionState.FAILED
+            logger.error(f"Reconnection error: {e}")
+
+    def _update_response_time(self, response_time: float):
+        """Update average response time"""
+        if self.metrics.average_response_time == 0:
+            self.metrics.average_response_time = response_time
+        else:
+            # Moving average
+            self.metrics.average_response_time = (self.metrics.average_response_time * 0.9 + response_time * 0.1)
+
+
+class WebSocketManager:
+    """Manages WebSocket connections for real-time data"""
+
+    def __init__(self, connector):
+        self.connector = connector
+        self.ws_url = None
+        self.websocket = None
+        self._ws_thread = None
+        self._stop_ws = threading.Event()
+        self._subscriptions = {}
+        self._reconnect_delay = 1.0
+        self._max_reconnect_delay = 60.0
+        self._reconnect_attempts = 0
+
+    async def connect(self):
+        """Connect to WebSocket"""
+        if not self.ws_url:
+            # Set WebSocket URL based on testnet/mainnet
+            if self.connector.testnet:
+                self.ws_url = "wss://api.hyperliquid-testnet.xyz/ws"
+            else:
+                self.ws_url = "wss://api.hyperliquid.xyz/ws"
+
+        try:
+            self.websocket = await websockets.connect(
+                self.ws_url,
+                ping_interval=20,
+                ping_timeout=10,
+                close_timeout=5
+            )
+            logger.info(f"WebSocket connected to {self.ws_url}")
+            self._reconnect_attempts = 0
+            self._reconnect_delay = 1.0
+            return True
+
+        except Exception as e:
+            logger.error(f"WebSocket connection failed: {e}")
+            return False
+
+    async def disconnect(self):
+        """Disconnect WebSocket"""
+        self._stop_ws.set()
+        if self.websocket:
+            await self.websocket.close()
+            self.websocket = None
+            logger.info("WebSocket disconnected")
+
+    async def subscribe(self, subscription_type: str, **params):
+        """Subscribe to WebSocket data"""
+        if not self.websocket:
+            raise ConnectionError("WebSocket not connected")
+
+        subscription = {
+            "method": "subscribe",
+            "subscription": {
+                "type": subscription_type,
+                **params
+            }
+        }
+
+        await self.websocket.send(json.dumps(subscription))
+        self._subscriptions[subscription_type] = params
+        logger.info(f"Subscribed to {subscription_type} with params: {params}")
+
+    async def _handle_reconnection(self):
+        """Handle WebSocket reconnection with exponential backoff"""
+        self._reconnect_attempts += 1
+
+        # Exponential backoff
+        delay = min(self._reconnect_delay * (2 ** self._reconnect_attempts), self._max_reconnect_delay)
+        logger.info(f"WebSocket reconnecting in {delay:.1f}s (attempt {self._reconnect_attempts})")
+
+        await asyncio.sleep(delay)
+
+        if await self.connect():
+            # Re-subscribe to previous subscriptions
+            for sub_type, params in self._subscriptions.items():
+                await self.subscribe(sub_type, **params)
+            logger.info("WebSocket reconnected and re-subscribed")
+        else:
+            # Schedule another reconnection attempt
+            asyncio.create_task(self._handle_reconnection())
+
+
+class RateLimitHandler:
+    """Handles API rate limiting with backoff and queuing"""
+
+    def __init__(self):
+        self.request_times = []
+        self.rate_limit_window = 60  # 1 minute window
+        self.max_requests_per_window = 100  # Conservative limit
+        self.rate_limit_backoff = 1.0  # Initial backoff time
+        self._lock = threading.Lock()
+
+    def can_make_request(self) -> bool:
+        """Check if we can make a request without hitting rate limits"""
+        with self._lock:
+            now = time.time()
+            # Remove old requests outside the window
+            self.request_times = [t for t in self.request_times if now - t < self.rate_limit_window]
+
+            return len(self.request_times) < self.max_requests_per_window
+
+    def record_request(self):
+        """Record a successful request"""
+        with self._lock:
+            self.request_times.append(time.time())
+
+    def handle_rate_limit(self):
+        """Handle rate limit hit"""
+        logger.warning(f"Rate limit hit, backing off for {self.rate_limit_backoff:.1f}s")
+        time.sleep(self.rate_limit_backoff)
+
+        # Increase backoff for next time (exponential backoff)
+        self.rate_limit_backoff = min(self.rate_limit_backoff * 2, 60.0)
+
+    def reset_backoff(self):
+        """Reset backoff after successful requests"""
+        self.rate_limit_backoff = 1.0
+
+
 # Define custom exception classes for better error handling
 class HyperliquidConnectionError(Exception):
     """Raised when connection to Hyperliquid API fails"""
@@ -40,6 +303,12 @@ class HyperliquidTimeoutError(Exception):
 
 class HyperliquidAPIError(Exception):
     """Raised when Hyperliquid API returns an error response"""
+
+    pass
+
+
+class HyperliquidRateLimitError(Exception):
+    """Raised when API rate limit is exceeded"""
 
     pass
 
@@ -118,23 +387,30 @@ class MetadataWrapper:
     # Add other methods as needed, following the same pattern
 
 
-# Define a decorator for API call retries
-def retry_api_call(max_tries=3, backoff_factor=1.5, max_backoff=30):
+# Define a decorator for API call retries with enhanced rate limiting support
+def retry_api_call(max_tries=3, backoff_factor=1.5, max_backoff=30, handle_rate_limit=True):
     """
-    Decorator for retrying API calls with exponential backoff
+    Decorator for retrying API calls with exponential backoff and rate limiting
 
     Args:
         max_tries: Maximum number of attempts
         backoff_factor: Multiplier for backoff time between retries
         max_backoff: Maximum backoff time in seconds
+        handle_rate_limit: Whether to handle rate limiting
     """
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # Get the connector instance if available (for rate limiting)
+            connector = None
+            if args and hasattr(args[0], 'rate_limiter'):
+                connector = args[0]
+
             retry_exceptions = (
                 HyperliquidConnectionError,
                 HyperliquidTimeoutError,
+                HyperliquidRateLimitError,
                 urllib3.exceptions.NewConnectionError,
                 requests.exceptions.ConnectionError,
                 requests.exceptions.Timeout,
@@ -143,9 +419,45 @@ def retry_api_call(max_tries=3, backoff_factor=1.5, max_backoff=30):
             last_exception = None
             for attempt in range(max_tries):
                 try:
-                    return func(*args, **kwargs)
+                    # Check rate limiting before making request
+                    if connector and handle_rate_limit:
+                        if not connector.rate_limiter.can_make_request():
+                            connector.rate_limiter.handle_rate_limit()
+
+                    # Make the API call
+                    result = func(*args, **kwargs)
+
+                    # Record successful request for rate limiting
+                    if connector and handle_rate_limit:
+                        connector.rate_limiter.record_request()
+                        connector.rate_limiter.reset_backoff()
+
+                    # Update connection health metrics
+                    if connector and hasattr(connector, 'health_monitor'):
+                        # Only update metrics if this wasn't already counted in _update_connection_success
+                        if not hasattr(connector, '_in_connect_method') or not connector._in_connect_method:
+                            # Note: Connection success metrics are handled in _update_connection_success
+                            # to avoid double-counting in the connect method
+                            pass  # connector.health_monitor.metrics.successful_connections += 1
+
+                    return result
+
+                except requests.exceptions.HTTPError as e:
+                    # Check for rate limiting response
+                    if e.response and e.response.status_code == 429:
+                        if connector:
+                            connector.health_monitor.metrics.rate_limit_hits += 1
+                        raise HyperliquidRateLimitError(f"Rate limit exceeded: {e}")
+                    else:
+                        last_exception = e
+
                 except retry_exceptions as e:
                     last_exception = e
+
+                    # Update connection health metrics
+                    if connector and hasattr(connector, 'health_monitor'):
+                        connector.health_monitor.metrics.failed_connections += 1
+
                     if attempt < max_tries - 1:  # Don't sleep on the last attempt
                         wait_time = min(backoff_factor**attempt, max_backoff)
                         logger.warning(
@@ -157,6 +469,7 @@ def retry_api_call(max_tries=3, backoff_factor=1.5, max_backoff=30):
                         logger.error(
                             f"API call to {func.__name__} failed after {max_tries} attempts: {str(e)}"
                         )
+
             # If we get here, all retries have failed
             raise last_exception
 
@@ -217,6 +530,15 @@ class HyperliquidConnector(BaseConnector):
         self.candle_cache = {} # Initialize cache
         self.cache_ttl = 60 # Cache time-to-live in seconds
 
+        # Initialize connection stability features
+        self.health_monitor = ConnectionHealthMonitor(self)
+        self.websocket_manager = WebSocketManager(self)
+        self.rate_limiter = RateLimitHandler()
+
+        # Connection state tracking
+        self.connection_state = ConnectionState.DISCONNECTED
+        self._connection_start_time = None
+
         # Set up dedicated loggers
         self.setup_loggers()
 
@@ -228,14 +550,25 @@ class HyperliquidConnector(BaseConnector):
             f"Initialized HyperliquidConnector with market types: {[mt.value for mt in self.market_types]}"
         )
 
+        # Log connection stability features initialization
+        logger.info("Connection stability features initialized: health monitoring, websocket management, rate limiting")
+
     @retry_api_call(max_tries=3, backoff_factor=2)
     def connect(self) -> bool:
         """
-        Establish connection to Hyperliquid API.
+        Establish connection to Hyperliquid API with enhanced stability features.
 
         Returns:
             bool: True if connection successful, False otherwise
         """
+        # Set flag to prevent double-counting metrics in retry decorator
+        self._in_connect_method = True
+
+        # Update connection state and metrics
+        self.connection_state = ConnectionState.CONNECTING
+        self.health_monitor.metrics.connection_attempts += 1
+        self._connection_start_time = datetime.now()
+
         try:
             # Defer imports until needed to avoid import errors if library not installed
             import requests  # Keep requests for potential direct calls elsewhere
@@ -260,7 +593,7 @@ class HyperliquidConnector(BaseConnector):
                 meta = self.info.meta()
                 if not meta or "universe" not in meta:
                     logger.error("Failed to fetch valid metadata from Hyperliquid API.")
-                    self._is_connected = False
+                    self._update_connection_failure()
                     return False
 
                 # Log details about the universe data
@@ -271,7 +604,7 @@ class HyperliquidConnector(BaseConnector):
 
             except Exception as e:
                 logger.error(f"Failed to initialize Info client or fetch metadata: {e}", exc_info=True)
-                self._is_connected = False
+                self._update_connection_failure()
                 return False
 
             # Initialize exchange client for trading
@@ -292,21 +625,54 @@ class HyperliquidConnector(BaseConnector):
                 self.exchange = None
 
             # If info client initialized successfully, consider connected
-            self._is_connected = True
+            self._update_connection_success()
             logger.info(
                 f"Connected to Hyperliquid {'Testnet' if self.testnet else 'Mainnet'} successfully."
             )
+
+            # Start health monitoring after successful connection
+            self.health_monitor.start_monitoring()
+
             return True
 
         except ImportError as e:
              logger.error(f"Missing required Hyperliquid libraries (hyperliquid, eth_account): {e}")
-             self._is_connected = False
+             self._update_connection_failure()
              return False
         except Exception as e:
             # Catch-all for any other unexpected errors during connection
             logger.error(f"Unexpected error during connection to Hyperliquid: {e}", exc_info=True)
-            self._is_connected = False
+            self._update_connection_failure()
             return False
+        finally:
+            # Clear the flag
+            self._in_connect_method = False
+
+    def _update_connection_success(self):
+        """Update connection state and metrics after successful connection"""
+        self._is_connected = True
+        self.connection_state = ConnectionState.CONNECTED
+        self.health_monitor.state = ConnectionState.CONNECTED
+        self.health_monitor.metrics.successful_connections += 1
+        self.health_monitor.metrics.last_connection_time = datetime.now()
+
+        # Calculate connection time if we have start time
+        if self._connection_start_time:
+            connection_time = datetime.now() - self._connection_start_time
+            logger.debug(f"Connection established in {connection_time.total_seconds():.2f}s")
+
+    def _update_connection_failure(self):
+        """Update connection state and metrics after connection failure"""
+        self._is_connected = False
+        self.connection_state = ConnectionState.FAILED
+        self.health_monitor.state = ConnectionState.FAILED
+        self.health_monitor.metrics.failed_connections += 1
+        self.health_monitor.metrics.last_failure_time = datetime.now()
+
+        # Calculate downtime if we have start time
+        if self._connection_start_time:
+            attempt_duration = datetime.now() - self._connection_start_time
+            self.health_monitor.metrics.total_downtime += attempt_duration
 
     def get_markets(self) -> List[Dict[str, Any]]:
         """
@@ -1969,19 +2335,49 @@ class HyperliquidConnector(BaseConnector):
 
     def disconnect(self) -> bool:
         """
-        Disconnect from the Hyperliquid API.
+        Disconnect from the Hyperliquid API and clean up connection stability features.
 
         Returns:
             bool: True if disconnection is successful, False otherwise
         """
         try:
+            logger.info("Disconnecting from Hyperliquid API...")
+
+            # Stop health monitoring
+            if hasattr(self, 'health_monitor') and self.health_monitor:
+                self.health_monitor.stop_monitoring()
+
+            # Disconnect websocket if connected
+            if hasattr(self, 'websocket_manager') and self.websocket_manager:
+                if self.websocket_manager.websocket:
+                    import asyncio
+                    try:
+                        # Try to run async disconnect in a clean way
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # If loop is running, schedule the task
+                            asyncio.create_task(self.websocket_manager.disconnect())
+                        else:
+                            # If no loop running, run the disconnect
+                            loop.run_until_complete(self.websocket_manager.disconnect())
+                    except Exception as e:
+                        logger.warning(f"Error during websocket disconnect: {e}")
+
             # Close any open connections
             self.info = None
             self.exchange = None
+
+            # Update connection state
+            self.connection_state = ConnectionState.DISCONNECTED
+            if hasattr(self, 'health_monitor') and self.health_monitor:
+                self.health_monitor.state = ConnectionState.DISCONNECTED
+
             # Set the connected state to False
             self._is_connected = False
-            logger.info("Disconnected from Hyperliquid API")
+
+            logger.info("Successfully disconnected from Hyperliquid API")
             return True
+
         except Exception as e:
             logger.error(f"Failed to disconnect from Hyperliquid: {e}")
             return False
@@ -2287,3 +2683,139 @@ class HyperliquidConnector(BaseConnector):
         except Exception as e:
             logger.error(f"Error getting minimum order size for {symbol}: {e}")
             return 0.001  # Return default minimum size in case of error
+
+    async def start_websocket(self, subscriptions: Optional[List[Dict]] = None):
+        """
+        Start WebSocket connection for real-time data.
+
+        Args:
+            subscriptions: List of subscription dictionaries with 'type' and params
+        """
+        try:
+            if not hasattr(self, 'websocket_manager'):
+                logger.error("WebSocket manager not initialized")
+                return False
+
+            # Connect to websocket
+            if await self.websocket_manager.connect():
+                logger.info("WebSocket connection established")
+
+                # Subscribe to requested data if provided
+                if subscriptions:
+                    for sub in subscriptions:
+                        sub_type = sub.pop('type')
+                        await self.websocket_manager.subscribe(sub_type, **sub)
+
+                return True
+            else:
+                logger.error("Failed to establish WebSocket connection")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error starting WebSocket: {e}")
+            return False
+
+    async def stop_websocket(self):
+        """Stop WebSocket connection."""
+        try:
+            if hasattr(self, 'websocket_manager') and self.websocket_manager:
+                await self.websocket_manager.disconnect()
+                logger.info("WebSocket connection stopped")
+        except Exception as e:
+            logger.error(f"Error stopping WebSocket: {e}")
+
+    def get_connection_metrics(self) -> Dict[str, Any]:
+        """
+        Get detailed connection metrics and health information.
+
+        Returns:
+            Dict containing connection metrics and state information
+        """
+        if not hasattr(self, 'health_monitor') or not self.health_monitor:
+            return {"error": "Health monitor not initialized"}
+
+        metrics = self.health_monitor.metrics
+
+        return {
+            "connection_state": self.connection_state.value,
+            "is_connected": self._is_connected,
+            "connection_attempts": metrics.connection_attempts,
+            "successful_connections": metrics.successful_connections,
+            "failed_connections": metrics.failed_connections,
+            "success_rate": (
+                metrics.successful_connections / (metrics.successful_connections + metrics.failed_connections)
+                if (metrics.successful_connections + metrics.failed_connections) > 0 else 0
+            ),
+            "last_connection_time": (
+                metrics.last_connection_time.isoformat()
+                if metrics.last_connection_time else None
+            ),
+            "last_failure_time": (
+                metrics.last_failure_time.isoformat()
+                if metrics.last_failure_time else None
+            ),
+            "total_downtime_seconds": metrics.total_downtime.total_seconds(),
+            "average_response_time": metrics.average_response_time,
+            "rate_limit_hits": metrics.rate_limit_hits,
+            "websocket_disconnects": metrics.websocket_disconnects,
+            "reconnection_attempts": metrics.reconnection_attempts,
+            "health_monitor_active": (
+                self.health_monitor._health_thread and
+                self.health_monitor._health_thread.is_alive()
+                if self.health_monitor._health_thread else False
+            ),
+            "websocket_connected": (
+                self.websocket_manager.websocket is not None
+                if hasattr(self, 'websocket_manager') else False
+            )
+        }
+
+    def force_reconnection(self) -> bool:
+        """
+        Force a reconnection attempt.
+
+        Returns:
+            bool: True if reconnection successful, False otherwise
+        """
+        try:
+            logger.info("Forcing reconnection to Hyperliquid API...")
+
+            # Disconnect first
+            self.disconnect()
+
+            # Wait a moment
+            time.sleep(1.0)
+
+            # Attempt to reconnect
+            return self.connect()
+
+        except Exception as e:
+            logger.error(f"Error during forced reconnection: {e}")
+            return False
+
+    def is_healthy(self) -> bool:
+        """
+        Check if the connection is healthy based on recent metrics.
+
+        Returns:
+            bool: True if connection is healthy, False otherwise
+        """
+        if not self._is_connected:
+            return False
+
+        if not hasattr(self, 'health_monitor') or not self.health_monitor:
+            # If no health monitor, just return connection status
+            return self._is_connected
+
+        # Check health based on recent activity
+        if self.health_monitor._last_health_check:
+            time_since_check = datetime.now() - self.health_monitor._last_health_check
+            if time_since_check.total_seconds() > self.health_monitor.health_check_interval * 2:
+                # Too long since last health check
+                return False
+
+        # Check consecutive failures
+        if self.health_monitor._consecutive_failures >= self.health_monitor.max_consecutive_failures:
+            return False
+
+        return self.connection_state == ConnectionState.CONNECTED

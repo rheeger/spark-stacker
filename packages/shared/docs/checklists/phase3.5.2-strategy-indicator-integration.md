@@ -224,12 +224,12 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 3.3 Unit Tests - Signal Enhancement
 
-- [ ] **Update test_base_indicator.py**
-      (`packages/spark-app/tests/unit/indicators/test_base_indicator.py`)
-  - [ ] Test Signal creation with strategy context
-  - [ ] Test Signal string representation
-  - [ ] Test backward compatibility with existing signals
-  - [ ] Test signal metadata preservation
+- [x] **Update test_base_indicator.py**
+      (`packages/spark-app/tests/indicators/unit/test_base_indicator.py`)
+  - [x] Test Signal creation with strategy context
+  - [x] Test Signal string representation
+  - [x] Test backward compatibility with existing signals
+  - [x] Test signal metadata preservation
 
 ### 3.4 Unit Tests - Trading Engine
 
