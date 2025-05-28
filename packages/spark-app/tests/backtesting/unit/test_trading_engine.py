@@ -1004,7 +1004,8 @@ async def test_process_signal(
     trading_engine.stop()
 
 
-def test_execute_hedged_trade(trading_engine, mock_risk_manager, mock_connector):
+@pytest.mark.asyncio
+async def test_execute_hedged_trade(trading_engine, mock_risk_manager, mock_connector):
     """Test the execution of a hedged trade."""
     # Set up the mocks
     mock_risk_manager.calculate_position_size.return_value = (100.0, 5.0)
@@ -1018,7 +1019,7 @@ def test_execute_hedged_trade(trading_engine, mock_risk_manager, mock_connector)
     trading_engine.start()
 
     # Execute a hedged trade in dry run mode
-    result = trading_engine._execute_hedged_trade(
+    result = await trading_engine._execute_hedged_trade(
         symbol="ETH",
         main_side=OrderSide.BUY,
         hedge_side=OrderSide.SELL,
@@ -1050,7 +1051,7 @@ def test_execute_hedged_trade(trading_engine, mock_risk_manager, mock_connector)
     # Test with trade validation failure
     mock_risk_manager.validate_trade.return_value = (False, "Invalid trade")
 
-    result = trading_engine._execute_hedged_trade(
+    result = await trading_engine._execute_hedged_trade(
         symbol="BTC", main_side=OrderSide.SELL, hedge_side=OrderSide.BUY, confidence=0.7
     )
 
@@ -1060,7 +1061,7 @@ def test_execute_hedged_trade(trading_engine, mock_risk_manager, mock_connector)
     mock_connector.get_account_balance.return_value = {"USD": 0.0}
     mock_risk_manager.validate_trade.return_value = (True, "Trade validated")
 
-    result = trading_engine._execute_hedged_trade(
+    result = await trading_engine._execute_hedged_trade(
         symbol="BTC", main_side=OrderSide.SELL, hedge_side=OrderSide.BUY, confidence=0.7
     )
 
