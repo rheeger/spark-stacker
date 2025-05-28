@@ -1,7 +1,8 @@
 # Configuration Guide - Spark Stacker Trading System
 
 This guide explains how to properly configure the Spark Stacker trading system, with clear
-explanations of how strategies, indicators, markets, and timeframes work together.
+explanations of how strategies, indicators, markets, timeframes, and **position sizing** work
+together.
 
 ## Architecture Overview
 
@@ -17,9 +18,10 @@ Understanding the relationship between components is essential for proper config
 │  │ exchange: "hyperliquid"     # symbol on specific       │   │
 │  │ timeframe: "4h"             # exchange)                │   │
 │  │ indicators: [               # Default timeframe        │   │
-│  │   "eth_trend_4h",           # Which indicators to use  │   │
-│  │   "eth_entry_1h"            # (by name reference)      │   │
+│  │   "trend_4h",               # Which indicators to use  │   │
+│  │   "entry_1h"                # (by name reference)      │   │
 │  │ ]                                                       │   │
+│  │ position_sizing: {...}      # Strategy-specific sizing │   │
 │  │ risk_params: {...}          # Position sizing, stops   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
@@ -28,7 +30,7 @@ Understanding the relationship between components is essential for proper config
            ▼                                ▼
 ┌──────────────────────┐         ┌──────────────────────┐
 │     INDICATOR        │         │     INDICATOR        │
-│ name: "eth_trend_4h" │         │ name: "eth_entry_1h" │
+│ name: "trend_4h"     │         │ name: "entry_1h"     │
 │ type: "rsi"          │         │ type: "macd"         │
 │ timeframe: "4h"      │         │ timeframe: "1h"      │
 │ parameters: {...}    │         │ parameters: {...}    │
@@ -47,12 +49,14 @@ Understanding the relationship between components is essential for proper config
 ### Key Principles
 
 1. **Strategies define WHAT to trade**: Market symbol, exchange, which indicators to use, risk
-   parameters
+   parameters, and position sizing
 2. **Indicators define HOW to analyze**: Algorithm type, timeframe, and specific parameters
 3. **Markets use full exchange symbols**: "ETH-USD", "BTC-USD", not abbreviated forms
 4. **Timeframes are set at indicator level**: Each indicator specifies its own data timeframe
 5. **Strategy-indicator connection**: Strategies reference indicators by name in the `indicators`
    array
+6. **Position sizing is strategy-specific**: Each strategy can have its own position sizing method
+   and parameters
 
 ## Configuration File Structure
 
@@ -78,6 +82,13 @@ Understanding the relationship between components is essential for proper config
     }
   ],
 
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 5000
+  },
+
   "strategies": [
     {
       "name": "eth_multi_timeframe_strategy",
@@ -85,18 +96,35 @@ Understanding the relationship between components is essential for proper config
       "exchange": "hyperliquid",
       "enabled": true,
       "timeframe": "4h",
-      "indicators": ["eth_trend_daily", "eth_momentum_4h", "eth_entry_1h"],
+      "indicators": ["trend_daily", "momentum_4h", "entry_1h"],
       "main_leverage": 1.0,
       "stop_loss_pct": 5.0,
       "take_profit_pct": 10.0,
       "max_position_size": 0.1,
-      "risk_per_trade_pct": 0.02
+      "risk_per_trade_pct": 0.02,
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03,
+        "max_position_size_usd": 3000
+      }
+    },
+    {
+      "name": "btc_conservative_strategy",
+      "market": "BTC-USD",
+      "exchange": "hyperliquid",
+      "enabled": true,
+      "indicators": ["btc_rsi_4h"],
+      "position_sizing": {
+        "method": "percent_equity",
+        "percent_equity": 0.05,
+        "max_position_size_usd": 2000
+      }
     }
   ],
 
   "indicators": [
     {
-      "name": "eth_trend_daily",
+      "name": "trend_daily",
       "type": "ma",
       "enabled": true,
       "timeframe": "1d",
@@ -107,7 +135,7 @@ Understanding the relationship between components is essential for proper config
       }
     },
     {
-      "name": "eth_momentum_4h",
+      "name": "momentum_4h",
       "type": "rsi",
       "enabled": true,
       "timeframe": "4h",
@@ -119,7 +147,7 @@ Understanding the relationship between components is essential for proper config
       }
     },
     {
-      "name": "eth_entry_1h",
+      "name": "entry_1h",
       "type": "macd",
       "enabled": true,
       "timeframe": "1h",
@@ -127,6 +155,17 @@ Understanding the relationship between components is essential for proper config
         "fast_period": 12,
         "slow_period": 26,
         "signal_period": 9
+      }
+    },
+    {
+      "name": "btc_rsi_4h",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "4h",
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30
       }
     }
   ]
@@ -137,24 +176,41 @@ Understanding the relationship between components is essential for proper config
 
 ### Required Fields
 
-| Field        | Type   | Description                    | Example                         |
-| ------------ | ------ | ------------------------------ | ------------------------------- |
-| `name`       | string | Unique strategy identifier     | `"eth_momentum_strategy"`       |
-| `market`     | string | Full exchange symbol           | `"ETH-USD"`                     |
-| `exchange`   | string | Exchange to use                | `"hyperliquid"`                 |
-| `indicators` | array  | List of indicator names to use | `["eth_rsi_4h", "eth_macd_1h"]` |
+| Field        | Type   | Description                    | Example                   |
+| ------------ | ------ | ------------------------------ | ------------------------- |
+| `name`       | string | Unique strategy identifier     | `"eth_momentum_strategy"` |
+| `market`     | string | Full exchange symbol           | `"ETH-USD"`               |
+| `exchange`   | string | Exchange to use                | `"hyperliquid"`           |
+| `indicators` | array  | List of indicator names to use | `["rsi_4h", "macd_1h"]`   |
 
 ### Optional Fields
 
-| Field                | Type    | Description                    | Default |
-| -------------------- | ------- | ------------------------------ | ------- |
-| `enabled`            | boolean | Whether strategy is active     | `true`  |
-| `timeframe`          | string  | Default timeframe for strategy | `"1h"`  |
-| `main_leverage`      | number  | Leverage multiplier            | `1.0`   |
-| `stop_loss_pct`      | number  | Stop loss percentage           | `5.0`   |
-| `take_profit_pct`    | number  | Take profit percentage         | `10.0`  |
-| `max_position_size`  | number  | Maximum position size          | `0.1`   |
-| `risk_per_trade_pct` | number  | Risk per trade as % of capital | `0.02`  |
+| Field                | Type    | Description                              | Default |
+| -------------------- | ------- | ---------------------------------------- | ------- |
+| `enabled`            | boolean | Whether strategy is active               | `true`  |
+| `timeframe`          | string  | Default timeframe for strategy           | `"1h"`  |
+| `main_leverage`      | number  | Leverage multiplier                      | `1.0`   |
+| `stop_loss_pct`      | number  | Stop loss percentage                     | `5.0`   |
+| `take_profit_pct`    | number  | Take profit percentage                   | `10.0`  |
+| `max_position_size`  | number  | Maximum position size                    | `0.1`   |
+| `risk_per_trade_pct` | number  | Risk per trade as % of capital           | `0.02`  |
+| `position_sizing`    | object  | Strategy-specific position sizing config | `null`  |
+
+### Position Sizing Field
+
+The `position_sizing` object allows each strategy to override global position sizing defaults:
+
+```json
+{
+  "position_sizing": {
+    "method": "risk_based|fixed_usd|percent_equity",
+    "fixed_amount_usd": 1000, // For fixed_usd method
+    "risk_per_trade_pct": 0.02, // For risk_based method
+    "percent_equity": 0.1, // For percent_equity method
+    "max_position_size_usd": 5000 // Universal maximum limit
+  }
+}
+```
 
 ### Strategy Examples
 
@@ -166,7 +222,7 @@ Understanding the relationship between components is essential for proper config
   "market": "BTC-USD",
   "exchange": "hyperliquid",
   "timeframe": "4h",
-  "indicators": ["btc_rsi_4h"],
+  "indicators": ["rsi_4h"],
   "main_leverage": 2.0
 }
 ```
@@ -179,9 +235,9 @@ Understanding the relationship between components is essential for proper config
   "market": "ETH-USD",
   "exchange": "hyperliquid",
   "indicators": [
-    "eth_trend_daily", // 1d timeframe
-    "eth_momentum_4h", // 4h timeframe
-    "eth_entry_1h" // 1h timeframe
+    "trend_daily", // 1d timeframe
+    "momentum_4h", // 4h timeframe
+    "entry_1h" // 1h timeframe
   ],
   "main_leverage": 1.5
 }
@@ -195,17 +251,17 @@ Understanding the relationship between components is essential for proper config
     {
       "name": "eth_strategy",
       "market": "ETH-USD",
-      "indicators": ["eth_rsi_4h"]
+      "indicators": ["rsi_4h"]
     },
     {
       "name": "btc_strategy",
       "market": "BTC-USD",
-      "indicators": ["btc_macd_1h"]
+      "indicators": ["macd_1h"]
     },
     {
       "name": "avax_strategy",
       "market": "AVAX-USD",
-      "indicators": ["avax_bb_4h"]
+      "indicators": ["bb_4h"]
     }
   ]
 }
@@ -217,7 +273,7 @@ Understanding the relationship between components is essential for proper config
 
 | Field       | Type   | Description                 | Example                                  |
 | ----------- | ------ | --------------------------- | ---------------------------------------- |
-| `name`      | string | Unique indicator identifier | `"eth_rsi_4h"`                           |
+| `name`      | string | Unique indicator identifier | `"rsi_4h"`                               |
 | `type`      | string | Algorithm type              | `"rsi"`, `"macd"`, `"bollinger"`, `"ma"` |
 | `timeframe` | string | Data timeframe              | `"4h"`, `"1h"`, `"1d"`                   |
 
@@ -243,7 +299,7 @@ Understanding the relationship between components is essential for proper config
 
 ```json
 {
-  "name": "eth_rsi_4h",
+  "name": "rsi_4h",
   "type": "rsi",
   "timeframe": "4h",
   "parameters": {
@@ -259,7 +315,7 @@ Understanding the relationship between components is essential for proper config
 
 ```json
 {
-  "name": "eth_macd_1h",
+  "name": "macd_1h",
   "type": "macd",
   "timeframe": "1h",
   "parameters": {
@@ -275,7 +331,7 @@ Understanding the relationship between components is essential for proper config
 
 ```json
 {
-  "name": "eth_bb_4h",
+  "name": "bb_4h",
   "type": "bollinger",
   "timeframe": "4h",
   "parameters": {
@@ -289,7 +345,7 @@ Understanding the relationship between components is essential for proper config
 
 ```json
 {
-  "name": "eth_ma_1d",
+  "name": "ma_1d",
   "type": "ma",
   "timeframe": "1d",
   "parameters": {
@@ -349,13 +405,13 @@ For beginners or focused trading:
       "name": "eth_simple_rsi",
       "market": "ETH-USD",
       "exchange": "hyperliquid",
-      "indicators": ["eth_rsi_4h"],
+      "indicators": ["rsi_4h"],
       "main_leverage": 1.0
     }
   ],
   "indicators": [
     {
-      "name": "eth_rsi_4h",
+      "name": "rsi_4h",
       "type": "rsi",
       "timeframe": "4h",
       "parameters": {
@@ -380,27 +436,27 @@ Combining different timeframes for comprehensive analysis:
       "market": "ETH-USD",
       "exchange": "hyperliquid",
       "indicators": [
-        "eth_trend_1d", // Daily trend
-        "eth_momentum_4h", // 4-hour momentum
-        "eth_entry_1h" // 1-hour entry timing
+        "trend_daily", // Daily trend
+        "momentum_4h", // 4-hour momentum
+        "entry_1h" // 1-hour entry timing
       ]
     }
   ],
   "indicators": [
     {
-      "name": "eth_trend_1d",
+      "name": "trend_daily",
       "type": "ma",
       "timeframe": "1d",
       "parameters": { "short_period": 20, "long_period": 50 }
     },
     {
-      "name": "eth_momentum_4h",
+      "name": "momentum_4h",
       "type": "rsi",
       "timeframe": "4h",
       "parameters": { "period": 14 }
     },
     {
-      "name": "eth_entry_1h",
+      "name": "entry_1h",
       "type": "macd",
       "timeframe": "1h",
       "parameters": { "fast_period": 12, "slow_period": 26 }
@@ -419,25 +475,25 @@ Trading multiple assets with different strategies:
     {
       "name": "eth_momentum",
       "market": "ETH-USD",
-      "indicators": ["eth_rsi_4h", "eth_macd_1h"]
+      "indicators": ["rsi_4h", "macd_1h"]
     },
     {
       "name": "btc_trend",
       "market": "BTC-USD",
-      "indicators": ["btc_ma_1d", "btc_bb_4h"]
+      "indicators": ["ma_1d", "bb_4h"]
     },
     {
       "name": "avax_scalp",
       "market": "AVAX-USD",
-      "indicators": ["avax_rsi_15m"]
+      "indicators": ["rsi_4h"]
     }
   ],
   "indicators": [
-    { "name": "eth_rsi_4h", "type": "rsi", "timeframe": "4h" },
-    { "name": "eth_macd_1h", "type": "macd", "timeframe": "1h" },
-    { "name": "btc_ma_1d", "type": "ma", "timeframe": "1d" },
-    { "name": "btc_bb_4h", "type": "bollinger", "timeframe": "4h" },
-    { "name": "avax_rsi_15m", "type": "rsi", "timeframe": "15m" }
+    { "name": "rsi_4h", "type": "rsi", "timeframe": "4h" },
+    { "name": "macd_1h", "type": "macd", "timeframe": "1h" },
+    { "name": "ma_1d", "type": "ma", "timeframe": "1d" },
+    { "name": "bb_4h", "type": "bollinger", "timeframe": "4h" },
+    { "name": "rsi_4h", "type": "rsi", "timeframe": "4h" }
   ]
 }
 ```
@@ -461,10 +517,10 @@ Format: `{market}_{indicator_type}_{timeframe}`
 
 Examples:
 
-- `"eth_rsi_4h"`
-- `"btc_macd_1h"`
-- `"avax_bb_15m"`
-- `"sol_ma_1d"`
+- `"rsi_4h"`
+- `"macd_1h"`
+- `"bb_4h"`
+- `"ma_1d"`
 
 ### Benefits of Good Naming
 
@@ -498,7 +554,7 @@ Cause: Legacy symbol parsing attempt
 Fix: Use proper strategy.indicators array instead
 ```
 
-**Error: "Indicator 'eth_rsi_4h' not found"**
+**Error: "Indicator 'rsi_4h' not found"**
 
 ```
 Cause: Strategy references non-existent indicator
@@ -565,7 +621,7 @@ Test each strategy configuration:
 ```bash
 cd packages/spark-app
 .venv/bin/python -m tests._utils.cli backtest-indicator \
-  --indicator eth_rsi_4h \
+  --indicator rsi_4h \
   --symbol ETH-USD \
   --timeframe 4h \
   --start-date 2024-01-01 \
@@ -580,8 +636,8 @@ Begin with single-asset, single-indicator strategies:
 
 ```json
 {
-  "strategies": [{ "name": "eth_simple", "market": "ETH-USD", "indicators": ["eth_rsi_4h"] }],
-  "indicators": [{ "name": "eth_rsi_4h", "type": "rsi", "timeframe": "4h" }]
+  "strategies": [{ "name": "eth_simple", "market": "ETH-USD", "indicators": ["rsi_4h"] }],
+  "indicators": [{ "name": "rsi_4h", "type": "rsi", "timeframe": "4h" }]
 }
 ```
 
@@ -589,7 +645,7 @@ Begin with single-asset, single-indicator strategies:
 
 Prefer clear, descriptive names over short abbreviations:
 
-✅ Good: `"eth_momentum_4h"`, `"btc_trend_daily"` ❌ Avoid: `"ind1"`, `"strat_a"`, `"rsi"`
+✅ Good: `"momentum_4h"`, `"btc_trend_daily"` ❌ Avoid: `"ind1"`, `"strat_a"`, `"rsi"`
 
 ### 3. Group Related Components
 
@@ -599,12 +655,12 @@ Organize indicators by market and timeframe:
 {
   "indicators": [
     // ETH indicators
-    { "name": "eth_trend_1d", "type": "ma", "timeframe": "1d" },
-    { "name": "eth_momentum_4h", "type": "rsi", "timeframe": "4h" },
-    { "name": "eth_entry_1h", "type": "macd", "timeframe": "1h" },
+    { "name": "trend_daily", "type": "ma", "timeframe": "1d" },
+    { "name": "momentum_4h", "type": "rsi", "timeframe": "4h" },
+    { "name": "entry_1h", "type": "macd", "timeframe": "1h" },
 
     // BTC indicators
-    { "name": "btc_trend_1d", "type": "ma", "timeframe": "1d" },
+    { "name": "btc_trend_daily", "type": "ma", "timeframe": "1d" },
     { "name": "btc_momentum_4h", "type": "rsi", "timeframe": "4h" }
   ]
 }
@@ -620,7 +676,7 @@ Add comments to explain your strategy logic:
   // Uses daily MA for trend, 4h RSI for momentum, 1h MACD for entry
   "name": "eth_momentum_strategy",
   "market": "ETH-USD",
-  "indicators": ["eth_trend_1d", "eth_momentum_4h", "eth_entry_1h"]
+  "indicators": ["trend_daily", "momentum_4h", "entry_1h"]
 }
 ```
 
@@ -634,6 +690,236 @@ configs/
 ├── config-v1.1-multi-timeframe.json
 ├── config-v1.2-portfolio.json
 └── config.json (current)
+```
+
+## Position Sizing Configuration
+
+### Global Position Sizing
+
+Define default position sizing behavior in the root `position_sizing` section:
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 5000
+  }
+}
+```
+
+### Strategy-Specific Position Sizing
+
+Override global defaults with strategy-specific position sizing:
+
+```json
+{
+  "name": "eth_aggressive_strategy",
+  "market": "ETH-USD",
+  "indicators": ["rsi_4h"],
+  "position_sizing": {
+    "method": "risk_based",
+    "risk_per_trade_pct": 0.03,
+    "max_position_size_usd": 3000
+  }
+}
+```
+
+### Position Sizing Methods
+
+#### 1. Fixed USD Amount
+
+Trade a fixed dollar amount for each signal:
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "max_position_size_usd": 5000
+  }
+}
+```
+
+**Parameters:**
+
+- `fixed_amount_usd`: Fixed dollar amount per trade
+- `max_position_size_usd`: Maximum position size limit
+
+**Use Cases:**
+
+- Conservative trading
+- Consistent position sizes regardless of market conditions
+- Beginner strategies
+
+#### 2. Risk-Based Sizing
+
+Size positions based on risk per trade percentage:
+
+```json
+{
+  "position_sizing": {
+    "method": "risk_based",
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 10000
+  }
+}
+```
+
+**Parameters:**
+
+- `risk_per_trade_pct`: Percentage of portfolio to risk per trade (e.g., 0.02 = 2%)
+- `max_position_size_usd`: Maximum position size limit
+
+**Use Cases:**
+
+- Professional risk management
+- Scaling position size with portfolio growth
+- Consistent risk exposure
+
+#### 3. Percent Equity
+
+Size positions as a percentage of total equity:
+
+```json
+{
+  "position_sizing": {
+    "method": "percent_equity",
+    "percent_equity": 0.1,
+    "max_position_size_usd": 15000
+  }
+}
+```
+
+**Parameters:**
+
+- `percent_equity`: Percentage of total equity per position (e.g., 0.1 = 10%)
+- `max_position_size_usd`: Maximum position size limit
+
+**Use Cases:**
+
+- Growth-oriented strategies
+- Scaling with account size
+- Diversified portfolio allocation
+
+### Position Sizing Inheritance
+
+Strategy-specific position sizing inherits from global config and overrides specific parameters:
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 5000
+  },
+  "strategies": [
+    {
+      "name": "eth_conservative",
+      "market": "ETH-USD",
+      "indicators": ["rsi_4h"]
+      // Uses global position sizing: fixed_usd with $1000
+    },
+    {
+      "name": "eth_aggressive",
+      "market": "ETH-USD",
+      "indicators": ["macd_1h"],
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03
+        // Inherits max_position_size_usd: 5000 from global
+      }
+    },
+    {
+      "name": "btc_scalping",
+      "market": "BTC-USD",
+      "indicators": ["rsi_15m"],
+      "position_sizing": {
+        "fixed_amount_usd": 500
+        // Inherits method: "fixed_usd" and max_position_size_usd: 5000 from global
+      }
+    }
+  ]
+}
+```
+
+### Advanced Position Sizing Examples
+
+#### Multi-Strategy Portfolio with Different Risk Profiles
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "max_position_size_usd": 5000
+  },
+  "strategies": [
+    {
+      "name": "eth_trend_following",
+      "market": "ETH-USD",
+      "indicators": ["ma_1d", "rsi_4h"],
+      "position_sizing": {
+        "method": "percent_equity",
+        "percent_equity": 0.15,
+        "max_position_size_usd": 8000
+      }
+    },
+    {
+      "name": "btc_scalping",
+      "market": "BTC-USD",
+      "indicators": ["rsi_15m"],
+      "position_sizing": {
+        "method": "fixed_usd",
+        "fixed_amount_usd": 500,
+        "max_position_size_usd": 2000
+      }
+    },
+    {
+      "name": "avax_momentum",
+      "market": "AVAX-USD",
+      "indicators": ["macd_1h"],
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.025,
+        "max_position_size_usd": 3000
+      }
+    }
+  ]
+}
+```
+
+#### Exchange-Specific Position Sizing
+
+```json
+{
+  "strategies": [
+    {
+      "name": "hyperliquid_eth_strategy",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "indicators": ["rsi_4h"],
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03,
+        "max_position_size_usd": 5000
+      }
+    },
+    {
+      "name": "coinbase_eth_hedge",
+      "market": "ETH-USD",
+      "exchange": "coinbase",
+      "indicators": ["ma_1h"],
+      "position_sizing": {
+        "method": "fixed_usd",
+        "fixed_amount_usd": 1000,
+        "max_position_size_usd": 3000
+      }
+    }
+  ]
+}
 ```
 
 This configuration guide provides the foundation for properly setting up the Spark Stacker trading

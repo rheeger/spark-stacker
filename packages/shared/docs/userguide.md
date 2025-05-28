@@ -18,6 +18,7 @@ STRATEGY (defines what to trade)
 ├── market: "ETH-USD"              # Actual exchange symbol
 ├── timeframe: "4h"                # Default timeframe for the strategy
 ├── indicators: ["eth_rsi_4h", "eth_macd_1h"]  # Which indicators to use
+├── position_sizing: {...}         # Strategy-specific position sizing (optional)
 └── risk_params: {...}             # Position sizing, stop-loss, etc.
 
 INDICATORS (define how to analyze)
@@ -36,13 +37,15 @@ EXCHANGE CONNECTOR (provides data)
 ### Key Principles
 
 1. **Strategies define WHAT to trade**: The market symbol (like "ETH-USD"), which indicators to use,
-   and risk parameters
+   risk parameters, and position sizing methods
 2. **Indicators define HOW to analyze**: The specific algorithm, timeframe, and parameters for
    analysis
 3. **Markets are actual exchange symbols**: Use full symbols like "ETH-USD", "BTC-USD", not just
    "ETH"
 4. **Timeframes can be set at multiple levels**: Strategy-level defaults and indicator-level
    specifics
+5. **Position sizing can be strategy-specific**: Each strategy can use different position sizing
+   methods while inheriting from global defaults
 
 ## 1. **Setup & Installation**
 
@@ -105,6 +108,12 @@ The configuration follows a clear hierarchy. Here's a complete example:
       "use_as_main": true
     }
   ],
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 5000
+  },
   "strategies": [
     {
       "name": "eth_multi_timeframe_strategy",
@@ -117,7 +126,12 @@ The configuration follows a clear hierarchy. Here's a complete example:
       "stop_loss_pct": 5.0,
       "take_profit_pct": 10.0,
       "max_position_size": 0.1,
-      "risk_per_trade_pct": 0.02
+      "risk_per_trade_pct": 0.02,
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03,
+        "max_position_size_usd": 3000
+      }
     }
   ],
   "indicators": [
@@ -314,6 +328,146 @@ The configuration follows a clear hierarchy. Here's a complete example:
   ]
 }
 ```
+
+### 2.6 Position Sizing Configuration
+
+The system supports both global and strategy-specific position sizing, allowing you to customize
+position sizes based on your risk tolerance and strategy characteristics.
+
+#### 2.6.1 Global Position Sizing
+
+Set default position sizing behavior in the root `position_sizing` section:
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 5000
+  }
+}
+```
+
+#### 2.6.2 Strategy-Specific Position Sizing
+
+Override global defaults with strategy-specific position sizing:
+
+```json
+{
+  "name": "eth_aggressive_strategy",
+  "market": "ETH-USD",
+  "indicators": ["eth_rsi_4h"],
+  "position_sizing": {
+    "method": "risk_based",
+    "risk_per_trade_pct": 0.03,
+    "max_position_size_usd": 3000
+  }
+}
+```
+
+#### 2.6.3 Position Sizing Methods
+
+**1. Fixed USD Amount (`fixed_usd`)**
+
+Trade a consistent dollar amount for each signal:
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "max_position_size_usd": 5000
+  }
+}
+```
+
+- **Best for**: Conservative trading, beginners, consistent exposure
+- **Example**: Always trade $1000 worth, regardless of account size
+
+**2. Risk-Based Sizing (`risk_based`)**
+
+Size positions based on percentage of portfolio at risk:
+
+```json
+{
+  "position_sizing": {
+    "method": "risk_based",
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 10000
+  }
+}
+```
+
+- **Best for**: Professional risk management, scaling with portfolio
+- **Example**: Risk 2% of portfolio per trade, adjusting position size accordingly
+
+**3. Percent Equity (`percent_equity`)**
+
+Size positions as a percentage of total equity:
+
+```json
+{
+  "position_sizing": {
+    "method": "percent_equity",
+    "percent_equity": 0.1,
+    "max_position_size_usd": 15000
+  }
+}
+```
+
+- **Best for**: Growth strategies, scaling with account size
+- **Example**: Use 10% of total equity per position
+
+#### 2.6.4 Multi-Strategy Position Sizing Example
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "max_position_size_usd": 5000
+  },
+  "strategies": [
+    {
+      "name": "eth_conservative",
+      "market": "ETH-USD",
+      "indicators": ["eth_rsi_4h"]
+      // Uses global: fixed_usd $1000
+    },
+    {
+      "name": "eth_aggressive",
+      "market": "ETH-USD",
+      "indicators": ["eth_macd_1h"],
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03
+        // Inherits max_position_size_usd: 5000 from global
+      }
+    },
+    {
+      "name": "btc_scalping",
+      "market": "BTC-USD",
+      "indicators": ["btc_rsi_15m"],
+      "position_sizing": {
+        "fixed_amount_usd": 500
+        // Inherits method: "fixed_usd" from global
+      }
+    }
+  ]
+}
+```
+
+#### 2.6.5 Position Sizing Best Practices
+
+1. **Start Conservative**: Begin with fixed USD amounts or low risk percentages
+2. **Test Different Methods**: Backtest each method to understand performance
+3. **Consider Strategy Type**:
+   - Scalping strategies → Fixed USD or small percentages
+   - Swing trading → Risk-based sizing
+   - Long-term trends → Percent equity
+4. **Set Maximum Limits**: Always use `max_position_size_usd` to prevent oversized positions
+5. **Monitor Performance**: Track how different sizing methods affect your returns
 
 ## 3. **Exchange Connections**
 
