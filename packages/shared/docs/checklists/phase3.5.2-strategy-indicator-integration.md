@@ -200,14 +200,14 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 3.1 Unit Tests - Symbol Conversion
 
-- [ ] **Create test_symbol_converter.py**
-      (`packages/spark-app/tests/unit/core/test_symbol_converter.py` - NEW FILE)
-  - [ ] Test `convert_symbol_for_exchange()` with Hyperliquid format
-  - [ ] Test `convert_symbol_for_exchange()` with Coinbase format
-  - [ ] Test symbol conversion with unknown exchanges
-  - [ ] Test reverse symbol conversion utilities
-  - [ ] Test symbol validation
-  - [ ] Test error handling for invalid symbols
+- [x] **Create test_symbol_converter.py**
+      (`packages/spark-app/tests/connectors/unit/test_symbol_converter.py` - NEW FILE)
+  - [x] Test `convert_symbol_for_exchange()` with Hyperliquid format
+  - [x] Test `convert_symbol_for_exchange()` with Coinbase format
+  - [x] Test symbol conversion with unknown exchanges
+  - [x] Test reverse symbol conversion utilities
+  - [x] Test symbol validation
+  - [x] Test error handling for invalid symbols
 
 ### 3.2 Unit Tests - Strategy Manager
 
