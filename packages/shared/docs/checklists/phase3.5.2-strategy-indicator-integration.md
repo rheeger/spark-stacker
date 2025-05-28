@@ -212,7 +212,7 @@ This phase addresses the core architectural problems identified in the Spark Sta
 ### 3.2 Unit Tests - Strategy Manager
 
 - [x] **Create test_strategy_manager_integration.py**
-      (`packages/spark-app/tests/unit/core/test_strategy_manager_integration.py` - NEW FILE)
+      (`packages/spark-app/tests/core/integration/test_strategy_manager_integration.py` - NEW FILE)
   - [x] Test StrategyManager with strategy configs
   - [x] Test `_build_strategy_mappings()` method
   - [x] Test strategy-driven `run_cycle()` execution
@@ -285,17 +285,18 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 3.7 Integration Tests
 
-- [ ] **Create test_strategy_indicator_integration.py**
-      (`packages/spark-app/tests/integration/test_strategy_indicator_integration.py` - NEW FILE)
-  - [ ] Test complete strategy execution flow
-  - [ ] Test strategy → indicator → signal → trading pipeline
-  - [ ] Test multi-strategy execution
-  - [ ] Test multi-timeframe support
-  - [ ] Test error propagation through the pipeline
-  - [ ] Test configuration loading and validation
-  - [ ] Test strategy-specific position sizing in full pipeline
-  - [ ] Test multiple strategies with different position sizing methods
-  - [ ] Test symbol conversion integration across the pipeline
+- [x] **Create test_strategy_indicator_integration.py**
+      (`packages/spark-app/tests/core/integration/test_strategy_indicator_integration.py` - NEW
+      FILE)
+  - [x] Test complete strategy execution flow
+  - [x] Test strategy → indicator → signal → trading pipeline
+  - [x] Test multi-strategy execution
+  - [x] Test multi-timeframe support
+  - [x] Test error propagation through the pipeline
+  - [x] Test configuration loading and validation
+  - [x] Test strategy-specific position sizing in full pipeline
+  - [x] Test multiple strategies with different position sizing methods
+  - [x] Test symbol conversion integration across the pipeline
 
 ### 3.8 Fixture Updates
 
