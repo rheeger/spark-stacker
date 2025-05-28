@@ -136,26 +136,26 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 2.1 Strategy Configuration Schema
 
-- [ ] **Create StrategyConfig class** (`packages/spark-app/app/core/strategy_config.py` - NEW FILE)
+- [x] **Create StrategyConfig class** (`packages/spark-app/app/core/strategy_config.py` - NEW FILE)
 
-  - [ ] Define StrategyConfig dataclass with all required fields
-  - [ ] Add validation in `__post_init__()`
-  - [ ] Validate market format (must contain "-")
-  - [ ] Validate exchange is specified
-  - [ ] Validate indicators list is not empty
-  - [ ] **Add timeframe field** (`timeframe: str = "1h"`) - strategy dictates timeframe for all
+  - [x] Define StrategyConfig dataclass with all required fields
+  - [x] Add validation in `__post_init__()`
+  - [x] Validate market format (must contain "-")
+  - [x] Validate exchange is specified
+  - [x] Validate indicators list is not empty
+  - [x] **Add timeframe field** (`timeframe: str = "1h"`) - strategy dictates timeframe for all
         indicators
-  - [ ] Add position sizing configuration field (`position_sizing: Optional[Dict[str, Any]]`)
-  - [ ] Add risk management fields (stop_loss_pct, take_profit_pct, max_position_size_usd)
-  - [ ] **Validate timeframe format** (e.g., "1m", "5m", "1h", "4h", "1d")
+  - [x] Add position sizing configuration field (`position_sizing: Optional[Dict[str, Any]]`)
+  - [x] Add risk management fields (stop_loss_pct, take_profit_pct, max_position_size_usd)
+  - [x] **Validate timeframe format** (e.g., "1m", "5m", "1h", "4h", "1d")
 
-- [ ] **Create StrategyConfigLoader class** (`packages/spark-app/app/core/strategy_config.py`)
-  - [ ] Add `load_strategies()` static method
-  - [ ] Add comprehensive error handling
-  - [ ] Add `validate_indicators()` static method
-  - [ ] Verify all strategy indicators exist
-  - [ ] Add detailed logging for validation steps
-  - [ ] Validate position sizing configurations per strategy
+- [x] **Create StrategyConfigLoader class** (`packages/spark-app/app/core/strategy_config.py`)
+  - [x] Add `load_strategies()` static method
+  - [x] Add comprehensive error handling
+  - [x] Add `validate_indicators()` static method
+  - [x] Verify all strategy indicators exist
+  - [x] Add detailed logging for validation steps
+  - [x] Validate position sizing configurations per strategy
 
 ### 2.2 Strategy-Specific Position Sizing Integration
 
