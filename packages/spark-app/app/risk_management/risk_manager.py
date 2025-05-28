@@ -3,7 +3,10 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
-from connectors.base_connector import BaseConnector, OrderSide
+from app.connectors.base_connector import BaseConnector, OrderSide
+
+from .position_sizing import (PositionSizer, PositionSizingConfig,
+                              PositionSizingMethod)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,8 @@ class RiskManager:
         max_position_size_usd: Optional[float] = None,
         max_positions: int = 3,
         min_margin_buffer_pct: float = 20.0,
+        position_sizer: Optional[PositionSizer] = None,
+        position_sizing_config: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize the risk manager.
@@ -33,12 +38,37 @@ class RiskManager:
             max_position_size_usd: Maximum position size in USD (None for no limit)
             max_positions: Maximum number of concurrent positions
             min_margin_buffer_pct: Minimum margin buffer percentage
+            position_sizer: Optional custom position sizer instance
+            position_sizing_config: Optional position sizing configuration dict
         """
         self.max_account_risk_pct = max_account_risk_pct
         self.max_leverage = max_leverage
         self.max_position_size_usd = max_position_size_usd
         self.max_positions = max_positions
         self.min_margin_buffer_pct = min_margin_buffer_pct
+
+        # Initialize position sizer
+        if position_sizer:
+            self.position_sizer = position_sizer
+            logger.info(f"Using provided position sizer with method: {position_sizer.config.method.value}")
+        elif position_sizing_config:
+            # Create position sizer from config
+            sizing_config = PositionSizingConfig.from_config_dict(position_sizing_config)
+            self.position_sizer = PositionSizer(sizing_config)
+            logger.info(f"Created position sizer from config with method: {sizing_config.method.value}")
+        else:
+            # Create default position sizer with fallback configuration
+            default_config = {
+                'position_sizing_method': 'fixed_usd',
+                'fixed_usd_amount': max_position_size_usd or 1000.0,
+                'max_position_size_usd': max_position_size_usd or 10000.0,
+                'min_position_size_usd': 10.0,
+                'max_leverage': max_leverage,
+                'risk_per_trade_pct': max_account_risk_pct / 100.0,
+            }
+            sizing_config = PositionSizingConfig.from_config_dict(default_config)
+            self.position_sizer = PositionSizer(sizing_config)
+            logger.info("Created default position sizer with fixed USD method")
 
         # Track positions and risk metrics
         self.positions = {}
@@ -56,7 +86,7 @@ class RiskManager:
         stop_loss_pct: Optional[float] = None,
     ) -> Tuple[float, float]:
         """
-        Calculate position size based on risk parameters.
+        Calculate position size using the integrated position sizer.
 
         Args:
             exchange: Exchange connector
@@ -69,23 +99,48 @@ class RiskManager:
             stop_loss_pct: Stop loss percentage
 
         Returns:
-            Tuple of (position_size, adjusted_leverage)
+            Tuple of (position_size_usd, adjusted_leverage) where position_size_usd is in USD
         """
         # Handle balance input - convert dictionary to total if needed
         try:
             if isinstance(available_balance, dict):
-                total_balance = sum(float(val) for val in available_balance.values())
-                logger.debug(f"Converted balance dictionary {available_balance} to total: {total_balance}")
+                current_equity = sum(float(val) for val in available_balance.values())
+                logger.debug(f"Converted balance dictionary {available_balance} to total: {current_equity}")
             else:
-                total_balance = float(available_balance)
-                logger.debug(f"Using direct balance value: {total_balance}")
+                current_equity = float(available_balance)
+                logger.debug(f"Using direct balance value: {current_equity}")
 
-            if total_balance <= 0:
+            if current_equity <= 0:
                 logger.warning("Available balance is zero or negative")
                 return 0.0, 1.0
         except (TypeError, ValueError) as e:
             logger.error(f"Error processing available balance: {e}")
             return 0.0, 1.0
+
+        # Get current price if not provided
+        current_price = price
+        if not current_price:
+            try:
+                ticker = exchange.get_ticker(symbol)
+                if ticker and ticker.get("last_price"):
+                    current_price = ticker["last_price"]
+                    logger.debug(f"Using current market price: {current_price}")
+                else:
+                    logger.warning(f"Could not fetch current market price for {symbol}")
+                    return 0.0, 1.0
+            except Exception as e:
+                logger.warning(f"Could not fetch current market price: {e}")
+                return 0.0, 1.0
+
+        # Calculate stop loss price if percentage is provided
+        stop_loss_price = None
+        if stop_loss_pct and stop_loss_pct > 0:
+            if signal_side == OrderSide.BUY:
+                # For long positions, stop loss is below entry price
+                stop_loss_price = current_price * (1 - stop_loss_pct / 100.0)
+            else:
+                # For short positions, stop loss is above entry price
+                stop_loss_price = current_price * (1 + stop_loss_pct / 100.0)
 
         # Determine max leverage from exchange
         try:
@@ -107,51 +162,42 @@ class RiskManager:
                 logger.warning(f"No leverage tiers found for {symbol}, using default max_leverage: {exchange_max_leverage}")
 
             # Apply the leverage cap based on our findings
-            adjusted_leverage = min(leverage, exchange_max_leverage, self.max_leverage)
+            adjusted_leverage = min(leverage, exchange_max_leverage, self.max_leverage, self.position_sizer.config.max_leverage)
             logger.debug(f"Adjusted leverage to {adjusted_leverage} based on limits")
 
         except Exception as e:
             logger.error(f"Unexpected error determining leverage for {symbol}: {e}")
-            adjusted_leverage = min(leverage, self.max_leverage)
+            adjusted_leverage = min(leverage, self.max_leverage, self.position_sizer.config.max_leverage)
             logger.debug(f"Using fallback leverage: {adjusted_leverage}")
 
-        # Calculate max position size based on risk percentage
+        # Use position sizer to calculate position size in asset units
         try:
-            risk_amount = total_balance * (self.max_account_risk_pct / 100.0)
-            logger.debug(f"Risk amount: {risk_amount} (from {self.max_account_risk_pct}% of {total_balance})")
+            position_size_units = self.position_sizer.calculate_position_size(
+                current_equity=current_equity,
+                current_price=current_price,
+                stop_loss_price=stop_loss_price,
+                signal_strength=confidence
+            )
 
-            # Adjust by confidence
-            # Higher confidence = use more of the available risk amount
-            confidence_adjusted_risk = risk_amount * (0.5 + confidence * 0.5)
-            logger.debug(f"Confidence-adjusted risk: {confidence_adjusted_risk} (confidence: {confidence})")
+            # Convert position size from asset units to USD value
+            position_size_usd = position_size_units * current_price
 
-            # Calculate position size from risk amount and leverage
-            # If we have a stop loss percentage, use that to determine max position size
-            if stop_loss_pct and stop_loss_pct > 0:
-                # Determine how much we can lose before hitting the stop loss
-                max_loss_pct = stop_loss_pct / 100.0
-                # Calculate position size based on risk amount and potential loss
-                position_size = confidence_adjusted_risk / (max_loss_pct / adjusted_leverage)
-                logger.debug(f"Using stop-loss calculation: position_size = {position_size}")
-            else:
-                # Without specific stop-loss, use a more conservative approach
-                position_size = confidence_adjusted_risk * adjusted_leverage
-                logger.debug(f"Using conservative calculation: position_size = {position_size}")
+            logger.debug(f"Position sizer result: {position_size_units:.6f} units = ${position_size_usd:.2f} USD")
 
-            # Apply absolute position size limit if configured
-            if self.max_position_size_usd and position_size > self.max_position_size_usd:
-                logger.debug(f"Reducing position size from {position_size} to max limit: {self.max_position_size_usd}")
-                position_size = self.max_position_size_usd
+            # Apply additional risk management limits
+            if self.max_position_size_usd and position_size_usd > self.max_position_size_usd:
+                logger.debug(f"Reducing position size from ${position_size_usd:.2f} to max limit: ${self.max_position_size_usd}")
+                position_size_usd = self.max_position_size_usd
 
-            logger.info(f"Final position calculation for {symbol}: size={position_size:.2f}, leverage={adjusted_leverage:.1f}x")
-            return position_size, adjusted_leverage
+            logger.info(f"Final position calculation for {symbol}: ${position_size_usd:.2f} USD, leverage={adjusted_leverage:.1f}x")
+            return position_size_usd, adjusted_leverage
 
         except Exception as e:
             logger.error(f"Error in position size calculation for {symbol}: {e}", exc_info=True)
             # Return conservative values
-            default_position = total_balance * 0.05  # Use 5% of balance as safe default
+            default_position = current_equity * 0.05  # Use 5% of balance as safe default
             default_leverage = min(2.0, self.max_leverage)  # Use low leverage as safe default
-            logger.warning(f"Using fallback position size: {default_position:.2f} with leverage: {default_leverage:.1f}x")
+            logger.warning(f"Using fallback position size: ${default_position:.2f} with leverage: {default_leverage:.1f}x")
             return default_position, default_leverage
 
     def calculate_hedge_parameters(
@@ -449,3 +495,56 @@ class RiskManager:
 
         # No adjustment needed
         return False, "No adjustment needed", {}
+
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> 'RiskManager':
+        """
+        Create a RiskManager from configuration dictionary.
+
+        Args:
+            config: Configuration dictionary containing risk management and position sizing settings
+
+        Returns:
+            RiskManager instance
+        """
+        # Extract position sizing configuration if available
+        position_sizing_config = config.get('position_sizing')
+
+        # Extract risk management parameters
+        max_account_risk_pct = config.get('max_account_risk_pct', 2.0)
+        max_leverage = config.get('max_leverage', 25.0)
+        max_position_size_usd = config.get('max_position_size_usd')
+        max_positions = config.get('max_positions', 3)
+        min_margin_buffer_pct = config.get('min_margin_buffer_pct', 20.0)
+
+        # If position sizing config exists, merge risk parameters into it
+        if position_sizing_config:
+            # Merge risk parameters into position sizing config
+            merged_config = position_sizing_config.copy()
+
+            # Use position sizing config values, but fallback to risk management values if not specified
+            if 'max_position_size_usd' not in merged_config and max_position_size_usd:
+                merged_config['max_position_size_usd'] = max_position_size_usd
+            if 'max_leverage' not in merged_config:
+                merged_config['max_leverage'] = max_leverage
+            if 'risk_per_trade_pct' not in merged_config:
+                merged_config['risk_per_trade_pct'] = max_account_risk_pct / 100.0
+
+            logger.info("Creating RiskManager with position sizing configuration from config")
+            return cls(
+                max_account_risk_pct=max_account_risk_pct,
+                max_leverage=max_leverage,
+                max_position_size_usd=max_position_size_usd,
+                max_positions=max_positions,
+                min_margin_buffer_pct=min_margin_buffer_pct,
+                position_sizing_config=merged_config
+            )
+        else:
+            logger.info("Creating RiskManager with default position sizing configuration")
+            return cls(
+                max_account_risk_pct=max_account_risk_pct,
+                max_leverage=max_leverage,
+                max_position_size_usd=max_position_size_usd,
+                max_positions=max_positions,
+                min_margin_buffer_pct=min_margin_buffer_pct
+            )

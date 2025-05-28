@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Spark Stacker Indicator Report{% endblock %}</title>
+    <link rel="stylesheet" href="{{ static_path }}/style.css" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <h1>Spark Stacker</h1>
+        <div class="report-info">
+          <h2>
+            {% block report_title %}{{ indicator_name }} Indicator Performance
+            Report{% endblock %}
+          </h2>
+          <div class="metadata">
+            <p>Generated: {{ generation_time }}</p>
+            <p>Market: {{ market }}</p>
+            <p>Timeframe: {{ timeframe }}</p>
+            <p>Period: {{ start_date }} - {{ end_date }}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      {% block content %}
+      <div class="config-performance-section">
+        {% if indicator_config %}
+        <div class="config-column">
+          <h3>Configuration</h3>
+          <div class="settings-content">
+            <div class="settings-grid">
+              <div class="setting-item">
+                <span class="setting-label">Indicator Type:</span>
+                <span class="setting-value"
+                  >{{ indicator_config.type | upper }}</span
+                >
+              </div>
+              {% for key, value in indicator_config.parameters.items() %}
+              <div class="setting-item">
+                <span class="setting-label"
+                  >{{ key | replace('_', ' ') | title }}:</span
+                >
+                <span class="setting-value">{{ value }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="performance-column">
+          <h3>Performance</h3>
+          <div class="metrics-grid">
+            <div
+              class="metric-card {% if metrics.win_rate >= 60 %}good{% elif metrics.win_rate >= 40 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Win Rate</h4>
+              <div class="metric-value">{{ metrics.win_rate|round(2) }}%</div>
+            </div>
+            <div
+              class="metric-card {% if metrics.profit_factor >= 1.5 %}good{% elif metrics.profit_factor >= 1.0 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Profit Factor</h4>
+              <div class="metric-value">
+                {{ metrics.profit_factor|round(2) }}
+              </div>
+            </div>
+            <div
+              class="metric-card {% if metrics.total_return >= 10 %}good{% elif metrics.total_return >= 0 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Total Return</h4>
+              <div class="metric-value">
+                {{ metrics.total_return|round(2) }}%
+              </div>
+            </div>
+            <div
+              class="metric-card {% if metrics.max_drawdown <= 5 %}good{% elif metrics.max_drawdown <= 15 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Max Drawdown</h4>
+              <div class="metric-value">
+                {{ metrics.max_drawdown|round(2) }}%
+              </div>
+            </div>
+            <div
+              class="metric-card {% if metrics.sharpe >= 1.5 %}good{% elif metrics.sharpe >= 0.5 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Sharpe Ratio</h4>
+              <div class="metric-value">{{ metrics.sharpe|round(2) }}</div>
+            </div>
+            <div
+              class="metric-card {% if metrics.total_trades >= 20 %}good{% elif metrics.total_trades >= 5 %}neutral{% else %}bad{% endif %}"
+            >
+              <h4>Total Trades</h4>
+              <div class="metric-value">{{ metrics.total_trades }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="charts-section">
+        <h3>Performance Charts</h3>
+        <div class="chart-container">
+          <div class="chart" id="price-chart">
+            {% if charts.price_chart.endswith('.html') %}
+            <iframe
+              src="{{ charts.price_chart }}"
+              frameborder="0"
+              width="100%"
+              height="650"
+              style="border: none; overflow: hidden"
+              scrolling="no"
+            ></iframe>
+            {% else %}
+            <img src="{{ charts.price_chart }}" alt="Price Chart with Trades" />
+            {% endif %}
+          </div>
+          <div class="chart" id="equity-curve">
+            {% if charts.equity_curve.endswith('.html') %}
+            <iframe
+              src="{{ charts.equity_curve }}"
+              frameborder="0"
+              width="100%"
+              height="650"
+              style="border: none; overflow: hidden"
+              scrolling="no"
+            ></iframe>
+            {% else %}
+            <img src="{{ charts.equity_curve }}" alt="Equity Curve" />
+            {% endif %}
+          </div>
+          <div class="chart" id="drawdown-chart">
+            {% if charts.drawdown_chart.endswith('.html') %}
+            <iframe
+              src="{{ charts.drawdown_chart }}"
+              frameborder="0"
+              width="100%"
+              height="550"
+              style="border: none; overflow: hidden"
+              scrolling="no"
+            ></iframe>
+            {% else %}
+            <img src="{{ charts.drawdown_chart }}" alt="Drawdown Chart" />
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="trades-section">
+        <h3>Trade List</h3>
+        <div class="trades-filter">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="win">Winners</button>
+          <button class="filter-btn" data-filter="loss">Losers</button>
+        </div>
+        <div class="trades-table-container">
+          <table class="trades-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Time</th>
+                <th>Side</th>
+                <th>Price</th>
+                <th>Size</th>
+                <th>PnL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for trade in trades %}
+              <tr
+                class="trade-row {{ 'win' if trade.get('realized_pnl', 0) > 0 else 'loss' }}"
+              >
+                <td>{{ loop.index }}</td>
+                <td>{{ trade.get('timestamp', '') | format_timestamp }}</td>
+                <td>{{ trade.get('side', '') }}</td>
+                <td>{{ trade.get('price', 0) | format_price }}</td>
+                <td>{{ trade.get('amount', 0) | format_size }}</td>
+                <td>{{ trade.get('realized_pnl', 0) | format_pnl }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endblock %}
+    </main>
+
+    <footer>
+      <div class="container">
+        <p>Spark Stacker &copy; {{ current_year }}</p>
+        <p>Generated with Spark Stacker Backtesting Engine</p>
+      </div>
+    </footer>
+
+    <script>
+      // Simple JS for trade filtering and settings toggle
+      document.addEventListener('DOMContentLoaded', function () {
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        const tradeRows = document.querySelectorAll('.trade-row');
+
+        filterButtons.forEach((button) => {
+          button.addEventListener('click', function () {
+            const filter = this.getAttribute('data-filter');
+
+            // Remove active class from all buttons
+            filterButtons.forEach((btn) => btn.classList.remove('active'));
+
+            // Add active class to clicked button
+            this.classList.add('active');
+
+            // Show all rows if filter is 'all'
+            if (filter === 'all') {
+              tradeRows.forEach((row) => (row.style.display = ''));
+            } else {
+              // Hide/show rows based on filter
+              tradeRows.forEach((row) => {
+                if (row.classList.contains(filter)) {
+                  row.style.display = '';
+                } else {
+                  row.style.display = 'none';
+                }
+              });
+            }
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

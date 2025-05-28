@@ -943,13 +943,13 @@
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} > 0",
+          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} > 0)",
           "legendFormat": "Positive Histogram",
           "refId": "C"
         },
         {
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "expr": "spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} <= 0",
+          "expr": "(spark_stacker_macd_values{component=\"histogram\", market=\"ETH-USD\", timeframe=\"1m\"} <= 0)",
           "legendFormat": "Negative Histogram",
           "refId": "D"
         }
@@ -1015,7 +1015,26 @@
               "refId": "D"
             }
         ],
-        "description": "Candlestick chart showing ETH-USD price movement"
+        "description": "Candlestick chart showing ETH-USD price movement",
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {},
+              "renameByName": {
+                "Value #A": "Close",
+                "Value #B": "Open",
+                "Value #C": "High",
+                "Value #D": "Low"
+              }
+            }
+          }
+        ]
     },
     {
         "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },

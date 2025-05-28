@@ -23,11 +23,11 @@ print(f"app_dir: {app_dir}")
 in_docker = os.path.exists("/.dockerenv")
 
 if in_docker:
-    # In Docker, use /app/logs
-    logs_dir = Path("/app/logs")
+    # In Docker, use /app/_logs
+    logs_dir = Path("/app/_logs")
 else:
     # Outside Docker, use relative path from app directory
-    logs_dir = app_dir.parent / "logs"
+    logs_dir = app_dir.parent / "_logs"
 
 print(f"Logs directory path: {logs_dir}")
 
@@ -67,7 +67,7 @@ def create_compat_symlink():
 
     try:
         # We no longer need compatibility symlinks in the root directory
-        # All logs will be in /app/logs (Docker) or packages/spark-app/logs (local)
+        # All logs will be in /app/_logs (Docker) or packages/spark-app/_logs (local)
         logging.info("Compatibility symlinks are no longer needed - all logs are in the correct location")
         return
     except Exception as e:

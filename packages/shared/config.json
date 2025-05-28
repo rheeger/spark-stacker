@@ -7,7 +7,7 @@
     "show_market_details": false,
     "show_zero_balances": false
   },
-  "webhook_enabled": true,
+  "webhook_enabled": false,
   "webhook_port": 8080,
   "webhook_host": "0.0.0.0",
   "metrics_port": 9000,
@@ -18,10 +18,25 @@
   "dry_run": false,
   "max_account_risk_pct": 0.1,
   "max_leverage": 1.0,
-  "max_position_size_usd": 0.1,
+  "max_position_size_usd": 1000.0,
   "max_positions": 1,
   "min_margin_buffer_pct": 50.0,
   "enable_hedging": false,
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 100.0,
+    "equity_percentage": 0.05,
+    "risk_per_trade_pct": 0.02,
+    "default_stop_loss_pct": 0.05,
+    "fixed_units": 0.1,
+    "kelly_win_rate": 0.6,
+    "kelly_avg_win": 0.03,
+    "kelly_avg_loss": 0.02,
+    "kelly_max_position_pct": 0.25,
+    "max_position_size_usd": 1000.0,
+    "min_position_size_usd": 50.0,
+    "max_leverage": 1.0
+  },
   "exchanges": [
     {
       "name": "hyperliquid",
@@ -65,14 +80,14 @@
       "stop_loss_pct": 5.0,
       "take_profit_pct": 10.0,
       "max_position_size": 0.1,
-      "risk_per_trade_pct": 0.01
+      "risk_per_trade_pct": 0.02
     }
   ],
   "indicators": [
     {
       "name": "eth_rsi",
       "type": "rsi",
-      "enabled": false,
+      "enabled": true,
       "parameters": {
         "period": 14,
         "overbought": 70,
@@ -83,7 +98,7 @@
     {
       "name": "macd_eth_usd_1m",
       "type": "macd",
-      "enabled": true,
+      "enabled": false,
       "parameters": {
         "fast_period": 8,
         "slow_period": 21,

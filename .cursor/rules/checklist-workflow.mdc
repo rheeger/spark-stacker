@@ -1,0 +1,24 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Checklist Workflow Rule
+
+When working on project checklists such as [packages/shared/docs/checklists/phase3.5.1-indicator-testing-reporting.md](mdc:packages/shared/docs/checklists/phase3.5.1-indicator-testing-reporting.md), follow these guidelines:
+
+1. **Focus on one checkbox at a time** - Complete a single task completely before moving to the next one
+2. **Update the checklist** - Mark the checkbox as completed with `[x]` when finished
+3. **Commit your changes** - After completing a task, commit both the implementation and the updated checklist
+4. **Start fresh** - Begin a new chat session for each checklist item to maintain focus and context
+
+## Example workflow:
+
+1. Identify the next unchecked box in the checklist
+2. Work on implementing just that one item
+3. Test the implementation thoroughly
+4. Update the checklist to mark the item as completed
+5. Commit all changes with a descriptive message
+6. End the current session and start a new one for the next item
+
+This approach helps maintain clear progress tracking and creates logical, focused commits in the version history.

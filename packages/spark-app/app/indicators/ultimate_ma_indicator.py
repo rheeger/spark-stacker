@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from indicators.base_indicator import BaseIndicator, Signal, SignalDirection
+from app.indicators.base_indicator import BaseIndicator, Signal, SignalDirection
 
 logger = logging.getLogger(__name__)
 

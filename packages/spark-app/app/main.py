@@ -22,16 +22,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from connectors.connector_factory import ConnectorFactory
-from core.strategy_manager import StrategyManager
-from core.trading_engine import TradingEngine
-from indicators.indicator_factory import IndicatorFactory
-from metrics import start_metrics_server, update_mvp_signal_state
-from metrics.registry import start_historical_data_api
-from risk_management.risk_manager import RiskManager
-from utils.config import AppConfig, ConfigManager
-from utils.logging_setup import setup_logging
-from webhook.webhook_server import WebhookServer
+from app.connectors.connector_factory import ConnectorFactory
+from app.core.strategy_manager import StrategyManager
+from app.core.trading_engine import TradingEngine
+from app.indicators.indicator_factory import IndicatorFactory
+from app.metrics import start_metrics_server, update_mvp_signal_state
+from app.metrics.registry import start_historical_data_api
+from app.risk_management.risk_manager import RiskManager
+from app.utils.config import AppConfig, ConfigManager
+from app.utils.logging_setup import setup_logging
+from app.webhook.webhook_server import WebhookServer
 
 # Global variables
 engine: Optional[TradingEngine] = None
@@ -520,21 +520,19 @@ async def async_main():
                 "No hedge connector specified, using main connector for hedging"
             )
 
-        # Initialize risk manager with conservative settings for sandbox
-        risk_manager = RiskManager(
-            max_account_risk_pct=config.get("max_account_risk_pct", 1.0),  # Use config value or default to 1.0%
-            max_leverage=config.get("max_leverage", 1.0),  # Use config value or default to 1.0x
-            max_position_size_usd=config.get("max_position_size_usd", 10.0),  # Use config value or default to $10.0
-            max_positions=config.get("max_positions", 1),  # Use config value or default to 1
-            min_margin_buffer_pct=config.get("min_margin_buffer_pct", 50.0),  # Use config value or default to 50.0%
-        )
+        # Initialize risk manager with position sizing integration
+        risk_manager = RiskManager.from_config(config)
 
         # Log the risk manager settings
-        logger.info(f"Risk Manager initialized with: max_account_risk_pct={config.get('max_account_risk_pct', 1.0)}%, "
-                    f"max_leverage={config.get('max_leverage', 1.0)}x, "
-                    f"max_position_size_usd=${config.get('max_position_size_usd', 10.0)}, "
-                    f"max_positions={config.get('max_positions', 1)}, "
-                    f"min_margin_buffer_pct={config.get('min_margin_buffer_pct', 50.0)}%")
+        logger.info(f"Risk Manager initialized with: max_account_risk_pct={risk_manager.max_account_risk_pct}%, "
+                    f"max_leverage={risk_manager.max_leverage}x, "
+                    f"max_position_size_usd=${risk_manager.max_position_size_usd}, "
+                    f"max_positions={risk_manager.max_positions}, "
+                    f"min_margin_buffer_pct={risk_manager.min_margin_buffer_pct}%")
+        logger.info(f"Position sizing method: {risk_manager.position_sizer.config.method.value}")
+        logger.info(f"Position sizing config: USD amount=${risk_manager.position_sizer.config.fixed_usd_amount}, "
+                    f"Max=${risk_manager.position_sizer.config.max_position_size_usd}, "
+                    f"Min=${risk_manager.position_sizer.config.min_position_size_usd}")
 
         # Initialize trading engine with proper parameters
         engine = TradingEngine(

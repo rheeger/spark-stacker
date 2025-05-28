@@ -25,21 +25,25 @@ config.py
 # Nx
 .nx/
 
-# Cursor
-.cursor/
-
 # Node
 node_modules/
 
 # Test files & data
 **/test_data/**
-**/test_results/**
+**/test_results
+**/__test_data__/**
+**/__test_results__
 **/tests/test_data/
 **/tests/test_results/
+**/tests/__test_data__/
+**/tests/__test_results__/
 **/tests/market_data/**
 **/tests/*/test_data/**
 **/tests/*/test_results/**
+**/tests/*/__test_data__/**
+**/tests/*/__test_results__/**
 **/tests/*/market_data/**
+*.png
 
 # Virtualenv
 venv/
@@ -82,7 +86,7 @@ Thumbs.db
 docker-compose.override.yml
 
 # Logs
-logs/
+_logs/
 *.log
 
 # Temporary files
@@ -91,7 +95,7 @@ logs/
 *~
 
 # Coverage reports
-htmlcov/
+_htmlcov/
 .coverage
 .coverage.*
 .cache
@@ -130,3 +134,9 @@ venv.bak/
 
 .nx/cache
 .nx/workspace-data
+
+vite.config.*.timestamp*
+vitest.config.*.timestamp*
+
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md

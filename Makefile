@@ -1,4 +1,4 @@
-.PHONY: help install-all build-all start-all stop-all test-all lint-all clean-all monitoring spark-app shared restart-all reset-all
+.PHONY: help install-all build-all start-all stop-all test-all lint-all clean-all clean-results monitoring spark-app shared restart-all reset-all status
 
 # Default target
 help:
@@ -17,6 +17,9 @@ help:
 	@echo "  make test-all        : Run tests for all packages"
 	@echo "  make lint-all        : Run linters for all packages"
 	@echo "  make clean-all       : Clean up all packages"
+	@echo ""
+	@echo "Status commands:"
+	@echo "  make status          : Show status of all services"
 	@echo ""
 	@echo "Package-specific commands:"
 	@echo "  make monitoring      : Show monitoring package commands"
@@ -65,19 +68,21 @@ build-all:
 	@echo "All packages built"
 
 start-all:
-	@echo "Starting all services..."
-	@echo "Starting monitoring services..."
+	@echo "Starting all services in correct order..."
+	@echo "Starting monitoring services first..."
 	@cd packages/monitoring && make monitoring-start
-	@echo "Starting spark-app services..."
+	@echo "Waiting for monitoring services to be ready..."
+	@sleep 5
+	@echo "Starting spark-app service..."
 	@cd packages/spark-app && make spark-app-start
 	@echo "All services started"
 
 stop-all:
 	@echo "Stopping all services..."
+	@echo "Stopping spark-app service..."
+	@cd packages/spark-app && make spark-app-stop
 	@echo "Stopping monitoring services..."
 	@cd packages/monitoring && make monitoring-stop
-	@echo "Stopping spark-app services..."
-	@cd packages/spark-app && make spark-app-stop
 	@echo "All services stopped"
 
 test-all:
@@ -106,12 +111,24 @@ clean-all:
 	@cd packages/monitoring && make clean
 	@echo "All packages cleaned"
 
+clean-results:
+	@echo "Cleaning test results..."
+	@rm -rf packages/spark-app/tests/__test_results__/**/*.png
+	@rm -rf packages/spark-app/tests/__test_results__/*
+	@rm -rf packages/spark-app/tests/indicators/__test_results__
+	@echo "Test results cleaned"
+
+
 restart-all:
-	@echo "Restarting all services..."
+	@echo "Restarting all services in proper order..."
+	@echo "Stopping spark-app service first..."
+	@cd packages/spark-app && make spark-app-stop
 	@echo "Restarting monitoring services..."
 	@cd packages/monitoring && make monitoring-restart
-	@echo "Restarting spark-app services..."
-	@cd packages/spark-app && make restart
+	@echo "Waiting for monitoring services to be ready..."
+	@sleep 5
+	@echo "Starting spark-app service..."
+	@cd packages/spark-app && make spark-app-start
 	@echo "All services restarted"
 
 reset-all:
@@ -126,3 +143,7 @@ reset-all:
 	@echo "Starting all services..."
 	@$(MAKE) start-all
 	@echo "Full system reset complete"
+
+# Status command
+status:
+	@cd packages/spark-app && make status

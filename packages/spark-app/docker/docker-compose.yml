@@ -5,13 +5,13 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: spark-stacker
+    container_name: spark-app
     restart: unless-stopped
     ports:
       - "${WEBHOOK_PORT:-8080}:8080"
       - "9000:9000"
     volumes:
-      - ../logs:/app/logs:rw
+      - ../_logs:/app/_logs:rw
       - ../../shared/config.json:/app/config.json
       - ../../shared/.env:/app/.env
       - ../data:/app/data
@@ -26,7 +26,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    command: python main.py --config /app/config.json
+    command: python -m app.main --config /app/config.json
     networks:
       - default
       - monitoring_network
@@ -36,4 +36,4 @@ networks:
     driver: bridge
   monitoring_network:
     external: true
-    name: docker_monitoring
+    name: spark-stacker_monitoring

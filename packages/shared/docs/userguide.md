@@ -454,9 +454,9 @@ This analysis includes:
 
 The system maintains comprehensive logs:
 
-- Trade execution logs: `logs/trades.log`
-- System event logs: `logs/system.log`
-- Error logs: `logs/error.log`
+- Trade execution logs: `_logs/trades.log`
+- System event logs: `_logs/system.log`
+- Error logs: `_logs/error.log`
 
 Configure alerts via email or messaging services in `config.yml`:
 

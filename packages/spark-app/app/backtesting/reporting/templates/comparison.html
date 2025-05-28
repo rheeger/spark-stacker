@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark Stacker - Indicator Comparison Report</title>
+    <link rel="stylesheet" href="{{ static_path }}/style.css" />
+    <style>
+      /* Additional styles for comparison layout */
+      .comparison-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-bottom: 2rem;
+      }
+
+      .indicator-summary {
+        background: var(--card-bg);
+        border-radius: 8px;
+        padding: 1.5rem;
+        border: 1px solid var(--border-color);
+      }
+
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 2rem 0;
+        background: var(--card-bg);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .comparison-table th {
+        background: var(--primary-color);
+        color: white;
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+      }
+
+      .comparison-table td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: top;
+      }
+
+      .comparison-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .comparison-table tr:nth-child(even) {
+        background: rgba(0, 0, 0, 0.02);
+      }
+
+      .metric-name {
+        font-weight: 600;
+        color: var(--text-color);
+      }
+
+      .best-value {
+        background: rgba(34, 197, 94, 0.1);
+        color: #16a34a;
+        font-weight: 600;
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+      }
+
+      .worst-value {
+        background: rgba(239, 68, 68, 0.1);
+        color: #dc2626;
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+      }
+
+      .ranking-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 0.5rem;
+      }
+
+      .rank-1 {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .rank-2 {
+        background: #e5e7eb;
+        color: #374151;
+      }
+      .rank-3 {
+        background: #fecaca;
+        color: #991b1b;
+      }
+
+      .indicator-title {
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+        border-bottom: 2px solid var(--primary-color);
+        padding-bottom: 0.5rem;
+      }
+
+      .summary-metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      .summary-metric {
+        text-align: center;
+        padding: 0.75rem;
+        background: rgba(59, 130, 246, 0.05);
+        border-radius: 6px;
+        border: 1px solid rgba(59, 130, 246, 0.1);
+      }
+
+      .summary-metric .label {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        margin-bottom: 0.25rem;
+      }
+
+      .summary-metric .value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-color);
+      }
+
+      .market-conditions {
+        background: var(--card-bg);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin: 2rem 0;
+        border: 1px solid var(--border-color);
+      }
+
+      .condition-tag {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin: 0.25rem;
+      }
+
+      .bull-market {
+        background: #dcfce7;
+        color: #16a34a;
+      }
+      .bear-market {
+        background: #fecaca;
+        color: #dc2626;
+      }
+      .sideways-market {
+        background: #fef3c7;
+        color: #92400e;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <h1>Spark Stacker</h1>
+        <div class="report-info">
+          <h2>Indicator Comparison Report</h2>
+          <div class="metadata">
+            <p>Generated: {{ generation_time }}</p>
+            <p>Market: {{ market }}</p>
+            <p>Timeframe: {{ timeframe }}</p>
+            <p>Period: {{ start_date }} - {{ end_date }}</p>
+            <p>Indicators Compared: {{ indicator_count }}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- Market Conditions Summary -->
+      {% if market_conditions %}
+      <div class="market-conditions">
+        <h3>Market Conditions Analysis</h3>
+        <p>{{ market_conditions.description }}</p>
+        <div class="conditions-tags">
+          {% for condition in market_conditions.periods %}
+          <span class="condition-tag {{ condition.type }}-market">
+            {{ condition.label }}: {{ condition.percentage }}%
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Indicator Summaries Grid -->
+      <div class="comparison-grid">
+        {% for indicator in indicators %}
+        <div class="indicator-summary">
+          <h3 class="indicator-title">
+            {{ indicator.name }} {% if indicator.ranking %}
+            <span class="ranking-badge rank-{{ indicator.ranking }}">
+              #{{ indicator.ranking }}
+            </span>
+            {% endif %}
+          </h3>
+
+          <div class="summary-metrics">
+            <div class="summary-metric">
+              <div class="label">Win Rate</div>
+              <div class="value">
+                {{ indicator.metrics.win_rate|round(1) }}%
+              </div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">Total Return</div>
+              <div class="value">
+                {{ indicator.metrics.total_return|round(1) }}%
+              </div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">Profit Factor</div>
+              <div class="value">
+                {{ indicator.metrics.profit_factor|round(2) }}
+              </div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">Max Drawdown</div>
+              <div class="value">
+                {{ indicator.metrics.max_drawdown|round(1) }}%
+              </div>
+            </div>
+          </div>
+
+          {% if indicator.config %}
+          <div
+            class="config-summary"
+            style="
+              margin-top: 1rem;
+              padding-top: 1rem;
+              border-top: 1px solid var(--border-color);
+            "
+          >
+            <strong>Configuration:</strong>
+            {% for key, value in indicator.config.parameters.items() %}
+            <div style="font-size: 0.875rem; margin: 0.25rem 0">
+              {{ key | replace('_', ' ') | title }}: {{ value }}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Detailed Comparison Table -->
+      <div class="comparison-section">
+        <h3>Detailed Performance Comparison</h3>
+        <div style="overflow-x: auto">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                {% for indicator in indicators %}
+                <th>{{ indicator.name }}</th>
+                {% endfor %}
+                <th>Best</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for metric in comparison_metrics %}
+              <tr>
+                <td class="metric-name">{{ metric.display_name }}</td>
+                {% for indicator in indicators %}
+                <td
+                  class="{% if metric.best_indicator == indicator.name %}best-value{% elif metric.worst_indicator == indicator.name %}worst-value{% endif %}"
+                >
+                  {{ metric.indicator_values[indicator.name] }} {% if
+                  metric.units %}{{ metric.units }}{% endif %}
+                </td>
+                {% endfor %}
+                <td class="best-value">
+                  {{ metric.best_value }}{% if metric.units %}{{ metric.units
+                  }}{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Performance Rankings -->
+      <div class="rankings-section" style="margin: 3rem 0">
+        <h3>Overall Rankings</h3>
+        <div
+          style="
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+          "
+        >
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+              gap: 2rem;
+            "
+          >
+            <div>
+              <h4 style="color: var(--primary-color); margin-bottom: 1rem">
+                By Return
+              </h4>
+              {% for item in rankings.by_return %}
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  padding: 0.5rem 0;
+                  border-bottom: 1px solid var(--border-color);
+                "
+              >
+                <span>{{ loop.index }}. {{ item.name }}</span>
+                <span
+                  class="{% if item.value > 0 %}best-value{% else %}worst-value{% endif %}"
+                  >{{ item.value|round(1) }}%</span
+                >
+              </div>
+              {% endfor %}
+            </div>
+
+            <div>
+              <h4 style="color: var(--primary-color); margin-bottom: 1rem">
+                By Sharpe Ratio
+              </h4>
+              {% for item in rankings.by_sharpe %}
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  padding: 0.5rem 0;
+                  border-bottom: 1px solid var(--border-color);
+                "
+              >
+                <span>{{ loop.index }}. {{ item.name }}</span>
+                <span
+                  class="{% if item.value > 1.0 %}best-value{% elif item.value > 0.5 %}{% else %}worst-value{% endif %}"
+                  >{{ item.value|round(2) }}</span
+                >
+              </div>
+              {% endfor %}
+            </div>
+
+            <div>
+              <h4 style="color: var(--primary-color); margin-bottom: 1rem">
+                By Win Rate
+              </h4>
+              {% for item in rankings.by_win_rate %}
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  padding: 0.5rem 0;
+                  border-bottom: 1px solid var(--border-color);
+                "
+              >
+                <span>{{ loop.index }}. {{ item.name }}</span>
+                <span
+                  class="{% if item.value > 60 %}best-value{% elif item.value > 40 %}{% else %}worst-value{% endif %}"
+                  >{{ item.value|round(1) }}%</span
+                >
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Individual Reports Links -->
+      {% if individual_reports %}
+      <div class="individual-reports" style="margin: 3rem 0">
+        <h3>Individual Indicator Reports</h3>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+          "
+        >
+          {% for report in individual_reports %}
+          <a
+            href="{{ report.path }}"
+            style="
+              display: block;
+              padding: 1rem;
+              background: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 8px;
+              text-decoration: none;
+              color: var(--text-color);
+              transition: all 0.2s;
+            "
+          >
+            <strong>{{ report.name }}</strong>
+            <div
+              style="
+                font-size: 0.875rem;
+                color: var(--text-muted);
+                margin-top: 0.5rem;
+              "
+            >
+              View detailed report →
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </main>
+
+    <footer>
+      <div class="container">
+        <p>Spark Stacker &copy; {{ current_year }}</p>
+        <p>Generated with Spark Stacker Backtesting Engine</p>
+      </div>
+    </footer>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        // Add hover effects to individual report links
+        const reportLinks = document.querySelectorAll('.individual-reports a');
+        reportLinks.forEach((link) => {
+          link.addEventListener('mouseenter', function () {
+            this.style.borderColor = 'var(--primary-color)';
+            this.style.transform = 'translateY(-2px)';
+          });
+          link.addEventListener('mouseleave', function () {
+            this.style.borderColor = 'var(--border-color)';
+            this.style.transform = 'translateY(0)';
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

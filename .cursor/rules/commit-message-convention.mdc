@@ -1,0 +1,68 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Commit Message Naming Convention
+
+## Standard Format
+
+All commit messages should follow this format:
+```
+phase<X.Y.Z>: <type>(<scope>): <short description>
+```
+
+Where:
+- `phase<X.Y.Z>` identifies the checklist phase (e.g., `phase3.5.1`)
+- `<type>` is one of: feat, fix, docs, chore, refactor, test, style, perf
+- `<scope>` is the component being modified (optional)
+- `<short description>` is a concise explanation
+
+## Examples
+
+✅ Good examples:
+```
+phase3.5.1: feat(reporting): Implement HTML report generator
+phase4: fix(monitoring): Resolve Grafana dashboard loading issue
+phase3.5: test(hyperliquid): Add comprehensive API response validation
+phase2: refactor(backtesting): Convert to factory pattern for indicators
+```
+
+❌ Avoid:
+```
+Fixed bug
+Update code
+WIP
+Added new feature
+```
+
+## Checklist References
+
+The phase numbers should correlate to our project checklist structure:
+
+- phase1: System Design & Planning
+- phase2: Core Development & Backtesting
+- phase3: Integration & Dry Run
+- phase3.5: Hyperliquid Hardening
+- phase3.5.1: Indicator Testing & Reporting
+- phase4: Monitoring & Control Interface
+- phase5: Deployment & Live Trading
+- phase6: Continuous Improvement & Expansion
+
+## Subphase Numbering
+
+For tasks within a specific section of a checklist:
+
+```
+phase3.5.1-4.2: feat(testing): Implement standardized data generator
+```
+
+This indicates work on section 4.2 within phase 3.5.1.
+
+## Why This Matters
+
+Consistent commit messages:
+1. Make the git history easily navigable
+2. Provide clear traceability to checklist items
+3. Help with generating accurate changelogs
+4. Facilitate automated tooling for release management
