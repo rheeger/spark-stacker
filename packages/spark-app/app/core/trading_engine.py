@@ -139,11 +139,28 @@ class TradingEngine:
         """
         Get a connector by exchange name with fallback to main connector.
 
+        This method provides strategy-specific exchange routing by looking up connectors
+        based on the exchange name from a signal's context. It enables the trading engine
+        to route signals to the appropriate exchange connector.
+
+        The method searches through the built connector map which includes:
+        - Main connector (primary exchange)
+        - Hedge connector (if different from main)
+        - Additional connectors (passed during initialization)
+
         Args:
             exchange_name: Name of the exchange (e.g., "hyperliquid", "coinbase")
 
         Returns:
             BaseConnector: The connector for the specified exchange or main connector as fallback
+
+        Examples:
+            >>> connector = self._get_connector_by_name("hyperliquid")
+            >>> connector = self._get_connector_by_name(None)  # Returns main connector
+
+        Side Effects:
+            - Logs debug information about connector selection
+            - Logs warnings when falling back to main connector
         """
         if not exchange_name:
             logger.debug("No exchange specified, using main connector")
@@ -349,7 +366,7 @@ class TradingEngine:
             logger.error("Invalid signal: Missing symbol")
             return False
 
-        # Log signal processing with full context
+        # Log signal processing with full context - helps debug strategy flow
         logger.info(f"Processing signal with full context: {signal}")
         if signal.strategy_name:
             logger.info(f"Signal from strategy: {signal.strategy_name}")
@@ -360,41 +377,46 @@ class TradingEngine:
         if signal.market:
             logger.info(f"Signal market: {signal.market}")
 
-        # Ignore NEUTRAL signals
+        # Filter out neutral signals early - no action needed
         if signal.direction == SignalDirection.NEUTRAL:
             logger.info(f"Ignoring NEUTRAL signal for {signal.symbol}")
             return False
 
-        # Queue signal if engine is not in RUNNING state
+        # Queue management: Only process if engine is ready
         if self.state != TradingState.RUNNING:
             logger.info(f"Engine is {self.state}. Queueing signal for later processing.")
             self.pending_signals.append(signal)
             return False
 
-        # Queue signal if we've reached max parallel trades
+        # Throttle concurrent trades to prevent overexposure
         if len(self.active_trades) >= self.max_parallel_trades:
             logger.info(f"Maximum parallel trades reached ({self.max_parallel_trades}). Queueing signal for later processing.")
             self.pending_signals.append(signal)
             return False
 
-        # Use signal's market field if available, otherwise fall back to symbol
+        # Symbol resolution: Use signal's market field (standard format) or fall back to symbol
         # Market field should be in standard format (e.g., "ETH-USD")
+        # Symbol field might be in exchange-specific format (e.g., "ETH")
         market_symbol = signal.market if signal.market else signal.symbol
 
-        # Determine which connector to use based on signal's exchange context
+        # Strategy-based exchange routing: Route signal to appropriate connector
+        # This allows different strategies to use different exchanges
         target_connector = self._get_connector_by_name(signal.exchange)
 
-        # Handle symbol conversion for the target exchange
+        # Symbol conversion for exchange-specific API calls
         try:
             if signal.exchange and signal.market:
                 # Convert standard market format to exchange-specific format
+                # e.g., "ETH-USD" -> "ETH" for Hyperliquid, "ETH-USD" for Coinbase
                 exchange_symbol = convert_symbol_for_exchange(signal.market, signal.exchange)
                 logger.info(f"Converted market symbol '{signal.market}' to exchange format '{exchange_symbol}' for {signal.exchange}")
             else:
                 # No exchange specified or no market field, use symbol as-is
+                # This maintains backward compatibility
                 exchange_symbol = signal.symbol
                 logger.debug(f"No symbol conversion needed, using symbol: {exchange_symbol}")
         except Exception as e:
+            # Symbol conversion failures shouldn't block trading
             logger.error(f"Error converting symbol for exchange: {e}")
             # Fall back to original symbol
             exchange_symbol = signal.symbol

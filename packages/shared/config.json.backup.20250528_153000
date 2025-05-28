@@ -1,0 +1,121 @@
+{
+  "log_level": "DEBUG",
+  "logging": {
+    "log_to_file": true,
+    "enable_console": true,
+    "connector_log_level": "DEBUG",
+    "show_market_details": false,
+    "show_zero_balances": false
+  },
+  "webhook_enabled": false,
+  "webhook_port": 8080,
+  "webhook_host": "0.0.0.0",
+  "metrics_port": 9000,
+  "metrics_host": "0.0.0.0",
+  "metrics_publish_historical": true,
+  "max_parallel_trades": 1,
+  "polling_interval": 30,
+  "dry_run": false,
+  "max_account_risk_pct": 0.1,
+  "max_leverage": 1.0,
+  "max_position_size_usd": 1000.0,
+  "max_positions": 1,
+  "min_margin_buffer_pct": 50.0,
+  "enable_hedging": false,
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 100.0,
+    "equity_percentage": 0.05,
+    "risk_per_trade_pct": 0.02,
+    "default_stop_loss_pct": 0.05,
+    "fixed_units": 0.1,
+    "kelly_win_rate": 0.6,
+    "kelly_avg_win": 0.03,
+    "kelly_avg_loss": 0.02,
+    "kelly_max_position_pct": 0.25,
+    "max_position_size_usd": 1000.0,
+    "min_position_size_usd": 50.0,
+    "max_leverage": 1.0
+  },
+  "exchanges": [
+    {
+      "name": "hyperliquid",
+      "exchange_type": "hyperliquid",
+      "wallet_address": "${WALLET_ADDRESS}",
+      "private_key": "${PRIVATE_KEY}",
+      "testnet": "${HYPERLIQUID_TESTNET}",
+      "enabled": true,
+      "use_as_main": true,
+      "use_as_hedge": false
+    },
+    {
+      "name": "coinbase",
+      "exchange_type": "coinbase",
+      "api_key": "${COINBASE_API_KEY}",
+      "api_secret": "${COINBASE_API_SECRET}",
+      "use_sandbox": "${COINBASE_USE_SANDBOX}",
+      "enabled": false,
+      "use_as_main": false,
+      "use_as_hedge": false
+    },
+    {
+      "name": "kraken",
+      "exchange_type": "kraken",
+      "api_key": "${KRAKEN_API_KEY}",
+      "api_secret": "${KRAKEN_API_SECRET}",
+      "testnet": "${KRAKEN_USE_SANDBOX}",
+      "enabled": false,
+      "use_as_main": false,
+      "use_as_hedge": false
+    }
+  ],
+  "strategies": [
+    {
+      "name": "eth_multi_timeframe_strategy",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "enabled": true,
+      "timeframe": "4h",
+      "indicators": ["eth_rsi_4h", "eth_macd_1h"],
+      "main_leverage": 1.0,
+      "hedge_leverage": 1.0,
+      "hedge_ratio": 0,
+      "stop_loss_pct": 5.0,
+      "take_profit_pct": 10.0,
+      "max_position_size": 0.1,
+      "risk_per_trade_pct": 0.02
+    }
+  ],
+  "indicators": [
+    {
+      "name": "eth_rsi_4h",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "4h",
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "eth_macd_1h",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "fast_period": 8,
+        "slow_period": 21,
+        "signal_period": 7
+      }
+    }
+  ],
+  "backtesting": {
+    "default_timeframe": "1h",
+    "enable_multi_timeframe": true,
+    "supported_timeframes": ["1m", "5m", "15m", "1h", "4h", "1d"],
+    "default_data_source": "default",
+    "default_leverage": 1.0
+  }
+}

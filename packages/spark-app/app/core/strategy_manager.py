@@ -74,6 +74,21 @@ class StrategyManager:
     def _build_strategy_mappings(self) -> None:
         """
         Build strategy-indicator mappings from strategy configurations.
+
+        This method processes the strategies list and creates a mapping dictionary
+        that links each strategy name to its list of indicators. This mapping is used
+        during strategy-driven execution to determine which indicators to run for each strategy.
+
+        The method validates that each strategy has a name and indicators defined,
+        logging warnings for any invalid configurations and skipping them.
+
+        Updates:
+            self.strategy_indicators: Dictionary mapping strategy names to indicator lists
+
+        Side Effects:
+            - Clears existing strategy_indicators mapping
+            - Logs debug information for each strategy mapping created
+            - Logs warnings for strategies with missing names or indicators
         """
         self.strategy_indicators.clear()
 
@@ -314,13 +329,33 @@ class StrategyManager:
 
     def _publish_historical_data_to_metrics(self, symbol: str, interval: str, candles: List[Dict]) -> None:
         """
-        Publish historical data to metrics for visualization.
-        This is essential for data persistence across container restarts.
+        Publish historical data to metrics for visualization and persistence.
+
+        This method is essential for data persistence across container restarts and provides
+        historical data to monitoring systems like Grafana. It publishes both raw OHLC candle
+        data and calculated indicator values (like MACD) to Prometheus metrics.
+
+        The method handles:
+        1. Publishing OHLC candle data as time series
+        2. Calculating and publishing MACD indicator values if applicable
+        3. Updating standard metrics with the most recent values
+        4. Verifying that historical data was properly published
 
         Args:
-            symbol: Market symbol
-            interval: Time interval
-            candles: List of candle dictionaries
+            symbol: Market symbol (e.g., "ETH-USD")
+            interval: Time interval (e.g., "1m", "1h", "4h")
+            candles: List of candle dictionaries with timestamp, open, high, low, close, volume
+
+        Side Effects:
+            - Publishes historical time series data to Prometheus
+            - Updates MACD metrics if MACD indicators are found for the symbol
+            - Updates standard candle and indicator metrics
+            - Logs detailed information about publishing progress
+            - Verifies data availability in Prometheus
+
+        Note:
+            This method only runs if self.publish_historical is True (controlled by
+            the "metrics_publish_historical" configuration setting).
         """
         if not self.publish_historical:
             logger.info(f"Historical data publishing is disabled. Not publishing {len(candles)} candles for {symbol}")
@@ -541,13 +576,15 @@ class StrategyManager:
             List of signals with strategy metadata
         """
         signals = []
+        # Extract key strategy parameters with fallbacks
         strategy_name = strategy_config.get("name", "unknown")
-        strategy_timeframe = strategy_config.get("timeframe", "1h")
+        strategy_timeframe = strategy_config.get("timeframe", "1h")  # Strategy dictates timeframe for all indicators
         exchange = strategy_config.get("exchange", "hyperliquid")
 
         logger.info(f"Running strategy '{strategy_name}' indicators for {market} on {strategy_timeframe} timeframe")
 
-        # Validate indicators exist for strategy
+        # Pre-flight check: Validate all indicators exist before processing
+        # This prevents partial processing if some indicators are missing
         missing_indicators = []
         for indicator_name in indicator_names:
             if indicator_name not in self.indicators:
@@ -555,56 +592,64 @@ class StrategyManager:
 
         if missing_indicators:
             logger.error(f"Strategy '{strategy_name}' references missing indicators: {missing_indicators}")
-            return signals
+            return signals  # Return empty signals list - strategy cannot run
 
-        # Prepare data for the market/strategy-timeframe combination
-        required_periods = 50  # Default, will be updated per indicator
+        # Calculate minimum data requirements across all indicators
+        # Each indicator may need different amounts of historical data
+        required_periods = 50  # Conservative default minimum
         for indicator_name in indicator_names:
             indicator = self.indicators[indicator_name]
             indicator_periods = getattr(indicator, 'required_periods', 50)
+            # Take the maximum requirement to ensure all indicators have sufficient data
             required_periods = max(required_periods, indicator_periods)
 
-        # Use strategy timeframe for data preparation
+        # Prepare market data using strategy timeframe (not indicator timeframes)
+        # This is the key architectural change: strategy controls timeframe
         market_data = self._prepare_indicator_data(
-            market_symbol=market,
-            timeframe=strategy_timeframe,
-            exchange=exchange,
+            market_symbol=market,           # Standard format like "ETH-USD"
+            timeframe=strategy_timeframe,   # Strategy's timeframe overrides indicator defaults
+            exchange=exchange,              # For symbol conversion in API calls
             required_periods=required_periods
         )
 
+        # Abort if no data available - indicators cannot run without data
         if market_data.empty:
             logger.warning(f"No data available for strategy '{strategy_name}' on market {market}")
             return signals
 
-        # Run each indicator with strategy timeframe
+        # Process each indicator with strategy context
         for indicator_name in indicator_names:
             try:
                 indicator = self.indicators[indicator_name]
 
-                # Verify we have sufficient data for this indicator
+                # Final data sufficiency check per indicator
                 indicator_required_periods = getattr(indicator, 'required_periods', 50)
                 if len(market_data) < indicator_required_periods:
                     logger.warning(f"Insufficient data for indicator '{indicator_name}': need {indicator_required_periods}, have {len(market_data)}")
-                    continue
+                    continue  # Skip this indicator but continue with others
 
-                # Process indicator with strategy timeframe override
-                # The indicator should use the strategy timeframe instead of its default
+                # Key change: Pass strategy timeframe to indicator
+                # The indicator should use strategy timeframe instead of its default
                 logger.debug(f"Processing indicator '{indicator_name}' with strategy timeframe '{strategy_timeframe}'")
 
-                # Call indicator process method - the indicator should use strategy timeframe internally
+                # Process indicator with strategy timeframe override
+                # Second parameter (strategy_timeframe) tells indicator to use this timeframe
                 processed_data, signal = indicator.process(market_data, strategy_timeframe)
 
+                # Enhance signal with strategy context if signal was generated
                 if signal:
-                    # Add strategy context to signal
-                    signal.strategy_name = strategy_name
-                    signal.market = market
-                    signal.exchange = exchange
-                    signal.timeframe = strategy_timeframe
+                    # Add strategy metadata to signal for downstream processing
+                    signal.strategy_name = strategy_name    # Which strategy generated this
+                    signal.market = market                  # Standard market format
+                    signal.exchange = exchange              # Target exchange for routing
+                    signal.timeframe = strategy_timeframe   # Timeframe used for analysis
 
                     signals.append(signal)
                     logger.info(f"Signal generated by indicator '{indicator_name}' for strategy '{strategy_name}': {signal}")
 
             except Exception as e:
+                # Log error but continue processing other indicators
+                # One indicator failure shouldn't stop the entire strategy
                 logger.error(f"Error running indicator '{indicator_name}' for strategy '{strategy_name}': {e}", exc_info=True)
 
         logger.debug(f"Strategy '{strategy_name}' generated {len(signals)} signals for {market}")

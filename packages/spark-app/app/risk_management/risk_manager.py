@@ -626,7 +626,8 @@ class RiskManager:
         Returns:
             PositionSizer: Position sizer configured for the strategy
         """
-        # Start with default position sizing config
+        # Start with default position sizing config as the baseline
+        # This ensures strategies inherit global settings unless explicitly overridden
         merged_config = {
             'position_sizing_method': self.position_sizer.config.method.value,
             'max_position_size_usd': self.position_sizer.config.max_position_size_usd,
@@ -635,27 +636,36 @@ class RiskManager:
             'risk_per_trade_pct': self.position_sizer.config.risk_per_trade_pct,
         }
 
-        # Add method-specific defaults
+        # Add method-specific defaults from global config
+        # Each position sizing method has different required parameters
         if self.position_sizer.config.method == PositionSizingMethod.FIXED_USD:
+            # Fixed USD method needs the fixed amount parameter
             merged_config['fixed_usd_amount'] = self.position_sizer.config.fixed_usd_amount
         elif self.position_sizer.config.method == PositionSizingMethod.PERCENT_EQUITY:
+            # Percentage method needs the equity percentage parameter
             merged_config['percent_equity'] = self.position_sizer.config.percent_equity
         elif self.position_sizer.config.method == PositionSizingMethod.RISK_BASED:
+            # Risk-based method uses risk per trade percentage
             merged_config['risk_per_trade_pct'] = self.position_sizer.config.risk_per_trade_pct
         elif self.position_sizer.config.method == PositionSizingMethod.VOLATILITY_ADJUSTED:
+            # Volatility adjusted method needs base percentage
             merged_config['base_percent_equity'] = self.position_sizer.config.base_percent_equity
 
-        # Override with strategy-specific configuration
+        # Override inheritance: Strategy-specific config takes precedence
+        # This allows strategies to customize any aspect of position sizing
         if strategy.position_sizing:
             for key, value in strategy.position_sizing.items():
                 merged_config[key] = value
                 logger.debug(f"Strategy '{strategy.name}' overrides {key} = {value}")
 
-        # Create and validate position sizing config
+        # Create and validate the merged configuration
         try:
+            # Parse merged config into validated PositionSizingConfig object
             sizing_config = PositionSizingConfig.from_config_dict(merged_config)
             return PositionSizer(sizing_config)
         except Exception as e:
+            # If strategy config is invalid, log error and fall back to default
+            # This prevents one bad strategy from breaking the entire system
             logger.error(f"Invalid position sizing config for strategy '{strategy.name}': {e}")
             logger.info(f"Using default position sizer for strategy '{strategy.name}'")
             return self.position_sizer

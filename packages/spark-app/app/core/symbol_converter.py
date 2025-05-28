@@ -29,7 +29,8 @@ EXCHANGE_SYMBOL_FORMATS = {
     }
 }
 
-# Standard symbol separators we recognize
+# Standard symbol separators we recognize in input symbols
+# We accept symbols like "ETH-USD", "BTC_USDT", "ETH/USD"
 STANDARD_SEPARATORS = ["-", "_", "/"]
 
 
@@ -57,27 +58,35 @@ def convert_symbol_for_exchange(symbol: str, exchange: str) -> str:
         >>> convert_symbol_for_exchange("BTC-USD", "kraken")
         "BTCUSD"
     """
+    # Normalize exchange name to lowercase for consistent lookup
     exchange_lower = exchange.lower()
 
+    # Validate exchange is supported - fail fast if not
     if exchange_lower not in EXCHANGE_SYMBOL_FORMATS:
         raise ValueError(f"Unsupported exchange: {exchange}. Supported exchanges: {list(EXCHANGE_SYMBOL_FORMATS.keys())}")
 
+    # Validate symbol input - empty symbols are invalid
     if not symbol:
         raise ValueError("Symbol cannot be empty")
 
-    # Get exchange format requirements
+    # Get exchange-specific formatting rules
     format_config = EXCHANGE_SYMBOL_FORMATS[exchange_lower]
 
-    # Parse the standard symbol
+    # Parse standard symbol into base and quote components
+    # This handles symbols like "ETH-USD" -> ("ETH", "USD")
     base_symbol, quote_symbol = _parse_standard_symbol(symbol)
 
-    # Apply exchange-specific formatting
+    # Apply exchange-specific formatting rules
     if format_config["base_only"]:
+        # Some exchanges (like Hyperliquid) only need the base symbol
+        # "ETH-USD" -> "ETH"
         result = base_symbol
     else:
+        # Other exchanges need both base and quote with their separator
+        # "ETH-USD" -> "ETH-USD" (Coinbase) or "ETHUSD" (Kraken)
         result = f"{base_symbol}{format_config['separator']}{quote_symbol}"
 
-    # Apply case formatting
+    # Apply case formatting as required by exchange
     if format_config["case"] == "upper":
         result = result.upper()
     elif format_config["case"] == "lower":
