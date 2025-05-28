@@ -45,7 +45,7 @@
       "exchange": "hyperliquid",
       "enabled": true,
       "timeframe": "1h",
-      "indicators": ["test_rsi_1h"],
+      "indicators": ["rsi_1h"],
       "main_leverage": 1.0,
       "hedge_leverage": 1.0,
       "hedge_ratio": 0,

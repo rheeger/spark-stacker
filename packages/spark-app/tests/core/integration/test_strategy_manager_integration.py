@@ -164,8 +164,9 @@ class TestStrategyManagerIntegration:
 
         # Verify strategy mappings are built
         assert len(strategy_manager.strategy_indicators) == 3
-        assert strategy_manager.strategy_indicators["eth_multi_timeframe"] == ["rsi_4h", "macd_1h"]
-        assert strategy_manager.strategy_indicators["btc_daily_strategy"] == ["sma_daily"]
+        assert strategy_manager.strategy_indicators["rsi_4h"] == ["rsi_4h"]
+        assert strategy_manager.strategy_indicators["macd_1h"] == ["macd_1h"]
+        assert strategy_manager.strategy_indicators["sma_daily"] == ["sma_daily"]
         assert strategy_manager.strategy_indicators["disabled_strategy"] == ["rsi_4h"]
 
     def test_build_strategy_mappings(self, mock_trading_engine, test_indicators):
@@ -426,8 +427,8 @@ class TestStrategyManagerIntegration:
 
             # Should not process disabled_strategy
             call_args = [call[0][0]['name'] for call in mock_run_indicators.call_args_list]
-            assert "eth_multi_timeframe" in call_args
-            assert "btc_daily_strategy" in call_args
+            assert "rsi_4h" in call_args
+            assert "macd_1h" in call_args
             assert "disabled_strategy" not in call_args
 
     @pytest.mark.asyncio
@@ -496,7 +497,7 @@ class TestStrategyManagerIntegration:
             # Should only process strategies for ETH-USD
             assert mock_run_indicators.call_count == 1
             call_args = mock_run_indicators.call_args_list[0][0]
-            assert call_args[0]['name'] == "eth_multi_timeframe"
+            assert call_args[0]['name'] == "rsi_4h"
             assert call_args[1] == "ETH-USD"
 
     @pytest.mark.asyncio

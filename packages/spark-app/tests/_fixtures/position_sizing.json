@@ -16,7 +16,7 @@
   },
 
   "strategy_specific_configs": {
-    "eth_rsi_1h": {
+    "rsi_1h": {
       "method": "fixed_usd",
       "fixed_usd_amount": 500.0,
       "max_position_size_usd": 2000.0,
@@ -56,7 +56,7 @@
   "position_sizing_test_cases": [
     {
       "description": "Fixed USD position sizing",
-      "strategy_name": "eth_rsi_1h",
+      "strategy_name": "rsi_1h",
       "account_balance": 10000.0,
       "signal_price": 1650.0,
       "expected_position_size_usd": 500.0,

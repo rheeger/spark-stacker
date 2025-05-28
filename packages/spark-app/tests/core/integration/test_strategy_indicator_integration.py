@@ -150,14 +150,14 @@ class TestStrategyIndicatorIntegration:
     def integration_test_indicators(self):
         """Create realistic test indicators for integration testing."""
         return {
-            "eth_rsi_4h": IntegrationMockIndicator(
-                name="eth_rsi_4h",
+            "rsi_4h": IntegrationMockIndicator(
+                name="rsi_4h",
                 indicator_type="rsi",
                 timeframe="4h",
                 required_periods=14
             ),
-            "eth_macd_1h": IntegrationMockIndicator(
-                name="eth_macd_1h",
+            "macd_1h": IntegrationMockIndicator(
+                name="macd_1h",
                 indicator_type="macd",
                 timeframe="1h",
                 required_periods=26
@@ -179,7 +179,7 @@ class TestStrategyIndicatorIntegration:
                 "market": "ETH-USD",
                 "exchange": "hyperliquid",
                 "timeframe": "4h",
-                "indicators": ["eth_rsi_4h", "eth_macd_1h"],
+                "indicators": ["rsi_4h", "macd_1h"],
                 "enabled": True,
                 "position_sizing": {
                     "method": "fixed_usd",
@@ -207,7 +207,7 @@ class TestStrategyIndicatorIntegration:
                 "market": "ADA-USD",
                 "exchange": "hyperliquid",
                 "timeframe": "1h",
-                "indicators": ["eth_rsi_4h"],  # Reuse indicator
+                "indicators": ["rsi_4h"],  # Reuse indicator
                 "enabled": False
             }
         ]
@@ -303,7 +303,7 @@ class TestStrategyIndicatorIntegration:
             "market": "ETH-USD",
             "exchange": "hyperliquid",
             "timeframe": "4h",
-            "indicators": ["eth_rsi_4h", "eth_macd_1h"],
+            "indicators": ["rsi_4h", "macd_1h"],
             "enabled": True
         }
 
@@ -313,7 +313,7 @@ class TestStrategyIndicatorIntegration:
 
             # Execute strategy indicators
             signals = integration_strategy_manager.run_strategy_indicators(
-                strategy_config, "ETH-USD", ["eth_rsi_4h", "eth_macd_1h"]
+                strategy_config, "ETH-USD", ["rsi_4h", "macd_1h"]
             )
 
             # Verify signals were generated
@@ -327,8 +327,8 @@ class TestStrategyIndicatorIntegration:
                 assert signal.timeframe == "4h"
 
             # Verify indicators were processed with strategy timeframe
-            rsi_indicator = integration_test_indicators["eth_rsi_4h"]
-            macd_indicator = integration_test_indicators["eth_macd_1h"]
+            rsi_indicator = integration_test_indicators["rsi_4h"]
+            macd_indicator = integration_test_indicators["macd_1h"]
 
             assert len(rsi_indicator.process_calls) == 1
             assert len(macd_indicator.process_calls) == 1
@@ -347,7 +347,7 @@ class TestStrategyIndicatorIntegration:
             test_signal = Signal(
                 direction=SignalDirection.BUY,
                 symbol="ETH-USD",
-                indicator="eth_rsi_4h",
+                indicator="rsi_4h",
                 confidence=0.8,
                 strategy_name="eth_multi_timeframe_strategy",
                 market="ETH-USD",
@@ -376,7 +376,7 @@ class TestStrategyIndicatorIntegration:
                 [Signal(
                     direction=SignalDirection.BUY,
                     symbol="ETH-USD",
-                    indicator="eth_rsi_4h",
+                    indicator="rsi_4h",
                     confidence=0.8,
                     strategy_name="eth_multi_timeframe_strategy",
                     market="ETH-USD",
@@ -418,7 +418,7 @@ class TestStrategyIndicatorIntegration:
             "market": "ETH-USD",
             "exchange": "hyperliquid",
             "timeframe": "4h",  # Strategy timeframe
-            "indicators": ["eth_rsi_4h", "eth_macd_1h"],  # Different indicator timeframes
+            "indicators": ["rsi_4h", "macd_1h"],  # Different indicator timeframes
             "enabled": True
         }
 
@@ -431,12 +431,12 @@ class TestStrategyIndicatorIntegration:
             mock_prepare.return_value = sample_data
 
             signals = integration_strategy_manager.run_strategy_indicators(
-                strategy_config, "ETH-USD", ["eth_rsi_4h", "eth_macd_1h"]
+                strategy_config, "ETH-USD", ["rsi_4h", "macd_1h"]
             )
 
             # Verify both indicators processed data with strategy timeframe
-            rsi_calls = integration_test_indicators["eth_rsi_4h"].process_calls
-            macd_calls = integration_test_indicators["eth_macd_1h"].process_calls
+            rsi_calls = integration_test_indicators["rsi_4h"].process_calls
+            macd_calls = integration_test_indicators["macd_1h"].process_calls
 
             assert len(rsi_calls) >= 1, f"RSI should have been processed, calls: {rsi_calls}"
             assert len(macd_calls) >= 1, f"MACD should have been processed, calls: {macd_calls}"
@@ -470,7 +470,7 @@ class TestStrategyIndicatorIntegration:
             # This should handle the error gracefully and return empty signals
             try:
                 signals = integration_strategy_manager.run_strategy_indicators(
-                    strategy_config, "ETH-USD", ["eth_rsi_4h"]
+                    strategy_config, "ETH-USD", ["rsi_4h"]
                 )
                 # If no exception, should return empty signals
                 assert signals == [], "Should handle data fetching errors gracefully"
@@ -526,7 +526,7 @@ class TestStrategyIndicatorIntegration:
                 "market": "ETH-USD",
                 "exchange": "hyperliquid",
                 "timeframe": "4h",
-                "indicators": ["eth_rsi_4h"],
+                "indicators": ["rsi_4h"],
                 "enabled": True,
                 "position_sizing": {
                     "method": "fixed_usd",
@@ -595,7 +595,7 @@ class TestStrategyIndicatorIntegration:
             "market": "ETH-USD",
             "exchange": "hyperliquid",
             "timeframe": "4h",
-            "indicators": ["eth_rsi_4h"],
+            "indicators": ["rsi_4h"],
             "enabled": True
         }
 
@@ -656,7 +656,7 @@ class TestStrategyIndicatorIntegration:
                 "market": f"TEST{i}-USD",
                 "exchange": "hyperliquid",
                 "timeframe": "1h",
-                "indicators": ["eth_rsi_4h"],  # Reuse existing indicator
+                "indicators": ["rsi_4h"],  # Reuse existing indicator
                 "enabled": True
             }
             for i in range(5)
@@ -691,7 +691,7 @@ class TestStrategyIndicatorIntegration:
                 "market": "ETH-USD",
                 "exchange": "hyperliquid",
                 "timeframe": "4h",
-                "indicators": ["eth_rsi_4h"],
+                "indicators": ["rsi_4h"],
                 "enabled": True
             },
             {
@@ -699,7 +699,7 @@ class TestStrategyIndicatorIntegration:
                 "market": "ETH-USD",
                 "exchange": "hyperliquid",
                 "timeframe": "1h",
-                "indicators": ["eth_macd_1h"],
+                "indicators": ["macd_1h"],
                 "enabled": True
             }
         ]
@@ -766,7 +766,7 @@ class TestStrategyIndicatorIntegration:
                 "market": "ETH-USD",
                 "exchange": "hyperliquid",
                 "timeframe": "invalid_timeframe",
-                "indicators": ["eth_rsi_4h"],
+                "indicators": ["rsi_4h"],
                 "enabled": True
             }
         ]
@@ -781,7 +781,7 @@ class TestStrategyIndicatorIntegration:
                 "market": "ETHUSD",  # Missing separator
                 "exchange": "hyperliquid",
                 "timeframe": "4h",
-                "indicators": ["eth_rsi_4h"],
+                "indicators": ["rsi_4h"],
                 "enabled": True
             }
         ]

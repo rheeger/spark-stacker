@@ -76,7 +76,7 @@
       "exchange": "hyperliquid",
       "enabled": true,
       "timeframe": "4h",
-      "indicators": ["eth_rsi_4h", "eth_macd_1h"],
+      "indicators": ["rsi_4h", "macd_1h"],
       "main_leverage": 1.0,
       "hedge_leverage": 1.0,
       "hedge_ratio": 0,
@@ -88,7 +88,7 @@
   ],
   "indicators": [
     {
-      "name": "eth_rsi_4h",
+      "name": "rsi_4h",
       "type": "rsi",
       "enabled": true,
       "timeframe": "4h",
@@ -100,7 +100,7 @@
       }
     },
     {
-      "name": "eth_macd_1h",
+      "name": "macd_1h",
       "type": "macd",
       "enabled": true,
       "timeframe": "1h",

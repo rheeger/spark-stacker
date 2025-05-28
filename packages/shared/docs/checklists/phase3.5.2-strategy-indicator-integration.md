@@ -437,15 +437,15 @@ This phase addresses the core architectural problems identified in the Spark Sta
 
 ### 5.2 Architecture Documentation
 
-- [ ] **Update architectural-fixes.md** with implementation status, move to Retro folder with
+- [x] **Update architectural-fixes.md** with implementation status, move to Retro folder with
       updated name
-- [ ] **Remove the IMMEDIATE-FIXES-SUMMARY.md file**
-- [ ] **Update configuration.md** with new strategy schema
-- [ ] **Update userguide.md** with strategy setup instructions
-- [ ] **Create strategy-development.md** guide for adding new strategies
-- [ ] **Create symbol-conversion.md** guide for exchange symbol handling
-- [ ] **Create strategy-position-sizing.md** guide for configuring position sizing per strategy
-- [ ] **Update risk-management.md** with strategy-specific position sizing documentation
+- [x] **Remove the IMMEDIATE-FIXES-SUMMARY.md file**
+- [x] **Update configuration.md** with new strategy schema
+- [x] **Update userguide.md** with strategy setup instructions
+- [x] **Create strategy-development.md** guide for adding new strategies
+- [x] **Create symbol-conversion.md** guide for exchange symbol handling
+- [x] **Create strategy-position-sizing.md** guide for configuring position sizing per strategy
+- [x] **Update risk-management.md** with strategy-specific position sizing documentation
 
 ### 5.3 README Updates
 

@@ -219,13 +219,13 @@ Always use standard format in configuration:
       "name": "eth_momentum_strategy",
       "market": "ETH-USD", // ✅ Standard format
       "exchange": "hyperliquid", // ✅ Exchange specified
-      "indicators": ["eth_rsi_4h"]
+      "indicators": ["rsi_4h"]
     },
     {
       "name": "btc_trend_strategy",
       "market": "BTC-USD", // ✅ Standard format
       "exchange": "coinbase", // ✅ Different exchange
-      "indicators": ["btc_ma_1d"]
+      "indicators": ["rsi_4h"]
     }
   ]
 }
@@ -239,7 +239,7 @@ Indicators don't need to know about exchange formats:
 {
   "indicators": [
     {
-      "name": "eth_rsi_4h",
+      "name": "rsi_4h",
       "type": "rsi",
       "timeframe": "4h",
       // ✅ No symbol field needed - provided by strategy
@@ -353,7 +353,7 @@ class StrategyConfig:
     {
       "name": "eth_rsi_strategy",
       "market": "ETH-USD", // ✅ Market symbol
-      "indicators": ["eth_rsi_4h"], // ✅ Indicator reference
+      "indicators": ["rsi_4h"], // ✅ Indicator reference
       "exchange": "hyperliquid"
     }
   ]
@@ -422,7 +422,7 @@ def test_strategy_symbol_conversion():
             "name": "test_strategy",
             "market": "ETH-USD",
             "exchange": "hyperliquid",
-            "indicators": ["test_indicator"]
+            "indicators": ["rsi_4h"]
         }]
     }
 
@@ -448,13 +448,13 @@ Trade the same market on different exchanges:
       "name": "eth_hyperliquid_long",
       "market": "ETH-USD",
       "exchange": "hyperliquid",
-      "indicators": ["eth_rsi_4h"]
+      "indicators": ["rsi_4h"]
     },
     {
       "name": "eth_coinbase_hedge",
       "market": "ETH-USD",
       "exchange": "coinbase",
-      "indicators": ["eth_rsi_4h"]
+      "indicators": ["rsi_4h"]
     }
   ]
 }

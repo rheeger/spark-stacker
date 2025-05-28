@@ -86,7 +86,7 @@
       }
     },
     {
-      "name": "eth_momentum_4h",
+      "name": "momentum_4h",
       "type": "rsi",
       "enabled": true,
       "timeframe": "4h",
@@ -98,7 +98,7 @@
       }
     },
     {
-      "name": "eth_entry_1h",
+      "name": "entry_1h",
       "type": "macd",
       "enabled": true,
       "timeframe": "1h",
@@ -110,7 +110,7 @@
       }
     },
     {
-      "name": "eth_volatility_4h",
+      "name": "volatility_4h",
       "type": "bollinger",
       "enabled": true,
       "timeframe": "4h",

@@ -8,7 +8,7 @@
     "market": "ETH-USD",
     "exchange": "hyperliquid",
     "timeframe": "4h",
-    "indicator_name": "eth_rsi_4h",
+    "indicator_name": "rsi_4h",
     "metadata": {
       "rsi_value": 28.5,
       "overbought": 70,
@@ -22,7 +22,7 @@
     "strength": 0.7,
     "price": 2850.5,
     "timestamp": "2024-12-28T10:45:00Z",
-    "indicator_name": "btc_macd_1h",
+    "indicator_name": "macd_1h",
     "metadata": {
       "macd_line": -15.2,
       "signal_line": -8.1,
@@ -40,7 +40,7 @@
       "market": "ETH-USD",
       "exchange": "hyperliquid",
       "timeframe": "4h",
-      "indicator_name": "eth_rsi_4h",
+      "indicator_name": "rsi_4h",
       "metadata": {
         "rsi_value": 31.2,
         "condition": "oversold"
@@ -55,7 +55,7 @@
       "market": "ETH-USD",
       "exchange": "hyperliquid",
       "timeframe": "1h",
-      "indicator_name": "eth_macd_1h",
+      "indicator_name": "macd_1h",
       "metadata": {
         "macd_line": 2.5,
         "signal_line": 1.2,
@@ -70,7 +70,7 @@
       "strength": 0.8,
       "price": 1650.0,
       "timestamp": "2024-12-28T11:00:00Z",
-      "strategy_name": "eth_rsi_1h",
+      "strategy_name": "rsi_1h",
       "market": "ETH-USD",
       "exchange": "hyperliquid",
       "timeframe": "1h",

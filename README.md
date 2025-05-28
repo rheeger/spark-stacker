@@ -106,7 +106,7 @@ Example configuration:
       "exchange": "hyperliquid", // ← Specify which exchange
       "enabled": true,
       "timeframe": "4h", // ← Default timeframe
-      "indicators": ["eth_rsi_4h", "eth_macd_1h"], // ← Which indicators to use
+      "indicators": ["rsi_4h", "macd_1h"], // ← Which indicators to use
       "main_leverage": 5.0,
       "stop_loss_pct": 10.0,
       "take_profit_pct": 20.0,
@@ -115,7 +115,7 @@ Example configuration:
   ],
   "indicators": [
     {
-      "name": "eth_rsi_4h", // ← Unique identifier
+      "name": "rsi_4h", // ← Unique identifier
       "type": "rsi", // ← Algorithm type
       "enabled": true,
       "timeframe": "4h", // ← Data timeframe
@@ -127,7 +127,7 @@ Example configuration:
       }
     },
     {
-      "name": "eth_macd_1h",
+      "name": "macd_1h",
       "type": "macd",
       "enabled": true,
       "timeframe": "1h", // ← Different timeframe

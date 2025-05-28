@@ -96,7 +96,7 @@ Ensure required indicators exist or create them:
 {
   "indicators": [
     {
-      "name": "eth_trend_1d",
+      "name": "trend_1d",
       "type": "ma",
       "timeframe": "1d",
       "enabled": true,
@@ -107,7 +107,7 @@ Ensure required indicators exist or create them:
       }
     },
     {
-      "name": "eth_momentum_4h",
+      "name": "momentum_4h",
       "type": "rsi",
       "timeframe": "4h",
       "enabled": true,
@@ -118,7 +118,7 @@ Ensure required indicators exist or create them:
       }
     },
     {
-      "name": "eth_entry_1h",
+      "name": "entry_1h",
       "type": "macd",
       "timeframe": "1h",
       "enabled": true,
@@ -145,7 +145,7 @@ Add the strategy to your configuration:
       "exchange": "hyperliquid",
       "enabled": true,
       "timeframe": "1h",
-      "indicators": ["eth_trend_1d", "eth_momentum_4h", "eth_entry_1h"],
+      "indicators": ["trend_1d", "momentum_4h", "entry_1h"],
       "main_leverage": 2.0,
       "stop_loss_pct": 3.0,
       "take_profit_pct": 6.0,
@@ -207,7 +207,7 @@ Adapt behavior based on market conditions:
   "name": "eth_adaptive_strategy",
   "market": "ETH-USD",
   "exchange": "hyperliquid",
-  "indicators": ["eth_volatility_1d", "eth_trend_strength_4h", "eth_momentum_1h"],
+  "indicators": ["volatility_1d", "trend_strength_4h", "momentum_1h"],
   "position_sizing": {
     "method": "risk_based",
     "risk_per_trade_pct": 0.015
@@ -225,7 +225,7 @@ Trade multiple markets with shared logic:
     {
       "name": "crypto_momentum_eth",
       "market": "ETH-USD",
-      "indicators": ["crypto_momentum_4h", "eth_entry_1h"]
+      "indicators": ["crypto_momentum_4h", "entry_1h"]
     },
     {
       "name": "crypto_momentum_btc",
@@ -247,13 +247,13 @@ Exploit price differences between exchanges:
       "name": "eth_hyperliquid_long",
       "market": "ETH-USD",
       "exchange": "hyperliquid",
-      "indicators": ["eth_arbitrage_signal"]
+      "indicators": ["arbitrage_signal"]
     },
     {
       "name": "eth_coinbase_short",
       "market": "ETH-USD",
       "exchange": "coinbase",
-      "indicators": ["eth_arbitrage_signal"]
+      "indicators": ["arbitrage_signal"]
     }
   ]
 }
@@ -267,7 +267,7 @@ Adjust position sizing based on strategy performance:
 {
   "name": "eth_dynamic_strategy",
   "market": "ETH-USD",
-  "indicators": ["eth_rsi_4h"],
+  "indicators": ["rsi_4h"],
   "position_sizing": {
     "method": "risk_based",
     "risk_per_trade_pct": 0.02,
@@ -285,7 +285,7 @@ Test each indicator used in your strategy:
 ```bash
 cd packages/spark-app
 .venv/bin/python -m tests._utils.cli backtest-indicator \
-  --indicator eth_momentum_4h \
+  --indicator momentum_4h \
   --symbol ETH-USD \
   --timeframe 4h \
   --start-date 2024-01-01 \
@@ -359,8 +359,8 @@ cd packages/spark-app
 
 - Format: `{market}_{indicator_type}_{timeframe}`
 - Examples:
-  - `eth_rsi_4h`
-  - `btc_macd_1h`
+  - `rsi_4h`
+  - `macd_1h`
   - `avax_bb_15m`
   - `crypto_volatility_1d`
 
@@ -394,8 +394,8 @@ cd packages/spark-app
 
   "indicators": [
     // ETH Indicators
-    { "name": "eth_rsi_4h", "type": "rsi", "timeframe": "4h" },
-    { "name": "eth_macd_1h", "type": "macd", "timeframe": "1h" },
+    { "name": "rsi_4h", "type": "rsi", "timeframe": "4h" },
+    { "name": "macd_1h", "type": "macd", "timeframe": "1h" },
 
     // BTC Indicators
     { "name": "btc_ma_1d", "type": "ma", "timeframe": "1d" },
@@ -490,7 +490,7 @@ for rsi_period in [10, 14, 18, 22]:
         strategy_config = {
             "name": f"eth_rsi_opt_{rsi_period}_{rsi_threshold}",
             "market": "ETH-USD",
-            "indicators": [f"eth_rsi_{rsi_period}_{rsi_threshold}"]
+            "indicators": [f"rsi_{rsi_period}_{rsi_threshold}"]
         }
 
         # Run backtest

@@ -47,7 +47,7 @@
         "exchange": "hyperliquid",
         "enabled": true,
         "timeframe": "1h",
-        "indicators": ["test_rsi_1h"],
+        "indicators": ["rsi_1h"],
         "main_leverage": 1.0,
         "hedge_leverage": 1.0,
         "hedge_ratio": 0,
@@ -106,7 +106,7 @@
     ],
     "indicators": [
       {
-        "name": "test_rsi_1h",
+        "name": "rsi_1h",
         "type": "rsi",
         "enabled": true,
         "timeframe": "1h",
@@ -171,7 +171,7 @@
         "exchange": "hyperliquid",
         "enabled": true,
         "timeframe": "1h",
-        "indicators": ["eth_rsi_hyperliquid"],
+        "indicators": ["rsi_hyperliquid"],
         "main_leverage": 1.0,
         "hedge_leverage": 1.0,
         "hedge_ratio": 0,
@@ -186,7 +186,7 @@
         "exchange": "coinbase",
         "enabled": true,
         "timeframe": "1h",
-        "indicators": ["eth_rsi_coinbase"],
+        "indicators": ["rsi_coinbase"],
         "main_leverage": 1.0,
         "hedge_leverage": 1.0,
         "hedge_ratio": 0,
@@ -198,7 +198,7 @@
     ],
     "indicators": [
       {
-        "name": "eth_rsi_hyperliquid",
+        "name": "rsi_hyperliquid",
         "type": "rsi",
         "enabled": true,
         "timeframe": "1h",
@@ -210,7 +210,7 @@
         }
       },
       {
-        "name": "eth_rsi_coinbase",
+        "name": "rsi_coinbase",
         "type": "rsi",
         "enabled": true,
         "timeframe": "1h",
@@ -366,7 +366,7 @@
         "exchange": "hyperliquid",
         "enabled": true,
         "timeframe": "4h",
-        "indicators": ["eth_rsi_4h", "eth_macd_1h"],
+        "indicators": ["rsi_4h", "macd_1h"],
         "main_leverage": 1.0,
         "hedge_leverage": 1.0,
         "hedge_ratio": 0,
@@ -384,7 +384,7 @@
     ],
     "indicators": [
       {
-        "name": "eth_rsi_4h",
+        "name": "rsi_4h",
         "type": "rsi",
         "enabled": true,
         "timeframe": "4h",
@@ -396,7 +396,7 @@
         }
       },
       {
-        "name": "eth_macd_1h",
+        "name": "macd_1h",
         "type": "macd",
         "enabled": true,
         "timeframe": "1h",

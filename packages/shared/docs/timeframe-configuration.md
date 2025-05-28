@@ -21,7 +21,7 @@ Configure specific timeframes for individual indicators in `config.json`:
 {
   "indicators": [
     {
-      "name": "eth_rsi_4h",
+      "name": "rsi_4h",
       "type": "rsi",
       "enabled": true,
       "timeframe": "4h",
@@ -32,7 +32,7 @@ Configure specific timeframes for individual indicators in `config.json`:
       }
     },
     {
-      "name": "eth_macd_1h",
+      "name": "macd_1h",
       "type": "macd",
       "enabled": true,
       "timeframe": "1h",
@@ -110,7 +110,7 @@ You can run multiple indicators on different timeframes simultaneously:
 {
   "indicators": [
     {
-      "name": "eth_rsi_daily",
+      "name": "rsi_daily",
       "type": "rsi",
       "enabled": true,
       "timeframe": "1d",
@@ -121,7 +121,7 @@ You can run multiple indicators on different timeframes simultaneously:
       }
     },
     {
-      "name": "eth_macd_4h",
+      "name": "macd_4h",
       "type": "macd",
       "enabled": true,
       "timeframe": "4h",
@@ -132,7 +132,7 @@ You can run multiple indicators on different timeframes simultaneously:
       }
     },
     {
-      "name": "eth_bollinger_1h",
+      "name": "bollinger_1h",
       "type": "bollinger",
       "enabled": true,
       "timeframe": "1h",
@@ -162,7 +162,7 @@ packages/spark-app/.venv/bin/python -m tests._utils.cli backtest-indicator \
 
 # Run backtest using config timeframes
 packages/spark-app/.venv/bin/python -m tests._utils.cli backtest-indicator \
-  --indicator eth_macd_1h \
+  --indicator macd_1h \
   --symbol ETH-USD
 ```
 
@@ -180,7 +180,7 @@ backtest_manager = IndicatorBacktestManager(backtest_engine)
 
 # Run backtest with configured timeframe
 result = backtest_manager.run_indicator_backtest(
-    indicator_name="eth_macd_1h",  # Uses timeframe from config
+    indicator_name="macd_1h",  # Uses timeframe from config
     symbol="ETH-USD",
     timeframe="1h",  # Can override config timeframe
     start_date="2024-01-01",
@@ -227,7 +227,7 @@ spark_stacker_macd{market="ETH-USD", timeframe="1h", component="macd_line"}
 Logs now include timeframe information:
 
 ```
-2024-12-19 10:15:30 - strategy_manager - INFO - Found target MACD indicator: eth_macd_1h for ETH-USD on 1h timeframe
+2024-12-19 10:15:30 - strategy_manager - INFO - Found target MACD indicator: macd_1h for ETH-USD on 1h timeframe
 2024-12-19 10:15:31 - strategy_manager - DEBUG - Updated MACD metrics for ETH-USD on 1h timeframe
 ```
 
@@ -241,7 +241,7 @@ If you have existing indicator configurations without timeframes:
 
 ```json
 {
-  "name": "eth_rsi",
+  "name": "rsi",
   "type": "rsi",
   "enabled": true,
   "parameters": {
@@ -254,7 +254,7 @@ If you have existing indicator configurations without timeframes:
 
 ```json
 {
-  "name": "eth_rsi_4h",
+  "name": "rsi_4h",
   "type": "rsi",
   "enabled": true,
   "timeframe": "4h",
@@ -281,7 +281,7 @@ Include timeframes in indicator names for clarity:
 ```json
 {
   "name": "btc_macd_4h", // Good: Clear timeframe
-  "name": "eth_rsi_daily", // Good: Descriptive timeframe
+  "name": "rsi_daily", // Good: Descriptive timeframe
   "name": "macd_indicator" // Avoid: No timeframe information
 }
 ```

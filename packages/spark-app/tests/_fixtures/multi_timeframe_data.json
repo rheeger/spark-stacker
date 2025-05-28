@@ -168,14 +168,14 @@
     "eth_multi_timeframe_strategy": {
       "strategy_timeframe": "4h",
       "indicator_timeframes": {
-        "eth_rsi_4h": "4h",
-        "eth_macd_1h": "1h"
+        "rsi_4h": "4h",
+        "macd_1h": "1h"
       }
     }
   },
 
   "indicator_calculations": {
-    "rsi_1h_eth": {
+    "rsi_1h": {
       "timeframe": "1h",
       "symbol": "ETH-USD",
       "period": 14,

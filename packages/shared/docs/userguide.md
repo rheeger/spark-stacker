@@ -17,12 +17,12 @@ Understanding the relationship between the core components is essential for prop
 STRATEGY (defines what to trade)
 ├── market: "ETH-USD"              # Actual exchange symbol
 ├── timeframe: "4h"                # Default timeframe for the strategy
-├── indicators: ["eth_rsi_4h", "eth_macd_1h"]  # Which indicators to use
+├── indicators: ["rsi_4h", "macd_1h"]  # Which indicators to use
 ├── position_sizing: {...}         # Strategy-specific position sizing (optional)
 └── risk_params: {...}             # Position sizing, stop-loss, etc.
 
 INDICATORS (define how to analyze)
-├── name: "eth_rsi_4h"             # Unique identifier
+├── name: "rsi_4h"             # Unique identifier
 ├── type: "rsi"                    # Indicator algorithm
 ├── timeframe: "4h"                # Data timeframe for this indicator
 ├── parameters: {...}              # Algorithm-specific settings
@@ -121,7 +121,7 @@ The configuration follows a clear hierarchy. Here's a complete example:
       "exchange": "hyperliquid", // ← WHICH EXCHANGE TO USE
       "enabled": true,
       "timeframe": "4h", // ← DEFAULT TIMEFRAME
-      "indicators": ["eth_trend_4h", "eth_entry_1h"], // ← WHICH INDICATORS
+      "indicators": ["trend_4h", "entry_1h"], // ← WHICH INDICATORS
       "main_leverage": 1.0,
       "stop_loss_pct": 5.0,
       "take_profit_pct": 10.0,
@@ -136,7 +136,7 @@ The configuration follows a clear hierarchy. Here's a complete example:
   ],
   "indicators": [
     {
-      "name": "eth_trend_4h", // ← UNIQUE IDENTIFIER
+      "name": "trend_4h", // ← UNIQUE IDENTIFIER
       "type": "rsi", // ← ALGORITHM TYPE
       "enabled": true,
       "timeframe": "4h", // ← DATA TIMEFRAME
@@ -148,7 +148,7 @@ The configuration follows a clear hierarchy. Here's a complete example:
       }
     },
     {
-      "name": "eth_entry_1h",
+      "name": "entry_1h",
       "type": "macd",
       "enabled": true,
       "timeframe": "1h", // ← DIFFERENT TIMEFRAME
@@ -271,15 +271,15 @@ The configuration follows a clear hierarchy. Here's a complete example:
 {
   "strategies": [
     {
-      "name": "eth_4h_rsi",
+      "name": "rsi_4h",
       "market": "ETH-USD",
       "timeframe": "4h",
-      "indicators": ["eth_rsi_4h"]
+      "indicators": ["rsi_4h"]
     }
   ],
   "indicators": [
     {
-      "name": "eth_rsi_4h",
+      "name": "rsi_4h",
       "type": "rsi",
       "timeframe": "4h"
     }
@@ -295,13 +295,13 @@ The configuration follows a clear hierarchy. Here's a complete example:
     {
       "name": "eth_combined",
       "market": "ETH-USD",
-      "indicators": ["eth_rsi_4h", "eth_macd_1h", "eth_bb_15m"]
+      "indicators": ["rsi_4h", "macd_1h", "bb_15m"]
     }
   ],
   "indicators": [
-    { "name": "eth_rsi_4h", "type": "rsi", "timeframe": "4h" },
-    { "name": "eth_macd_1h", "type": "macd", "timeframe": "1h" },
-    { "name": "eth_bb_15m", "type": "bollinger", "timeframe": "15m" }
+    { "name": "rsi_4h", "type": "rsi", "timeframe": "4h" },
+    { "name": "macd_1h", "type": "macd", "timeframe": "1h" },
+    { "name": "bb_15m", "type": "bollinger", "timeframe": "15m" }
   ]
 }
 ```
@@ -314,7 +314,7 @@ The configuration follows a clear hierarchy. Here's a complete example:
     {
       "name": "eth_strategy",
       "market": "ETH-USD",
-      "indicators": ["eth_rsi_4h"]
+      "indicators": ["rsi_4h"]
     },
     {
       "name": "btc_strategy",
@@ -323,7 +323,7 @@ The configuration follows a clear hierarchy. Here's a complete example:
     }
   ],
   "indicators": [
-    { "name": "eth_rsi_4h", "type": "rsi", "timeframe": "4h" },
+    { "name": "rsi_4h", "type": "rsi", "timeframe": "4h" },
     { "name": "btc_macd_1h", "type": "macd", "timeframe": "1h" }
   ]
 }
@@ -357,7 +357,7 @@ Override global defaults with strategy-specific position sizing:
 {
   "name": "eth_aggressive_strategy",
   "market": "ETH-USD",
-  "indicators": ["eth_rsi_4h"],
+  "indicators": ["rsi_4h"],
   "position_sizing": {
     "method": "risk_based",
     "risk_per_trade_pct": 0.03,
@@ -432,13 +432,13 @@ Size positions as a percentage of total equity:
     {
       "name": "eth_conservative",
       "market": "ETH-USD",
-      "indicators": ["eth_rsi_4h"]
+      "indicators": ["rsi_4h"]
       // Uses global: fixed_usd $1000
     },
     {
       "name": "eth_aggressive",
       "market": "ETH-USD",
-      "indicators": ["eth_macd_1h"],
+      "indicators": ["macd_1h"],
       "position_sizing": {
         "method": "risk_based",
         "risk_per_trade_pct": 0.03
@@ -526,7 +526,7 @@ Test your strategy configuration:
 ```bash
 cd packages/spark-app
 .venv/bin/python -m tests._utils.cli backtest-indicator \
-  --indicator eth_rsi_4h \
+  --indicator rsi_4h \
   --symbol ETH-USD \
   --timeframe 4h \
   --start-date 2024-01-01 \
@@ -604,7 +604,7 @@ spark_stacker_macd{market="ETH-USD", timeframe="1h", component="macd_line"}
 
 ### 6.1 Configuration Best Practices
 
-1. **Use descriptive names**: `"eth_rsi_4h"` instead of `"rsi1"`
+1. **Use descriptive names**: `"rsi_4h"` instead of `"rsi1"`
 2. **Match timeframes to strategy**: Daily strategies use daily indicators
 3. **Start simple**: Single indicator, single timeframe, then expand
 4. **Test thoroughly**: Always backtest before live trading
@@ -614,7 +614,7 @@ spark_stacker_macd{market="ETH-USD", timeframe="1h", component="macd_line"}
 **Indicators:**
 
 - Format: `{market}_{type}_{timeframe}`
-- Examples: `"eth_rsi_4h"`, `"btc_macd_1h"`, `"avax_bb_15m"`
+- Examples: `"rsi_4h"`, `"btc_macd_1h"`, `"avax_bb_15m"`
 
 **Strategies:**
 

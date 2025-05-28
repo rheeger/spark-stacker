@@ -33,14 +33,14 @@ The Spark Stacker system now supports **unified timeframe configuration** across
 {
   "indicators": [
     {
-      "name": "eth_rsi_4h",
+      "name": "rsi_4h",
       "type": "rsi",
       "enabled": true,
       "timeframe": "4h",
       "parameters": { "period": 14 }
     },
     {
-      "name": "eth_macd_1h",
+      "name": "macd_1h",
       "type": "macd",
       "enabled": true,
       "timeframe": "1h",
@@ -54,7 +54,7 @@ The Spark Stacker system now supports **unified timeframe configuration** across
 
 ```bash
 packages/spark-app/.venv/bin/python -m tests._utils.cli backtest-indicator \
-  --indicator eth_macd_1h \
+  --indicator rsi_4h \
   --symbol ETH-USD \
   --timeframe 1h
 ```
@@ -80,7 +80,7 @@ If you have existing indicators without timeframes, simply add the `timeframe` f
 
 ```json
 {
-  "name": "eth_rsi_4h",
+  "name": "rsi_4h",
   "type": "rsi",
   "enabled": true,
   "timeframe": "4h", // ← Add this line
