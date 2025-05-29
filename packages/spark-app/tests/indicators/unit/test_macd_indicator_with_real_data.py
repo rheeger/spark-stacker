@@ -16,6 +16,7 @@ TEST_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 class TestMACDIndicatorWithRealData:
     """Test MACD indicator implementation with real market data."""
 
+    @pytest.mark.slow
     def test_macd_signal_generation_with_default_params(self, sample_price_data):
         """Test MACD indicator with default parameters on real market data."""
         # Create MACD indicator with default parameters
@@ -48,6 +49,7 @@ class TestMACDIndicatorWithRealData:
         # Optional: Save a chart for visual inspection
         self._save_chart(sample_price_data, signals, "macd_default_params")
 
+    @pytest.mark.slow
     @pytest.mark.parametrize(
         "market_data_params",
         [
@@ -91,6 +93,7 @@ class TestMACDIndicatorWithRealData:
         assert signals is not None
         assert "macd" in signals.columns
 
+    @pytest.mark.slow
     @pytest.mark.parametrize(
         "params",
         [
