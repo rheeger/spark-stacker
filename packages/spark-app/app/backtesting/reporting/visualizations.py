@@ -118,9 +118,9 @@ def generate_price_chart(
                         y=[trade['entry_price']],
                         mode='markers',
                         marker=dict(
-                            symbol='triangle-up' if trade.get('side', 'long') == 'long' else 'triangle-down',
+                            symbol='triangle-up',  # Use triangle-up for all entries
                             size=10,
-                            color='orange',  # Changed to orange for better visibility
+                            color='blue',  # Keep blue for entry markers
                         ),
                         name='Entry',
                         showlegend=not entry_legend_added,  # Only show legend for first entry
@@ -145,7 +145,7 @@ def generate_price_chart(
                         y=[trade['exit_price']],
                         mode='markers',
                         marker=dict(
-                            symbol='circle',
+                            symbol='triangle-down',
                             size=10,
                             color='purple',  # Changed to purple for better visibility
                         ),

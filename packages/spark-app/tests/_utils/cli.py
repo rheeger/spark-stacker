@@ -178,12 +178,9 @@ def create_charts_for_report(results_dir, symbol="ETH-USD", trades=None, backtes
 
                 # Determine marker color and shape based on trade side
                 trade_side = trade.get('side', 'LONG').upper()
-                if trade_side == 'LONG':
-                    entry_color = 'green'
-                    entry_marker = '^'  # Triangle up for buy
-                else:
-                    entry_color = 'red'
-                    entry_marker = 'v'  # Triangle down for sell short
+                # Use blue carets for all entry points
+                entry_color = 'blue'
+                entry_marker = '^'  # Caret/triangle up for entry
 
                 # Plot entry marker using the market price - only add label for first entry
                 plt.scatter(closest_entry_time, market_price_at_entry,
@@ -1086,7 +1083,7 @@ def demo(
 @click.option("--timeframe", default="1m", help="Timeframe for analysis")
 @click.option("--days", default=10, help="Number of days of historical data to fetch")
 @click.option("--output-dir", help="Directory to save backtest results")
-@click.option("--testnet", is_flag=True, default=True, help="Use Hyperliquid testnet")
+@click.option("--testnet", is_flag=True, default=None, help="Use Hyperliquid testnet (defaults to HYPERLIQUID_TESTNET env var)")
 def real_data(
     indicator_name: str,
     symbol: str,
@@ -1096,8 +1093,14 @@ def real_data(
     testnet: bool,
 ):
     """Run a backtest with real market data from Hyperliquid."""
+
+    # If testnet is not explicitly set, use environment variable
+    if testnet is None:
+        testnet = os.getenv('HYPERLIQUID_TESTNET', 'false').lower() in ('true', '1', 't', 'yes', 'y')
+
     logger.info(f"Running {indicator_name} backtest with real Hyperliquid data")
     logger.info(f"Parameters: {symbol} {timeframe}, {days} days, testnet={testnet}")
+    logger.info(f"Using {'testnet' if testnet else 'mainnet'} based on {'CLI flag' if testnet != (os.getenv('HYPERLIQUID_TESTNET', 'true').lower() in ('true', '1', 't', 'yes', 'y')) else 'environment variable'}")
 
     try:
         # Create data directory for real data in test data directory
@@ -1440,7 +1443,7 @@ def demo_macd(
 @click.option("--timeframe", default="1h", help="Timeframe for analysis")
 @click.option("--output-dir", help="Directory to save comparison results")
 @click.option("--use-real-data", is_flag=True, help="Use real market data instead of synthetic demo data")
-@click.option("--testnet", is_flag=True, default=True, help="Use Hyperliquid testnet (when using real data)")
+@click.option("--testnet", is_flag=True, default=None, help="Use Hyperliquid testnet (defaults to HYPERLIQUID_TESTNET env var)")
 def compare_popular(
     symbol: str,
     timeframe: str,
@@ -1449,6 +1452,11 @@ def compare_popular(
     testnet: bool,
 ):
     """Quick comparison of popular indicators: RSI, MACD, and Bollinger Bands."""
+
+    # If testnet is not explicitly set, use environment variable
+    if testnet is None:
+        testnet = os.getenv('HYPERLIQUID_TESTNET', 'false').lower() in ('true', '1', 't', 'yes', 'y')
+
     try:
         # This is equivalent to calling compare with popular indicators
         ctx = click.get_current_context()
@@ -1475,7 +1483,7 @@ def compare_popular(
 @click.option("--days", default=10, help="Number of days of historical data (for real data)")
 @click.option("--output-dir", help="Directory to save comparison results")
 @click.option("--use-real-data", is_flag=True, help="Use real market data instead of synthetic demo data")
-@click.option("--testnet", is_flag=True, default=True, help="Use Hyperliquid testnet (when using real data)")
+@click.option("--testnet", is_flag=True, default=None, help="Use Hyperliquid testnet (defaults to HYPERLIQUID_TESTNET env var)")
 def compare(
     indicator_names: str,
     symbol: str,
@@ -1489,6 +1497,11 @@ def compare(
 
     INDICATOR_NAMES should be comma-separated list, e.g., "RSI,MACD,BOLLINGER"
     """
+
+    # If testnet is not explicitly set, use environment variable
+    if testnet is None:
+        testnet = os.getenv('HYPERLIQUID_TESTNET', 'false').lower() in ('true', '1', 't', 'yes', 'y')
+
     logger.info(f"Running comparison for indicators: {indicator_names}")
 
     try:
