@@ -1,6 +1,6 @@
 ---
 description: Git commit message conventions and standards for consistent version control history
-globs: 
+globs:
 alwaysApply: false
 ---
 # Commit Message Conventions
