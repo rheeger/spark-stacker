@@ -1,6 +1,6 @@
 ---
 description:
-globs: **/tests/**
+globs: **/tests/**,test_*.py,*_test.py,pytest.ini,conftest.py
 alwaysApply: false
 ---
 # Spark Stacker Testing Suite Guide

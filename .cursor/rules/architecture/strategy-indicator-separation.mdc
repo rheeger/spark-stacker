@@ -1,0 +1,163 @@
+---
+description: Architecture principles for separating strategy logic from indicator implementations in trading systems
+globs:
+alwaysApply: false
+---
+# Strategy-Indicator Separation Architecture
+
+## Core Principle
+
+Spark Stacker follows a **strategy-driven architecture** with clear separation between strategies (WHAT to trade) and indicators (HOW to analyze data).
+
+## Architecture Pattern
+
+```
+Strategy → Indicators → Signals → Trading Engine → Exchange
+```
+
+### Strategy Responsibilities
+- Define **WHAT** to trade (market symbol like "ETH-USD")
+- Specify **WHERE** to trade (exchange like "hyperliquid")
+- Select **WHICH** indicators to consult for signals
+- Set **HOW MUCH** risk to take (position sizing, stop losses)
+- Configure **WHEN** to act (timeframes, thresholds)
+
+### Indicator Responsibilities
+- Define **HOW** to analyze data (algorithm like "rsi", "macd")
+- Specify **TIMEFRAME** for analysis ("1h", "4h", "1d")
+- Set **PARAMETERS** for the algorithm (periods, thresholds)
+- Generate **SIGNALS** based on market data
+
+## Key Files
+
+### Strategy Management
+- [StrategyManager](mdc:packages/spark-app/app/core/strategy_manager.py) - Orchestrates strategy execution
+- [StrategyConfig](mdc:packages/spark-app/app/core/strategy_config.py) - Strategy configuration schema and validation
+
+### Indicator Framework
+- [BaseIndicator](mdc:packages/spark-app/app/indicators/base_indicator.py) - Base class for all indicators
+- [IndicatorFactory](mdc:packages/spark-app/app/indicators/indicator_factory.py) - Creates indicators from configuration
+
+### Configuration
+- [config.json](mdc:packages/shared/config.json) - Main configuration file with strategy-indicator mappings
+
+## Implementation Rules
+
+### 1. Strategy Configuration Format
+```json
+{
+  "strategies": [
+    {
+      "name": "strategy_name",
+      "market": "SYMBOL-USD",        // Always full symbol format
+      "exchange": "exchange_name",   // Required: which exchange
+      "enabled": true,
+      "indicators": ["indicator_name_1", "indicator_name_2"],
+      "timeframe": "4h",            // Optional: default for strategy
+      "position_sizing": {...}      // Optional: strategy-specific
+    }
+  ]
+}
+```
+
+### 2. Indicator Configuration Format
+```json
+{
+  "indicators": [
+    {
+      "name": "unique_indicator_name",
+      "type": "algorithm_type",      // rsi, macd, etc.
+      "enabled": true,
+      "timeframe": "4h",            // Data timeframe for analysis
+      "parameters": {
+        // Algorithm-specific parameters
+      }
+    }
+  ]
+}
+```
+
+### 3. Strategy-Indicator Relationship Rules
+
+#### ✅ Correct Patterns
+- **One strategy, multiple indicators**: Single strategy can use multiple indicators with different timeframes
+- **Multiple strategies, shared indicators**: Multiple strategies can reference the same indicator
+- **Independent lifecycles**: Strategies and indicators can be enabled/disabled independently
+- **Timeframe flexibility**: Strategy can use indicators with different timeframes
+
+#### ❌ Anti-Patterns
+- **Indicator names as market symbols**: Never use indicator names (like "RSI-4H") as market symbols
+- **Hardcoded symbol formats**: Don't assume exchange-specific symbol formats in configuration
+- **Circular dependencies**: Indicators should not reference strategies
+- **Timeframe assumptions**: Don't assume all indicators use the same timeframe
+
+### 4. Signal Generation Flow
+
+1. **Strategy Manager** iterates through enabled strategies
+2. For each strategy, **collect required indicators**
+3. **Process indicators** with strategy's market data and timeframe context
+4. **Generate signals** with strategy context (market, exchange, timeframe)
+5. **Route signals** to Trading Engine with full context
+
+### 5. Error Handling Patterns
+
+#### Common Error: "Market RSI-4H not found"
+```python
+# ❌ Wrong: Using indicator name as market
+strategy_config = {
+    "market": "RSI-4H",  # This is an indicator name!
+    "indicators": ["rsi_4h"]
+}
+
+# ✅ Correct: Proper separation
+strategy_config = {
+    "market": "ETH-USD",     # Market symbol
+    "exchange": "hyperliquid",
+    "indicators": ["rsi_4h"]  # Indicator references
+}
+```
+
+## Development Guidelines
+
+### Adding New Strategies
+1. **Never modify indicator code** when adding strategies
+2. **Reference existing indicators** by name in strategy config
+3. **Validate configuration** using [StrategyConfigLoader](mdc:packages/spark-app/app/core/strategy_config.py)
+4. **Test in dry-run mode** before enabling
+
+### Adding New Indicators
+1. **Extend BaseIndicator** class with new algorithm
+2. **Register in IndicatorFactory** for configuration loading
+3. **Test independently** before referencing in strategies
+4. **Document parameters** and expected timeframes
+
+### Configuration Validation
+Always validate strategy-indicator relationships:
+```python
+from app.core.strategy_config import StrategyConfigLoader
+from app.main import _validate_strategy_indicators
+
+# Load and validate
+strategies = StrategyConfigLoader.load_strategies(config['strategies'])
+_validate_strategy_indicators(config['strategies'], config['indicators'])
+```
+
+## Testing Requirements
+
+### Unit Tests
+- **Strategy configuration loading** and validation
+- **Indicator creation** and processing
+- **Signal generation** with proper context
+- **Error handling** for misconfigurations
+
+### Integration Tests
+- **Complete strategy execution** flow
+- **Multi-strategy coordination**
+- **Cross-timeframe indicator** usage
+- **Configuration validation** scenarios
+
+## References
+
+- [Strategy Development Guide](mdc:packages/shared/docs/strategy-development.md)
+- [Configuration Documentation](mdc:packages/shared/docs/configuration.md)
+- [Main README](mdc:README.md) - Architecture section

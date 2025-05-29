@@ -1,0 +1,344 @@
+---
+description:
+globs: config.json,**/config/**,**/config*.py,**/config*.json
+alwaysApply: false
+---
+# Position Sizing Configuration
+
+## Core Principle
+
+Support **global position sizing defaults** with **strategy-specific overrides** to allow different strategies to use different position sizing methods and parameters.
+
+## Position Sizing Architecture
+
+### Inheritance Pattern
+1. **Global defaults** - Set in root `position_sizing` object
+2. **Strategy overrides** - Optional `position_sizing` object in strategy config
+3. **Parameter inheritance** - Strategy configs inherit global parameters and can override specific ones
+4. **Validation** - All position sizing configurations validated at startup
+
+## Key Files
+
+### Risk Management
+- [RiskManager](mdc:packages/spark-app/app/risk_management/risk_manager.py) - Main position sizing orchestration
+- [PositionSizer](mdc:packages/spark-app/app/risk_management/position_sizer.py) - Position sizing algorithm implementations
+
+### Configuration
+- [config.json](mdc:packages/shared/config.json) - Position sizing configuration examples
+- [StrategyConfig](mdc:packages/spark-app/app/core/strategy_config.py) - Strategy configuration validation
+
+## Position Sizing Methods
+
+### 1. Fixed USD Amount
+**Use case**: Testing, conservative strategies, fixed risk per trade
+
+```json
+{
+  "method": "fixed_usd",
+  "fixed_usd_amount": 100.0,
+  "max_position_size_usd": 1000.0,
+  "min_position_size_usd": 50.0
+}
+```
+
+**Behavior**: Always trades the same dollar amount regardless of account balance.
+
+### 2. Percentage of Equity
+**Use case**: Compounding strategies, growth-oriented approaches
+
+```json
+{
+  "method": "percent_equity",
+  "equity_percentage": 0.05,              // 5% of account balance
+  "max_position_size_usd": 2000.0,
+  "min_position_size_usd": 50.0
+}
+```
+
+**Behavior**: Position size scales with account balance (compounding effect).
+
+### 3. Risk-Based Sizing
+**Use case**: Sophisticated risk management, stop-loss based position sizing
+
+```json
+{
+  "method": "risk_based",
+  "risk_per_trade_pct": 0.02,            // Risk 2% of account per trade
+  "default_stop_loss_pct": 0.05,         // Assume 5% stop loss distance
+  "max_position_size_usd": 1500.0
+}
+```
+
+**Calculation**: Position Size = (Account Balance × Risk%) / Stop Loss%
+
+### 4. Kelly Criterion
+**Use case**: Optimal position sizing based on historical performance
+
+```json
+{
+  "method": "kelly",
+  "kelly_win_rate": 0.55,                // 55% win rate
+  "kelly_avg_win": 0.08,                 // Average win 8%
+  "kelly_avg_loss": 0.04,                // Average loss 4%
+  "kelly_max_position_pct": 0.25,        // Cap at 25% of account
+  "max_position_size_usd": 3000.0
+}
+```
+
+**Benefits**: Mathematically optimal position sizing but requires backtesting data.
+
+## Configuration Patterns
+
+### Global Defaults Only
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 100.0,
+    "max_position_size_usd": 1000.0
+  },
+  "strategies": [
+    {
+      "name": "strategy1",
+      // Uses global position sizing
+    },
+    {
+      "name": "strategy2",
+      // Also uses global position sizing
+    }
+  ]
+}
+```
+
+### Strategy-Specific Overrides
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 100.0
+  },
+  "strategies": [
+    {
+      "name": "conservative_strategy",
+      // Uses global defaults
+    },
+    {
+      "name": "aggressive_strategy",
+      "position_sizing": {
+        "method": "percent_equity",
+        "equity_percentage": 0.1,
+        "max_position_size_usd": 2000.0
+      }
+    },
+    {
+      "name": "risk_managed_strategy",
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03,
+        "default_stop_loss_pct": 0.05
+      }
+    }
+  ]
+}
+```
+
+### Parameter Inheritance
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 100.0,
+    "max_position_size_usd": 1000.0,      // Global limit
+    "min_position_size_usd": 50.0         // Global minimum
+  },
+  "strategies": [
+    {
+      "name": "custom_strategy",
+      "position_sizing": {
+        "method": "percent_equity",         // Override method
+        "equity_percentage": 0.05,          // New parameter
+        // Inherits max_position_size_usd and min_position_size_usd from global
+      }
+    }
+  ]
+}
+```
+
+## Implementation Rules
+
+### 1. RiskManager Integration
+
+```python
+class RiskManager:
+    def __init__(self, config: Dict[str, Any], strategies: List[StrategyConfig]):
+        self.default_position_sizer = self._create_default_position_sizer(config)
+        self.strategy_position_sizers = self._create_strategy_position_sizers(strategies)
+
+    def calculate_position_size(self, strategy_name: str, market_data: Dict) -> float:
+        # Route to strategy-specific sizer or default
+        sizer = self.strategy_position_sizers.get(strategy_name, self.default_position_sizer)
+        return sizer.calculate_position_size(market_data)
+```
+
+### 2. Configuration Validation
+
+```python
+def validate_position_sizing_config(config: Dict[str, Any]) -> None:
+    """Validate position sizing configuration parameters."""
+    method = config.get("method")
+
+    if method == "fixed_usd":
+        assert "fixed_usd_amount" in config
+        assert config["fixed_usd_amount"] > 0
+
+    elif method == "percent_equity":
+        assert "equity_percentage" in config
+        assert 0 < config["equity_percentage"] <= 1.0
+
+    elif method == "risk_based":
+        assert "risk_per_trade_pct" in config
+        assert "default_stop_loss_pct" in config
+        assert 0 < config["risk_per_trade_pct"] <= 0.1  # Max 10% risk per trade
+
+    elif method == "kelly":
+        assert all(key in config for key in ["kelly_win_rate", "kelly_avg_win", "kelly_avg_loss"])
+        assert 0 < config["kelly_win_rate"] < 1.0
+```
+
+### 3. Strategy Position Sizer Factory
+
+```python
+def _create_position_sizer_for_strategy(self, strategy: StrategyConfig) -> PositionSizer:
+    """Create position sizer for specific strategy with parameter inheritance."""
+
+    # Start with global defaults
+    config = self.global_position_config.copy()
+
+    # Override with strategy-specific settings
+    if strategy.position_sizing:
+        config.update(strategy.position_sizing)
+
+    # Validate merged configuration
+    self._validate_position_sizing_config(config)
+
+    return PositionSizer.from_config(config)
+```
+
+## Error Handling Patterns
+
+### Missing Required Parameters
+```python
+try:
+    position_sizer = PositionSizer.from_config(config)
+except KeyError as e:
+    logger.error(f"Missing required position sizing parameter: {e}")
+    raise ConfigurationError(f"Invalid position sizing config for {strategy_name}")
+```
+
+### Invalid Parameter Values
+```python
+if config.get("equity_percentage", 0) > 1.0:
+    raise ValueError("equity_percentage must be <= 1.0 (100%)")
+
+if config.get("risk_per_trade_pct", 0) > 0.1:
+    logger.warning("risk_per_trade_pct > 10% is very aggressive")
+```
+
+### Position Size Limits
+```python
+def calculate_position_size(self, market_data: Dict) -> float:
+    # Calculate raw position size
+    raw_size = self._calculate_raw_position_size(market_data)
+
+    # Apply limits
+    max_size = self.config.get("max_position_size_usd", float('inf'))
+    min_size = self.config.get("min_position_size_usd", 0)
+
+    return max(min_size, min(raw_size, max_size))
+```
+
+## Testing Requirements
+
+### Unit Tests
+- **Position sizer creation** for each method
+- **Parameter inheritance** from global to strategy configs
+- **Configuration validation** for all methods
+- **Position size calculation** accuracy
+- **Limit enforcement** (min/max position sizes)
+
+### Integration Tests
+- **Multi-strategy position sizing** with different methods
+- **Configuration loading** and validation
+- **Risk manager integration** with trading engine
+- **Position size calculation** in real trading scenarios
+
+## Development Guidelines
+
+### Adding New Position Sizing Methods
+
+1. **Extend PositionSizingMethod enum** with new method
+2. **Add configuration validation** for required parameters
+3. **Implement calculation logic** in PositionSizer class
+4. **Add unit tests** for new method
+5. **Update documentation** with examples and use cases
+
+### Modifying Existing Methods
+
+1. **Maintain backward compatibility** with existing configurations
+2. **Add parameter validation** for new parameters
+3. **Update default values** carefully
+4. **Test migration** from old to new configurations
+
+### Configuration Best Practices
+
+1. **Start with conservative settings** (small position sizes)
+2. **Test in dry-run mode** before live trading
+3. **Monitor position sizing performance** over time
+4. **Adjust parameters** based on strategy performance
+5. **Use different methods** for different strategy types
+
+## Validation Scripts
+
+### Configuration Testing
+```bash
+# Test position sizing configuration loading
+.venv/bin/python -c "
+import json
+from app.risk_management.risk_manager import RiskManager
+from app.core.strategy_config import StrategyConfigLoader
+
+with open('../shared/config.json') as f:
+    config = json.load(f)
+
+strategies = StrategyConfigLoader.load_strategies(config['strategies'])
+risk_manager = RiskManager.from_config(config)
+
+for strategy in strategies:
+    print(f'Strategy {strategy.name}: Position sizing method = {getattr(strategy.position_sizing, \"method\", \"inherited\")}')
+"
+```
+
+### Position Size Testing
+```bash
+# Test position size calculations
+.venv/bin/python -c "
+from app.risk_management.risk_manager import RiskManager
+import json
+
+with open('../shared/config.json') as f:
+    config = json.load(f)
+
+risk_manager = RiskManager.from_config(config)
+test_data = {'account_balance': 10000, 'current_price': 3000}
+
+for strategy_name in ['eth_multi_timeframe_strategy']:
+    size = risk_manager.calculate_position_size(strategy_name, test_data)
+    print(f'Strategy {strategy_name}: Position size = ${size:.2f}')
+"
+```
+
+## References
+
+- [Position Sizing Documentation](mdc:packages/shared/docs/strategy-position-sizing.md)
+- [Risk Management Guide](mdc:packages/shared/docs/risk-management.md)
+- [Configuration Examples](mdc:packages/shared/config.json)

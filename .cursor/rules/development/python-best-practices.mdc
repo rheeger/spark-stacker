@@ -1,0 +1,483 @@
+---
+description:
+globs: *.py,requirements.txt,pytest.ini,**/.venv/**
+alwaysApply: false
+---
+# Python Best Practices for Spark Stacker
+
+## Environment and Dependencies
+
+### Virtual Environment
+**Always use the project's virtual environment** located at [packages/spark-app/.venv](mdc:packages/spark-app/.venv)
+
+```bash
+# Activate environment
+cd packages/spark-app
+source .venv/bin/activate  # Unix/Mac
+# OR
+.venv\Scripts\activate     # Windows
+
+# Run scripts with explicit path
+.venv/bin/python app/main.py
+.venv/bin/python -m pytest tests/
+```
+
+### Python Version and Dependencies
+- **Python 3.11+** required
+- **Dependencies** managed in [requirements.txt](mdc:packages/spark-app/requirements.txt)
+- **Always use full pathnames** when running scripts via terminal
+
+## Code Structure and Organization
+
+### Project Structure
+```
+packages/spark-app/
+├── app/                    # Main application code
+│   ├── core/              # Core business logic (StrategyManager, TradingEngine)
+│   ├── connectors/        # Exchange connectors
+│   ├── indicators/        # Technical indicators
+│   ├── risk_management/   # Position sizing and risk controls
+│   └── backtesting/       # Backtesting framework
+├── tests/                 # Test suites
+├── .venv/                 # Virtual environment
+└── requirements.txt       # Dependencies
+```
+
+### Import Organization
+```python
+# Standard library imports
+import json
+import logging
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+
+# Third-party imports
+import pandas as pd
+import numpy as np
+from dataclasses import dataclass
+
+# Local application imports
+from app.core.strategy_manager import StrategyManager
+from app.indicators.base_indicator import BaseIndicator
+from app.connectors.connector_factory import ConnectorFactory
+```
+
+## Coding Standards
+
+### Type Hints
+**Always use type hints** for function parameters and return values:
+
+```python
+def calculate_position_size(
+    self,
+    strategy_name: str,
+    market_data: Dict[str, Any],
+    account_balance: float
+) -> float:
+    """Calculate position size for strategy."""
+    pass
+
+def process_signal(
+    self,
+    signal: Signal,
+    position_size: float
+) -> Optional[Order]:
+    """Process trading signal and return order if executed."""
+    pass
+```
+
+### Error Handling
+**Use specific exception classes** and comprehensive error handling:
+
+```python
+# Custom exceptions for domain-specific errors
+class StrategyConfigurationError(Exception):
+    """Raised when strategy configuration is invalid."""
+    pass
+
+class ExchangeConnectionError(Exception):
+    """Raised when exchange connection fails."""
+    pass
+
+class PositionSizingError(Exception):
+    """Raised when position sizing calculation fails."""
+    pass
+
+# Comprehensive error handling
+def load_strategy_config(config_path: str) -> List[StrategyConfig]:
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+
+        strategies = StrategyConfigLoader.load_strategies(config['strategies'])
+        return strategies
+
+    except FileNotFoundError:
+        logger.error(f"Configuration file not found: {config_path}")
+        raise StrategyConfigurationError(f"Missing config file: {config_path}")
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in config file: {e}")
+        raise StrategyConfigurationError(f"Invalid JSON: {e}")
+
+    except KeyError as e:
+        logger.error(f"Missing required config key: {e}")
+        raise StrategyConfigurationError(f"Missing config key: {e}")
+```
+
+### Logging Patterns
+
+#### Standard Logging Setup
+```python
+import logging
+
+# For local scripts
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# For trading application components
+logger = logging.getLogger(__name__)
+```
+
+#### Structured Logging for Trading Events
+```python
+def log_trade_execution(
+    self,
+    strategy_name: str,
+    market: str,
+    action: str,
+    size: float,
+    price: float
+) -> None:
+    """Log trade execution with structured data."""
+    logger.info(
+        "Trade executed",
+        extra={
+            "strategy": strategy_name,
+            "market": market,
+            "action": action,
+            "size": size,
+            "price": price,
+            "timestamp": datetime.now().isoformat()
+        }
+    )
+```
+
+### Documentation Standards
+
+#### Docstrings
+```python
+def process_indicators(
+    self,
+    strategy_config: StrategyConfig,
+    market: str,
+    indicator_names: List[str]
+) -> List[Signal]:
+    """
+    Process indicators for a strategy and generate signals.
+
+    Args:
+        strategy_config: Configuration for the strategy
+        market: Market symbol in standard format (e.g., "ETH-USD")
+        indicator_names: List of indicator names to process
+
+    Returns:
+        List of signals generated by indicators
+
+    Raises:
+        IndicatorNotFoundError: If any indicator is not configured
+        DataFetchError: If market data cannot be retrieved
+
+    Example:
+        >>> strategy = StrategyConfig(name="test", market="ETH-USD", ...)
+        >>> signals = manager.process_indicators(strategy, "ETH-USD", ["rsi_4h"])
+        >>> len(signals)
+        1
+    """
+    pass
+```
+
+#### Inline Comments
+```python
+def _prepare_indicator_data(self, market: str, timeframe: str, exchange: str) -> pd.DataFrame:
+    # Convert standard symbol format to exchange-specific format
+    exchange_symbol = convert_symbol_for_exchange(market, exchange)
+    logger.debug(f"Converted {market} to {exchange_symbol} for {exchange}")
+
+    # Check cache first using standard format for key consistency
+    cache_key = f"{market}_{timeframe}"
+    if cache_key in self.data_cache:
+        logger.debug(f"Using cached data for {cache_key}")
+        return self.data_cache[cache_key]
+
+    # Fetch fresh data using exchange-specific symbol
+    data = self.data_manager.get_historical_data(exchange_symbol, timeframe)
+
+    # Cache using standard format key for cross-exchange sharing
+    self.data_cache[cache_key] = data
+    return data
+```
+
+## Performance and Optimization
+
+### Memory Management
+```python
+# Use generators for large datasets
+def process_historical_data(self, data_files: List[str]) -> Iterator[pd.DataFrame]:
+    """Process large datasets efficiently using generators."""
+    for file_path in data_files:
+        yield pd.read_csv(file_path, chunksize=1000)
+
+# Clean up resources in context managers
+class DataManager:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup_connections()
+        self.clear_cache()
+```
+
+### Async/Await for I/O Operations
+```python
+import asyncio
+from typing import List
+
+async def fetch_market_data_async(
+    self,
+    symbols: List[str],
+    timeframe: str
+) -> Dict[str, pd.DataFrame]:
+    """Fetch market data for multiple symbols concurrently."""
+    tasks = [
+        self._fetch_single_symbol_data(symbol, timeframe)
+        for symbol in symbols
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    return {
+        symbol: result
+        for symbol, result in zip(symbols, results)
+        if not isinstance(result, Exception)
+    }
+```
+
+### Connection Pooling
+```python
+class ExchangeConnector:
+    def __init__(self, config: Dict[str, Any]):
+        self.session_pool = self._create_connection_pool(config)
+
+    def _create_connection_pool(self, config: Dict[str, Any]) -> aiohttp.ClientSession:
+        """Create connection pool for efficient API calls."""
+        connector = aiohttp.TCPConnector(
+            limit=10,              # Max 10 connections
+            limit_per_host=5,      # Max 5 per host
+            keepalive_timeout=60,  # Keep connections alive
+        )
+        return aiohttp.ClientSession(connector=connector)
+```
+
+## Testing Patterns
+
+### Test Organization
+```
+tests/
+├── unit/                  # Unit tests (fast, isolated)
+├── integration/           # Integration tests (slower, real components)
+├── _fixtures/            # Test data and fixtures
+├── _helpers/             # Test helper functions
+└── _utils/               # Test utilities and CLI tools
+```
+
+### Unit Test Example
+```python
+import pytest
+from unittest.mock import Mock, patch
+from app.core.strategy_manager import StrategyManager
+from app.core.strategy_config import StrategyConfig
+
+class TestStrategyManager:
+
+    @pytest.fixture
+    def strategy_config(self):
+        return StrategyConfig(
+            name="test_strategy",
+            market="ETH-USD",
+            exchange="hyperliquid",
+            enabled=True,
+            indicators=["rsi_4h"],
+            timeframe="4h"
+        )
+
+    @pytest.fixture
+    def mock_data_manager(self):
+        mock = Mock()
+        mock.get_historical_data.return_value = pd.DataFrame({
+            'close': [100, 101, 102, 103, 104],
+            'timestamp': pd.date_range('2024-01-01', periods=5, freq='4H')
+        })
+        return mock
+
+    def test_strategy_manager_initialization(self, strategy_config):
+        """Test strategy manager initializes correctly."""
+        strategies = [strategy_config]
+        manager = StrategyManager(strategies=strategies)
+
+        assert len(manager.strategies) == 1
+        assert manager.strategies[0].name == "test_strategy"
+
+    @patch('app.core.symbol_converter.convert_symbol_for_exchange')
+    def test_prepare_indicator_data_symbol_conversion(
+        self,
+        mock_convert,
+        strategy_config,
+        mock_data_manager
+    ):
+        """Test that symbol conversion is used correctly."""
+        mock_convert.return_value = "ETH"
+
+        manager = StrategyManager(strategies=[strategy_config])
+        manager.data_manager = mock_data_manager
+
+        result = manager._prepare_indicator_data("ETH-USD", "4h", "hyperliquid")
+
+        mock_convert.assert_called_once_with("ETH-USD", "hyperliquid")
+        mock_data_manager.get_historical_data.assert_called_once_with("ETH", "4h")
+```
+
+### Integration Test Example
+```python
+class TestStrategyIndicatorIntegration:
+
+    def test_complete_strategy_execution_flow(self):
+        """Test complete strategy execution from config to signals."""
+        # Load real configuration
+        with open('../shared/config.json') as f:
+            config = json.load(f)
+
+        # Create components
+        strategies = StrategyConfigLoader.load_strategies(config['strategies'])
+        indicators = IndicatorFactory.create_indicators_from_config(config['indicators'])
+
+        # Validate relationships
+        StrategyConfigLoader.validate_indicators(strategies, indicators)
+
+        # Test strategy execution
+        manager = StrategyManager(strategies=strategies)
+        signals = manager.run_cycle()
+
+        # Validate results
+        assert isinstance(signals, list)
+        for signal in signals:
+            assert hasattr(signal, 'strategy_name')
+            assert hasattr(signal, 'market')
+            assert hasattr(signal, 'exchange')
+```
+
+## Entry Points and Main Functions
+
+### Script Entry Points
+```python
+def main() -> None:
+    """Main entry point for trading application."""
+    try:
+        # Load configuration
+        config = load_configuration()
+
+        # Initialize components
+        strategy_manager = create_strategy_manager(config)
+        trading_engine = create_trading_engine(config)
+
+        # Start trading loop
+        run_trading_loop(strategy_manager, trading_engine)
+
+    except KeyboardInterrupt:
+        logger.info("Received shutdown signal")
+    except Exception as e:
+        logger.error(f"Unhandled error: {e}")
+        raise
+    finally:
+        cleanup_resources()
+
+if __name__ == "__main__":
+    main()
+```
+
+### Configuration Validation Scripts
+```python
+def validate_configuration() -> None:
+    """Validate configuration without running trading."""
+    try:
+        config = load_configuration()
+
+        # Validate strategies
+        strategies = StrategyConfigLoader.load_strategies(config['strategies'])
+        logger.info(f"✅ Loaded {len(strategies)} strategies")
+
+        # Validate indicators
+        indicators = IndicatorFactory.create_indicators_from_config(config['indicators'])
+        logger.info(f"✅ Loaded {len(indicators)} indicators")
+
+        # Validate relationships
+        StrategyConfigLoader.validate_indicators(strategies, indicators)
+        logger.info("✅ Strategy-indicator validation passed")
+
+        print("Configuration validation successful!")
+
+    except Exception as e:
+        logger.error(f"Configuration validation failed: {e}")
+        raise
+
+if __name__ == "__main__":
+    validate_configuration()
+```
+
+## Key Files and References
+
+### Core Application Files
+- [main.py](mdc:packages/spark-app/app/main.py) - Application entry point
+- [StrategyManager](mdc:packages/spark-app/app/core/strategy_manager.py) - Strategy execution orchestration
+- [TradingEngine](mdc:packages/spark-app/app/core/trading_engine.py) - Trade execution engine
+- [RiskManager](mdc:packages/spark-app/app/risk_management/risk_manager.py) - Position sizing and risk controls
+
+### Testing Infrastructure
+- [pytest.ini](mdc:packages/spark-app/pytest.ini) - Test configuration
+- [test fixtures](mdc:packages/spark-app/tests/_fixtures) - Reusable test data
+- [test helpers](mdc:packages/spark-app/tests/_helpers) - Test utility functions
+
+### Development Tools
+- [Makefile](mdc:packages/spark-app/Makefile) - Common development commands
+- [requirements.txt](mdc:packages/spark-app/requirements.txt) - Python dependencies
+
+## Common Commands
+
+### Development Workflow
+```bash
+cd packages/spark-app
+
+# Run application
+.venv/bin/python app/main.py
+
+# Run tests
+.venv/bin/python -m pytest tests/ --cov=app
+
+# Run specific test category
+.venv/bin/python -m pytest tests/unit/ -v
+.venv/bin/python -m pytest tests/integration/ -v
+
+# Validate configuration
+.venv/bin/python -c "from app.main import _validate_strategy_indicators; import json;
+with open('../shared/config.json') as f: config = json.load(f);
+_validate_strategy_indicators(config['strategies'], config['indicators'])"
+```
+
+## References
+
+- [Python Best Practices Guide](mdc:packages/shared/docs/developer-guide.md)
+- [Testing Documentation](mdc:packages/spark-app/tests/README.md)
+- [Project Structure Guide](mdc:README.md)

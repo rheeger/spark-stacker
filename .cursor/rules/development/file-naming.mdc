@@ -1,0 +1,384 @@
+---
+description:
+globs: *.py,*.ts,*.md,**/tests/**,**/docs/**
+alwaysApply: false
+---
+# File and Folder Naming Conventions
+
+## Core Principles
+
+Use **semantic prefixes** to control file explorer sorting and **consistent naming patterns** for easy navigation and organization.
+
+## Directory Naming Rules
+
+### Dot (.) Prefix - Hidden Configuration & Tools
+**Use for**: Files that should be hidden by default, managed by development tools
+
+```
+.git/                  # Git repository metadata
+.github/               # GitHub Actions and templates
+.nx/                   # NX monorepo build cache
+.vscode/               # VS Code workspace settings
+.cursor/               # Cursor editor configuration
+.pytest_cache/         # Pytest test cache
+```
+
+**Configuration Files**:
+```
+.env                   # Environment variables
+.prettierrc            # Code formatting rules
+.gitignore             # Git ignore patterns
+.DS_Store              # macOS system files
+```
+
+### Underscore (_) Prefix - Visible Generated Content
+**Use for**: Build outputs and generated reports that developers frequently access
+
+```
+_htmlcov/              # Coverage reports (developers browse these)
+_logs/                 # Application logs for debugging
+```
+
+**In Test Directories**:
+```
+tests/_helpers/        # Test helper functions
+tests/_fixtures/       # Test data fixtures
+tests/_utils/          # Test CLI tools and scripts
+```
+
+### Double Underscore (__) Prefix - Special Python Directories
+**Use for**: Python-specific conventions and static test data
+
+```
+__pycache__/           # Python bytecode cache (required name)
+__test_data__/         # Static test datasets
+__test_results__/      # Generated test outputs (gitignored)
+```
+
+**Python Files**:
+```
+__init__.py            # Python package initialization
+__main__.py            # Python module entry points
+```
+
+### Standard Names - Source Code & Tools
+**Keep as-is for**: Tool-required names and main content
+
+```
+node_modules/          # NPM/Yarn package directory
+packages/              # Source code organization
+app/                   # Main application code
+tests/                 # Test suites
+docs/                  # Documentation
+```
+
+## File Naming Patterns
+
+### Python Module Files
+
+#### Core Application Files
+```
+# Core business logic
+strategy_manager.py          # StrategyManager class
+trading_engine.py            # TradingEngine class
+risk_manager.py              # RiskManager class
+symbol_converter.py          # Symbol conversion utilities
+
+# Indicators (algorithm + timeframe pattern)
+rsi_indicator.py             # RSI implementation
+macd_indicator.py            # MACD implementation
+bollinger_bands_indicator.py # Bollinger Bands implementation
+
+# Connectors (exchange + connector pattern)
+hyperliquid_connector.py     # Hyperliquid exchange
+coinbase_connector.py        # Coinbase exchange
+kraken_connector.py          # Kraken exchange
+```
+
+#### Configuration and Factories
+```
+strategy_config.py           # Strategy configuration classes
+indicator_factory.py         # Indicator creation factory
+connector_factory.py         # Connector creation factory
+position_sizer.py           # Position sizing implementations
+```
+
+### Test File Naming
+
+#### Test File Patterns
+```
+# Unit tests (test_ prefix + module name)
+test_strategy_manager.py               # Tests for strategy_manager.py
+test_rsi_indicator.py                  # Tests for rsi_indicator.py
+test_hyperliquid_connector.py          # Tests for hyperliquid_connector.py
+
+# Integration tests (test_ prefix + integration description)
+test_strategy_indicator_integration.py # Strategy-indicator integration
+test_exchange_connectivity.py          # Exchange connection tests
+test_end_to_end_trading.py            # Complete trading flow
+```
+
+#### Test Data and Fixtures
+```
+# Test data files (market_timeframe_regime_sequence pattern)
+ETH_1h_bull_1.csv           # ETH 1-hour data, bull market, sequence 1
+BTC_4h_bear_2.csv           # BTC 4-hour data, bear market, sequence 2
+SOL_1d_sideways_1.csv       # SOL daily data, sideways market, sequence 1
+
+# Test fixture files
+strategy_configs.py          # Strategy configuration fixtures
+market_data_fixtures.py      # Market data test fixtures
+signal_fixtures.py           # Trading signal fixtures
+```
+
+### Documentation Files
+
+#### Markdown Documentation
+```
+# Main documentation (purpose-based)
+README.md                    # Main project documentation
+CONTRIBUTING.md              # Contribution guidelines
+CHANGELOG.md                 # Version history
+
+# Technical documentation (topic-based, lowercase with hyphens)
+strategy-development.md      # Strategy development guide
+symbol-conversion.md         # Symbol conversion documentation
+risk-management.md           # Risk management guide
+configuration.md             # Configuration documentation
+
+# Phase documentation (phase + description pattern)
+phase3.5.2-strategy-indicator-integration.md  # Phase-specific checklist
+phase4-monitoring-control-interface.md        # Phase-specific checklist
+```
+
+### Configuration Files
+
+#### JSON Configuration
+```
+config.json              # Main application configuration
+tsconfig.json            # TypeScript configuration
+package.json             # NPM package configuration
+tsconfig.base.json       # Base TypeScript configuration
+tsconfig.spec.json       # Test TypeScript configuration
+```
+
+#### Tool Configuration
+```
+pytest.ini              # Pytest configuration
+requirements.txt         # Python dependencies
+Makefile                 # Build automation
+docker-compose.yml       # Docker configuration
+```
+
+### Data and Log Files
+
+#### Generated Reports
+```
+# Report files (indicator_market_timeframe_timestamp pattern)
+rsi_ETH_4h_2024-12-28.html              # RSI report for ETH 4h
+macd_BTC_1h_2024-12-28.html             # MACD report for BTC 1h
+strategy_performance_2024-12-28.html     # Strategy performance report
+```
+
+#### Log Files
+```
+# Application logs (service-based)
+spark_stacker.log        # Main application log
+balance.log              # Account balance changes
+orders.log               # Order executions
+markets.log              # Market data updates
+
+# Log directories (timestamped)
+2024-12-28-14-30-15_a1b2c3d4/   # Timestamped log directory
+```
+
+#### Dataset Files
+```
+# Dataset naming (method suffix pattern)
+market_data_raw.csv          # Raw market data
+market_data_z_score.csv      # Z-score normalized data
+market_data_min_max.csv      # Min-max normalized data
+```
+
+## Naming Patterns by Component
+
+### Strategy-Related Files
+```
+# Strategy implementations
+momentum_strategy.py         # Momentum-based strategy
+mean_reversion_strategy.py   # Mean reversion strategy
+arbitrage_strategy.py        # Arbitrage strategy
+
+# Strategy configuration
+strategy_config.py           # Configuration schema
+strategy_validator.py        # Configuration validation
+strategy_factory.py          # Strategy creation
+```
+
+### Indicator-Related Files
+```
+# Indicator base classes
+base_indicator.py            # Base indicator class
+technical_indicator.py       # Technical indicator base
+composite_indicator.py       # Composite indicator base
+
+# Specific indicators
+rsi_indicator.py            # RSI implementation
+macd_indicator.py           # MACD implementation
+ema_indicator.py            # EMA implementation
+sma_indicator.py            # SMA implementation
+```
+
+### Connector-Related Files
+```
+# Connector architecture
+base_connector.py           # Base connector interface
+exchange_connector.py       # Exchange connector base
+websocket_connector.py      # WebSocket connector base
+
+# Exchange implementations
+hyperliquid_connector.py    # Hyperliquid implementation
+coinbase_connector.py       # Coinbase implementation
+kraken_connector.py         # Kraken implementation
+```
+
+### Risk Management Files
+```
+# Risk management core
+risk_manager.py             # Main risk manager
+position_sizer.py           # Position sizing algorithms
+risk_calculator.py          # Risk calculation utilities
+
+# Position sizing implementations
+fixed_position_sizer.py     # Fixed USD position sizing
+percent_position_sizer.py   # Percentage-based sizing
+kelly_position_sizer.py     # Kelly criterion sizing
+```
+
+## File Explorer Sorting Result
+
+With these conventions, directory contents sort as:
+```
+📁 _htmlcov/              # Generated content (visible, top)
+📁 _logs/                 # Generated content (visible, top)
+📁 __test_data__/         # Special Python directories
+📁 __test_results__/      # Special Python directories
+📁 .cursor/               # Hidden config (requires show hidden)
+📁 .git/                  # Hidden config (requires show hidden)
+📁 .github/               # Hidden config (requires show hidden)
+📁 .nx/                   # Hidden config (requires show hidden)
+📁 .pytest_cache/         # Hidden config (requires show hidden)
+📁 .vscode/               # Hidden config (requires show hidden)
+📁 app/                   # Source code
+📁 docs/                  # Documentation
+📁 node_modules/          # Dependencies (required name)
+📁 packages/              # Source code (main content)
+📁 tests/                 # Test code
+📄 .env                   # Hidden config files
+📄 .gitignore             # Hidden config files
+📄 .prettierrc            # Hidden config files
+📄 config.json            # Config files
+📄 package.json           # Config files
+📄 README.md              # Documentation
+```
+
+## Validation and Enforcement
+
+### File Naming Validation Script
+```bash
+# Validate file naming conventions
+cd packages/spark-app
+find . -name "*.py" | while read file; do
+    # Check test file naming
+    if [[ $file == *"/test"* ]] && [[ ! $(basename "$file") =~ ^test_.+\.py$ ]]; then
+        echo "❌ Invalid test file name: $file"
+    fi
+
+    # Check indicator naming
+    if [[ $file == *"/indicators/"* ]] && [[ $(basename "$file") != "base_indicator.py" ]] && [[ $(basename "$file") != "indicator_factory.py" ]] && [[ ! $(basename "$file") =~ .+_indicator\.py$ ]]; then
+        echo "❌ Invalid indicator file name: $file"
+    fi
+
+    # Check connector naming
+    if [[ $file == *"/connectors/"* ]] && [[ $(basename "$file") != "base_connector.py" ]] && [[ $(basename "$file") != "connector_factory.py" ]] && [[ ! $(basename "$file") =~ .+_connector\.py$ ]]; then
+        echo "❌ Invalid connector file name: $file"
+    fi
+done
+```
+
+### Directory Structure Validation
+```bash
+# Check for proper directory prefixes
+find . -maxdepth 2 -type d | while read dir; do
+    basename_dir=$(basename "$dir")
+
+    # Check for proper test utility directories
+    if [[ $dir == *"/tests/"* ]] && [[ $basename_dir =~ ^[a-z] ]] && [[ ! $basename_dir =~ ^(unit|integration|backtesting)$ ]]; then
+        if [[ ! $basename_dir =~ ^_.+ ]]; then
+            echo "⚠️  Test utility directory should start with underscore: $dir"
+        fi
+    fi
+done
+```
+
+## Benefits
+
+### ✅ Developer Experience
+- **Quick access** to frequently needed generated content
+- **Logical grouping** of related files
+- **Predictable naming** makes files easy to find
+
+### ✅ Tool Compatibility
+- **All standard conventions** preserved
+- **Cross-platform** consistency
+- **IDE integration** works seamlessly
+
+### ✅ Clean Organization
+- **Content sorted logically** in file explorers
+- **Hidden files** stay hidden until needed
+- **Generated content** easily accessible but separated
+
+### ✅ Maintainability
+- **Clear patterns** reduce cognitive load
+- **Consistent naming** across the codebase
+- **Easy to extend** with new components
+
+## Examples by File Type
+
+### ✅ Correct Naming Examples
+```python
+# Indicators
+rsi_indicator.py              # RSI algorithm implementation
+macd_indicator.py             # MACD algorithm implementation
+bollinger_bands_indicator.py  # Bollinger Bands implementation
+
+# Connectors
+hyperliquid_connector.py      # Hyperliquid exchange connector
+coinbase_connector.py         # Coinbase exchange connector
+
+# Tests
+test_rsi_indicator.py         # Tests for RSI indicator
+test_strategy_manager.py      # Tests for strategy manager
+
+# Configuration
+strategy_config.py            # Strategy configuration classes
+risk_manager.py               # Risk management core
+```
+
+### ❌ Naming Anti-Patterns
+```python
+# Avoid these patterns
+RSI.py                        # Should be rsi_indicator.py
+Strategy.py                   # Should be strategy_manager.py or specific strategy
+test.py                       # Should be test_specific_component.py
+utils.py                      # Should be specific_utility.py
+helpers.py                    # Should be specific_helper.py
+temp.py                       # Should have descriptive name
+config.py                     # Should be strategy_config.py or specific config
+```
+
+## References
+
+- [Project Structure](mdc:README.md) - Main project organization
+- [Python Best Practices](mdc:.cursor/rules/development/python-best-practices.mdc) - Code organization
+- [Testing Patterns](mdc:packages/spark-app/tests/README.md) - Test file organization

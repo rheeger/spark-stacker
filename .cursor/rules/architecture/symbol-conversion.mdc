@@ -1,0 +1,243 @@
+---
+description: Guide for symbol conversion architecture between standard format and exchange-specific formats in trading applications
+globs:
+alwaysApply: false
+---
+# Symbol Conversion Architecture
+
+## Core Principle
+
+Use **standardized symbol format** in configuration ("ETH-USD", "BTC-USD") and **automatically convert** to exchange-specific formats at runtime.
+
+## Symbol Format Standards
+
+### Configuration Format (Standard)
+- **Always use**: "SYMBOL-USD" format
+- **Examples**: "ETH-USD", "BTC-USD", "SOL-USD"
+- **Benefits**: Consistent, readable, exchange-agnostic
+
+### Exchange-Specific Formats
+- **Hyperliquid**: "ETH" (base symbol only)
+- **Coinbase**: "ETH-USD" (unchanged)
+- **Kraken**: "ETHUSD" (concatenated)
+
+## Key Files
+
+### Symbol Conversion Utilities
+- [SymbolConverter](mdc:packages/spark-app/app/core/symbol_converter.py) - Central symbol conversion utilities
+
+### Usage in Components
+- [StrategyManager](mdc:packages/spark-app/app/core/strategy_manager.py) - Uses symbol conversion in `_prepare_indicator_data()`
+- [TradingEngine](mdc:packages/spark-app/app/core/trading_engine.py) - Converts symbols before trade execution
+- [BaseConnector](mdc:packages/spark-app/app/connectors/base_connector.py) - Exchange-specific implementations
+
+## Implementation Rules
+
+### 1. Symbol Conversion Utilities
+
+```python
+from app.core.symbol_converter import convert_symbol_for_exchange
+
+# Convert standard format to exchange-specific
+hyperliquid_symbol = convert_symbol_for_exchange("ETH-USD", "hyperliquid")  # Returns "ETH"
+coinbase_symbol = convert_symbol_for_exchange("ETH-USD", "coinbase")        # Returns "ETH-USD"
+```
+
+### 2. Configuration Rules
+
+#### ✅ Correct Configuration
+```json
+{
+  "strategies": [
+    {
+      "market": "ETH-USD",           // Standard format
+      "exchange": "hyperliquid"      // Exchange handles conversion
+    }
+  ]
+}
+```
+
+#### ❌ Anti-Patterns
+```json
+{
+  "strategies": [
+    {
+      "market": "ETH",              // ❌ Exchange-specific format
+      "exchange": "hyperliquid"
+    },
+    {
+      "market": "ETHUSD",           // ❌ Concatenated format
+      "exchange": "kraken"
+    }
+  ]
+}
+```
+
+### 3. Symbol Conversion Flow
+
+1. **Configuration** uses standard "SYMBOL-USD" format
+2. **Strategy Manager** passes standard symbol to data preparation
+3. **Symbol Converter** transforms to exchange-specific format
+4. **Connector** uses exchange-specific format for API calls
+5. **Signals** retain original standard format for consistency
+
+### 4. Data Caching Strategy
+
+Use **market + timeframe** for cache keys (not exchange-specific symbols):
+```python
+# ✅ Correct: Use standard format for caching
+cache_key = f"{market}_{timeframe}"  # "ETH-USD_4h"
+
+# ❌ Wrong: Exchange-specific symbols break cache sharing
+cache_key = f"{exchange_symbol}_{timeframe}"  # "ETH_4h" (Hyperliquid) vs "ETH-USD_4h" (Coinbase)
+```
+
+## Symbol Conversion Utilities Implementation
+
+### Core Functions
+
+```python
+def convert_symbol_for_exchange(symbol: str, exchange: str) -> str:
+    """Convert standard symbol format to exchange-specific format."""
+
+def reverse_symbol_conversion(exchange_symbol: str, exchange: str) -> str:
+    """Convert exchange-specific symbol back to standard format."""
+
+def validate_symbol_format(symbol: str) -> bool:
+    """Validate that symbol follows standard format (SYMBOL-USD)."""
+```
+
+### Exchange Mappings
+
+```python
+EXCHANGE_SYMBOL_FORMATS = {
+    "hyperliquid": {
+        "format": "base_only",
+        "separator": None,
+        "example": "ETH-USD → ETH"
+    },
+    "coinbase": {
+        "format": "unchanged",
+        "separator": "-",
+        "example": "ETH-USD → ETH-USD"
+    },
+    "kraken": {
+        "format": "concatenated",
+        "separator": "",
+        "example": "ETH-USD → ETHUSD"
+    }
+}
+```
+
+## Error Handling
+
+### Symbol Validation
+```python
+# Validate symbol format before conversion
+if not symbol.endswith("-USD"):
+    raise ValueError(f"Invalid symbol format: {symbol}. Use 'SYMBOL-USD' format.")
+
+if "-" not in symbol:
+    raise ValueError(f"Symbol must contain hyphen: {symbol}")
+```
+
+### Exchange Support
+```python
+# Check exchange support
+if exchange not in SUPPORTED_EXCHANGES:
+    logger.warning(f"Unknown exchange: {exchange}. Using symbol as-is.")
+    return symbol
+```
+
+### Conversion Logging
+```python
+logger.debug(f"Converting symbol {symbol} for {exchange}: {converted_symbol}")
+```
+
+## Testing Requirements
+
+### Unit Tests
+- **Symbol conversion** for each supported exchange
+- **Reverse conversion** to standard format
+- **Invalid symbol format** handling
+- **Unknown exchange** fallback behavior
+- **Symbol validation** edge cases
+
+### Integration Tests
+- **End-to-end symbol conversion** in trading pipeline
+- **Cache key consistency** across exchanges
+- **Multi-exchange strategy** execution
+- **Data sharing** between strategies on different exchanges
+
+## Development Guidelines
+
+### Adding New Exchange Support
+
+1. **Add exchange mapping** to `EXCHANGE_SYMBOL_FORMATS`
+2. **Implement conversion logic** in `convert_symbol_for_exchange()`
+3. **Add reverse conversion** in `reverse_symbol_conversion()`
+4. **Create unit tests** for new exchange
+5. **Update documentation** with examples
+
+### Symbol Format Evolution
+
+1. **Never change standard format** without migration plan
+2. **Maintain backward compatibility** during transitions
+3. **Update all conversion utilities** simultaneously
+4. **Test across all exchanges** before deployment
+
+### Performance Considerations
+
+1. **Cache conversion results** for frequently used symbols
+2. **Validate symbols once** at configuration load time
+3. **Use batch conversion** for multiple symbols
+4. **Avoid repeated conversions** in tight loops
+
+## Common Patterns
+
+### Strategy Manager Usage
+```python
+def _prepare_indicator_data(self, market: str, timeframe: str, exchange: str):
+    # Convert standard symbol to exchange-specific format
+    exchange_symbol = convert_symbol_for_exchange(market, exchange)
+
+    # Use exchange symbol for data fetching
+    data = self.data_manager.get_historical_data(exchange_symbol, timeframe)
+
+    # Use standard symbol for caching
+    cache_key = f"{market}_{timeframe}"
+```
+
+### Trading Engine Usage
+```python
+def _execute_trade(self, signal, position_size):
+    # Convert symbol for specific exchange
+    exchange_symbol = convert_symbol_for_exchange(signal.market, signal.exchange)
+
+    # Execute with exchange-specific symbol
+    order = connector.place_order(exchange_symbol, position_size, signal.action)
+```
+
+## Validation Scripts
+
+### Configuration Validation
+```bash
+# Test symbol conversion for all configured strategies
+.venv/bin/python -c "
+from app.core.symbol_converter import convert_symbol_for_exchange
+import json
+
+with open('../shared/config.json') as f:
+    config = json.load(f)
+
+for strategy in config['strategies']:
+    symbol = convert_symbol_for_exchange(strategy['market'], strategy['exchange'])
+    print(f'{strategy['market']} → {symbol} ({strategy['exchange']})')
+"
+```
+
+## References
+
+- [Symbol Conversion Documentation](mdc:packages/shared/docs/symbol-conversion.md)
+- [Multi-Exchange Support Guide](mdc:packages/shared/docs/connectors.md)
+- [Configuration Examples](mdc:packages/shared/config.json)
