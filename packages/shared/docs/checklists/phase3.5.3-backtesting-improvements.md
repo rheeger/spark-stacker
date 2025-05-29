@@ -22,21 +22,21 @@ indicators. This phase updates the CLI to:
 
 ### 1.1 Configuration Integration
 
-- [ ] **Add config.json loading capabilities** (`packages/spark-app/tests/_utils/cli.py`)
+- [x] **Add config.json loading capabilities** (`packages/spark-app/tests/_utils/cli.py`)
 
-  - [ ] Add `--config` option to specify config file path
-  - [ ] Add `load_config()` function to parse config.json
-  - [ ] Add `validate_config()` function for configuration validation
-  - [ ] Add environment variable expansion (${VARIABLE} support)
-  - [ ] Add fallback to default config path (`../shared/config.json`)
-  - [ ] Add error handling for missing or invalid config files
+  - [x] Add `--config` option to specify config file path
+  - [x] Add `load_config()` function to parse config.json
+  - [x] Add `validate_config()` function for configuration validation
+  - [x] Add environment variable expansion (${VARIABLE} support)
+  - [x] Add fallback to default config path (`../shared/config.json`)
+  - [x] Add error handling for missing or invalid config files
 
-- [ ] **Create strategy discovery utilities** (`packages/spark-app/tests/_utils/cli.py`)
-  - [ ] Add `list_strategies()` function to show available strategies from config
-  - [ ] Add `get_strategy_config()` function to extract specific strategy config
-  - [ ] Add `validate_strategy_config()` function for strategy validation
-  - [ ] Add strategy filtering by exchange, market, or enabled status
-  - [ ] Add detailed strategy information display (indicators, timeframe, position sizing)
+- [x] **Create strategy discovery utilities** (`packages/spark-app/tests/_utils/cli.py`)
+  - [x] Add `list_strategies()` function to show available strategies from config
+  - [x] Add `get_strategy_config()` function to extract specific strategy config
+  - [x] Add `validate_strategy_config()` function for strategy validation
+  - [x] Add strategy filtering by exchange, market, or enabled status
+  - [x] Add detailed strategy information display (indicators, timeframe, position sizing)
 
 ### 1.2 Strategy-Based Commands
 
