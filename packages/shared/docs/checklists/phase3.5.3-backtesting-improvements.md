@@ -40,31 +40,31 @@ indicators. This phase updates the CLI to:
 
 ### 1.2 Strategy-Based Commands
 
-- [ ] **Add strategy backtesting command** (`packages/spark-app/tests/_utils/cli.py`)
+- [x] **Add strategy backtesting command** (`packages/spark-app/tests/_utils/cli.py`)
 
-  - [ ] Create `@cli.command("strategy")` for strategy-specific backtesting
-  - [ ] Add `--strategy-name` parameter to select from config
-  - [ ] **Run multi-scenario testing by default** (all 7 synthetic scenarios + real data)
-  - [ ] Add `--days` parameter to set testing duration for all scenarios
-  - [ ] Add `--scenarios` parameter to select specific scenarios (e.g., "bull,bear,real")
-  - [ ] Add `--scenario-only` flag to run single scenario instead of full suite
-  - [ ] Add `--override-timeframe` option to temporarily change timeframe
-  - [ ] Add `--override-market` option for different market testing
-  - [ ] Add `--override-position-size` option for testing different sizing
-  - [ ] Add `--use-real-data` flag for live data vs synthetic data (legacy compatibility)
-  - [ ] Add validation that strategy exists in config
-  - [ ] Add `--export-data` flag to save scenario data for external analysis
+  - [x] Create `@cli.command("strategy")` for strategy-specific backtesting
+  - [x] Add `--strategy-name` parameter to select from config
+  - [x] **Run multi-scenario testing by default** (all 7 synthetic scenarios + real data)
+  - [x] Add `--days` parameter to set testing duration for all scenarios
+  - [x] Add `--scenarios` parameter to select specific scenarios (e.g., "bull,bear,real")
+  - [x] Add `--scenario-only` flag to run single scenario instead of full suite
+  - [x] Add `--override-timeframe` option to temporarily change timeframe
+  - [x] Add `--override-market` option for different market testing
+  - [x] Add `--override-position-size` option for testing different sizing
+  - [x] Add `--use-real-data` flag for live data vs synthetic data (legacy compatibility)
+  - [x] Add validation that strategy exists in config
+  - [x] Add `--export-data` flag to save scenario data for external analysis
 
-- [ ] **Add strategy comparison command** (`packages/spark-app/tests/_utils/cli.py`)
-  - [ ] Create `@cli.command("compare-strategies")` for multi-strategy comparison
-  - [ ] **Run all strategies through multi-scenario testing for fair comparison**
-  - [ ] Add `--strategy-names` parameter for comma-separated strategy list
-  - [ ] Add `--all-strategies` flag to compare all enabled strategies
-  - [ ] Add `--same-market` flag to filter strategies by market
-  - [ ] Add `--same-exchange` flag to filter strategies by exchange
-  - [ ] Add strategy performance ranking and comparison metrics
-  - [ ] **Include cross-scenario robustness scoring in comparison**
-  - [ ] Add `--scenarios` parameter to limit comparison to specific scenarios
+- [x] **Add strategy comparison command** (`packages/spark-app/tests/_utils/cli.py`)
+  - [x] Create `@cli.command("compare-strategies")` for multi-strategy comparison
+  - [x] **Run all strategies through multi-scenario testing for fair comparison**
+  - [x] Add `--strategy-names` parameter for comma-separated strategy list
+  - [x] Add `--all-strategies` flag to compare all enabled strategies
+  - [x] Add `--same-market` flag to filter strategies by market
+  - [x] Add `--same-exchange` flag to filter strategies by exchange
+  - [x] Add strategy performance ranking and comparison metrics
+  - [x] **Include cross-scenario robustness scoring in comparison**
+  - [x] Add `--scenarios` parameter to limit comparison to specific scenarios
 
 ### 1.3 Enhanced List Commands
 
@@ -81,12 +81,333 @@ indicators. This phase updates the CLI to:
   - [ ] Show position sizing method and parameters per strategy
   - [ ] Add filtering and sorting options (by market, exchange, performance)
 
+### 1.4 CLI Modularization and Refactoring ⚠️ **INTERRUPT - CRITICAL REFACTOR NEEDED**
+
+**Problem**: The `cli.py` file is becoming a monolithic file with too much logic, making it
+difficult to maintain, test, and extend. Before implementing the remaining features, we need to
+modularize the CLI architecture.
+
+**Objective**: Break down the CLI into focused, single-responsibility modules with clear separation
+of concerns.
+
+#### 1.4.1 CLI Architecture Redesign
+
+- [ ] **Create modular CLI directory structure** (`packages/spark-app/tests/_utils/cli/` - NEW DIR)
+
+  ```
+  cli/
+  ├── __init__.py                   # CLI package initialization
+  ├── main.py                       # Main CLI entry point (refactored from cli.py)
+  ├── commands/                     # Command handler modules
+  │   ├── __init__.py
+  │   ├── strategy_commands.py      # Strategy backtesting commands
+  │   ├── indicator_commands.py     # Legacy indicator commands
+  │   ├── comparison_commands.py    # Strategy/indicator comparison commands
+  │   ├── list_commands.py          # List strategies/indicators commands
+  │   └── utility_commands.py       # Config validation, migration commands
+  ├── core/                         # Core business logic modules
+  │   ├── __init__.py
+  │   ├── config_manager.py         # Configuration loading and validation
+  │   ├── data_manager.py           # Data fetching and caching
+  │   ├── backtest_orchestrator.py  # Coordinates backtesting workflow
+  │   └── scenario_manager.py       # Multi-scenario testing coordination
+  ├── managers/                     # Specialized manager classes
+  │   ├── __init__.py
+  │   ├── strategy_backtest_manager.py    # Strategy-specific backtesting
+  │   ├── indicator_backtest_manager.py   # Legacy indicator backtesting
+  │   ├── scenario_backtest_manager.py    # Multi-scenario execution
+  │   └── comparison_manager.py           # Strategy comparison logic
+  ├── reporting/                    # Report generation modules
+  │   ├── __init__.py
+  │   ├── strategy_reporter.py      # Strategy-specific reporting
+  │   ├── comparison_reporter.py    # Strategy comparison reports
+  │   ├── scenario_reporter.py      # Multi-scenario reporting
+  │   └── interactive_reporter.py   # Interactive trade selection features
+  ├── validation/                   # Validation and error handling
+  │   ├── __init__.py
+  │   ├── config_validator.py       # Configuration validation
+  │   ├── strategy_validator.py     # Strategy-specific validation
+  │   └── data_validator.py         # Data quality validation
+  └── utils/                        # Utility functions and helpers
+      ├── __init__.py
+      ├── cli_helpers.py            # CLI utility functions
+      ├── output_formatters.py      # Console output formatting
+      └── progress_trackers.py      # Progress tracking utilities
+  ```
+
+- [ ] **Migrate main CLI entry point** (`packages/spark-app/tests/_utils/cli/main.py` - NEW FILE)
+
+  - [ ] Move click app definition from `cli.py`
+  - [ ] Keep only command definitions and routing logic
+  - [ ] Import command handlers from respective modules
+  - [ ] Add global CLI options (--config, --verbose, --debug)
+  - [ ] Add CLI initialization and setup logic
+  - [ ] Maintain backward compatibility with existing `cli.py` script
+
+- [ ] **Create backward compatibility shim** (`packages/spark-app/tests/_utils/cli.py` - UPDATE)
+  - [ ] Replace existing monolithic code with import from `cli.main`
+  - [ ] Maintain all existing command signatures and behavior
+  - [ ] Add deprecation notice about file location change
+  - [ ] Provide migration path documentation
+
+#### 1.4.2 Command Handler Modules
+
+- [ ] **Create strategy command handlers**
+      (`packages/spark-app/tests/_utils/cli/commands/strategy_commands.py` - NEW FILE)
+
+  - [ ] Move `@cli.command("strategy")` implementation
+  - [ ] Move `@cli.command("compare-strategies")` implementation
+  - [ ] Add strategy-specific parameter validation
+  - [ ] Import and use appropriate manager classes
+  - [ ] Handle strategy command error cases
+  - [ ] Add comprehensive logging for strategy commands
+
+- [ ] **Create indicator command handlers**
+      (`packages/spark-app/tests/_utils/cli/commands/indicator_commands.py` - NEW FILE)
+
+  - [ ] Move existing indicator commands (`demo`, `real-data`, `compare`, `compare-popular`)
+  - [ ] Add deprecation warnings with strategy migration suggestions
+  - [ ] Maintain full backward compatibility
+  - [ ] Add `--suggest-strategy` functionality
+  - [ ] Import and use IndicatorBacktestManager
+
+- [ ] **Create comparison command handlers**
+      (`packages/spark-app/tests/_utils/cli/commands/comparison_commands.py` - NEW FILE)
+
+  - [ ] Consolidate all comparison logic (strategy and indicator)
+  - [ ] Add unified comparison interface
+  - [ ] Handle cross-type comparisons (strategy vs indicator)
+  - [ ] Add comparison result caching
+  - [ ] Implement parallel comparison execution
+
+- [ ] **Create list command handlers**
+      (`packages/spark-app/tests/_utils/cli/commands/list_commands.py` - NEW FILE)
+
+  - [ ] Move `list-strategies` and `list-indicators` commands
+  - [ ] Add advanced filtering and sorting logic
+  - [ ] Add formatted output with tables and colors
+  - [ ] Add export functionality for lists
+  - [ ] Add interactive selection for subsequent commands
+
+- [ ] **Create utility command handlers**
+      (`packages/spark-app/tests/_utils/cli/commands/utility_commands.py` - NEW FILE)
+  - [ ] Add `validate-config` command for configuration checking
+  - [ ] Add `migrate-config` command for config file updates
+  - [ ] Add `diagnose` command for troubleshooting
+  - [ ] Add `clean-cache` command for clearing cached data
+  - [ ] Add `export-examples` command for generating example configs
+
+#### 1.4.3 Core Business Logic Modules
+
+- [ ] **Create configuration manager**
+      (`packages/spark-app/tests/_utils/cli/core/config_manager.py` - NEW FILE)
+
+  - [ ] Centralize all configuration loading logic
+  - [ ] Add configuration caching and reload functionality
+  - [ ] Handle environment variable expansion
+  - [ ] Add configuration merging (global + strategy overrides)
+  - [ ] Add configuration versioning and migration support
+  - [ ] Provide configuration validation and repair utilities
+
+- [ ] **Create data manager** (`packages/spark-app/tests/_utils/cli/core/data_manager.py` - NEW
+      FILE)
+
+  - [ ] Centralize all data fetching logic (real and synthetic)
+  - [ ] Add intelligent caching across multiple runs
+  - [ ] Handle multi-timeframe data requirements
+  - [ ] Add data quality validation and cleanup
+  - [ ] Implement data source failover and retry logic
+  - [ ] Add data export and import functionality
+
+- [ ] **Create backtest orchestrator**
+      (`packages/spark-app/tests/_utils/cli/core/backtest_orchestrator.py` - NEW FILE)
+
+  - [ ] Coordinate overall backtesting workflow
+  - [ ] Handle resource allocation and cleanup
+  - [ ] Manage parallel execution of multiple backtests
+  - [ ] Add progress tracking and user updates
+  - [ ] Handle interruption and graceful shutdown
+  - [ ] Coordinate between different manager types
+
+- [ ] **Create scenario manager** (`packages/spark-app/tests/_utils/cli/core/scenario_manager.py` -
+      NEW FILE)
+  - [ ] Centralize multi-scenario testing logic
+  - [ ] Coordinate scenario data generation
+  - [ ] Handle scenario execution scheduling
+  - [ ] Add scenario result aggregation
+  - [ ] Manage scenario-specific configuration overrides
+  - [ ] Add scenario performance analysis and ranking
+
+#### 1.4.4 Specialized Manager Classes
+
+- [ ] **Refactor strategy backtest manager**
+      (`packages/spark-app/tests/_utils/cli/managers/strategy_backtest_manager.py` - MOVE FROM
+      SECTION 2.1)
+
+  - [ ] Move from `tests/_utils/strategy_backtest_manager.py`
+  - [ ] Add integration with new core modules
+  - [ ] Add enhanced error handling and recovery
+  - [ ] Add strategy-specific optimization features
+  - [ ] Add strategy performance caching
+  - [ ] Add strategy result comparison utilities
+
+- [ ] **Refactor indicator backtest manager**
+      (`packages/spark-app/tests/_utils/cli/managers/indicator_backtest_manager.py` - MOVE EXISTING)
+
+  - [ ] Move existing IndicatorBacktestManager logic
+  - [ ] Add integration with new architecture
+  - [ ] Maintain compatibility with existing functionality
+  - [ ] Add enhanced reporting features
+  - [ ] Add indicator performance caching
+
+- [ ] **Create scenario backtest manager**
+      (`packages/spark-app/tests/_utils/cli/managers/scenario_backtest_manager.py` - MOVE FROM
+      SECTION 2.4)
+
+  - [ ] Move from `tests/_utils/scenario_backtest_manager.py`
+  - [ ] Add integration with core scenario manager
+  - [ ] Add parallel scenario execution
+  - [ ] Add scenario result aggregation
+  - [ ] Add scenario-specific performance metrics
+
+- [ ] **Create comparison manager**
+      (`packages/spark-app/tests/_utils/cli/managers/comparison_manager.py` - NEW FILE)
+  - [ ] Centralize all comparison logic
+  - [ ] Handle strategy-to-strategy comparisons
+  - [ ] Handle indicator-to-indicator comparisons
+  - [ ] Handle cross-type comparisons
+  - [ ] Add statistical comparison features
+  - [ ] Add comparison result export functionality
+
+#### 1.4.5 Reporting Module Architecture
+
+- [ ] **Create strategy reporter**
+      (`packages/spark-app/tests/_utils/cli/reporting/strategy_reporter.py` - NEW FILE)
+
+  - [ ] Centralize strategy-specific reporting logic
+  - [ ] Add comprehensive strategy report generation
+  - [ ] Handle strategy configuration display
+  - [ ] Add strategy performance breakdown
+  - [ ] Add strategy optimization suggestions
+  - [ ] Add export functionality for strategy results
+
+- [ ] **Create comparison reporter**
+      (`packages/spark-app/tests/_utils/cli/reporting/comparison_reporter.py` - NEW FILE)
+
+  - [ ] Handle all types of comparison reporting
+  - [ ] Add side-by-side comparison displays
+  - [ ] Add ranking and scoring displays
+  - [ ] Add statistical significance testing
+  - [ ] Add comparison visualization generation
+  - [ ] Add comparison result export
+
+- [ ] **Create scenario reporter**
+      (`packages/spark-app/tests/_utils/cli/reporting/scenario_reporter.py` - NEW FILE)
+
+  - [ ] Handle multi-scenario reporting
+  - [ ] Add scenario performance comparison tables
+  - [ ] Add scenario robustness analysis
+  - [ ] Add scenario-specific visualizations
+  - [ ] Add scenario correlation analysis
+  - [ ] Add scenario optimization recommendations
+
+- [ ] **Create interactive reporter**
+      (`packages/spark-app/tests/_utils/cli/reporting/interactive_reporter.py` - NEW FILE)
+  - [ ] Centralize interactive report generation
+  - [ ] Add trade selection and highlighting features
+  - [ ] Add JavaScript component generation
+  - [ ] Add responsive design features
+  - [ ] Add accessibility features
+  - [ ] Add interactive chart configuration
+
+#### 1.4.6 Validation Module Architecture
+
+- [ ] **Create config validator**
+      (`packages/spark-app/tests/_utils/cli/validation/config_validator.py` - MOVE FROM SECTION 4.1)
+
+  - [ ] Move from `tests/_utils/config_validation.py`
+  - [ ] Add comprehensive configuration validation
+  - [ ] Add configuration repair suggestions
+  - [ ] Add configuration compatibility checking
+  - [ ] Add configuration performance analysis
+  - [ ] Add configuration optimization recommendations
+
+- [ ] **Create strategy validator**
+      (`packages/spark-app/tests/_utils/cli/validation/strategy_validator.py` - NEW FILE)
+
+  - [ ] Add strategy-specific validation logic
+  - [ ] Validate strategy-indicator compatibility
+  - [ ] Validate strategy timeframe consistency
+  - [ ] Validate strategy position sizing
+  - [ ] Add strategy feasibility analysis
+  - [ ] Add strategy risk assessment
+
+- [ ] **Create data validator**
+      (`packages/spark-app/tests/_utils/cli/validation/data_validator.py` - NEW FILE)
+  - [ ] Add data quality validation
+  - [ ] Add data completeness checking
+  - [ ] Add data consistency validation
+  - [ ] Add data format validation
+  - [ ] Add data source reliability assessment
+  - [ ] Add data preprocessing validation
+
+#### 1.4.7 Migration and Integration
+
+- [ ] **Update all import statements throughout the codebase**
+
+  - [ ] Update test files to use new module structure
+  - [ ] Update documentation references
+  - [ ] Update example scripts and tutorials
+  - [ ] Add import compatibility layer for transition period
+  - [ ] Add migration warnings and guidance
+
+- [ ] **Add comprehensive module testing** (`packages/spark-app/tests/_utils/cli/test_modules/` -
+      NEW DIR)
+
+  - [ ] Create unit tests for each new module
+  - [ ] Add integration tests for module interactions
+  - [ ] Add performance tests for new architecture
+  - [ ] Add backward compatibility tests
+  - [ ] Add error handling and edge case tests
+
+- [ ] **Update CLI documentation** (`packages/spark-app/tests/_utils/cli/README.md` - NEW FILE)
+  - [ ] Document new modular architecture
+  - [ ] Add module interaction diagrams
+  - [ ] Document extension points for new features
+  - [ ] Add troubleshooting guide for common issues
+  - [ ] Document best practices for adding new commands
+
+#### 1.4.8 Benefits of Modular Architecture
+
+**Maintainability**:
+
+- Single-responsibility modules are easier to understand and modify
+- Clear separation of concerns reduces coupling
+- Individual modules can be tested and debugged independently
+
+**Extensibility**:
+
+- New commands can be added without modifying existing code
+- New report types can be added through the reporting module system
+- New validation rules can be added through the validation system
+
+**Performance**:
+
+- Lazy loading of modules reduces startup time
+- Caching can be implemented at the module level
+- Parallel execution can be optimized per module
+
+**Testing**:
+
+- Each module can have focused unit tests
+- Integration testing becomes more systematic
+- Mocking and stubbing becomes easier with clear interfaces
+
 ## 🏗️ **2. Strategy Backtesting Engine Integration**
 
 ### 2.1 Strategy Configuration Processing
 
-- [ ] **Create StrategyBacktestManager class**
-      (`packages/spark-app/tests/_utils/strategy_backtest_manager.py` - NEW FILE)
+- [ ] **Enhanced StrategyBacktestManager** (now in `cli/managers/strategy_backtest_manager.py`)
 
   - [ ] Initialize with StrategyConfig object from config.json
   - [ ] Load and validate all strategy indicators from config
@@ -94,53 +415,59 @@ indicators. This phase updates the CLI to:
   - [ ] Configure data sources based on strategy market and exchange
   - [ ] Handle strategy-specific timeframe and data requirements
   - [ ] Add comprehensive error handling and validation
+  - [ ] **Integrate with new ConfigManager and DataManager modules**
+  - [ ] **Use new validation modules for comprehensive strategy validation**
 
-- [ ] **Integrate with existing IndicatorBacktestManager**
-      (`packages/spark-app/tests/_utils/cli.py`)
-  - [ ] Update CLI to use StrategyBacktestManager for strategy commands
-  - [ ] Maintain IndicatorBacktestManager for indicator-only commands
-  - [ ] Add factory method to choose appropriate manager based on command
-  - [ ] Ensure consistent data handling between both managers
+- [ ] **Integrate with modular architecture** (updated in `cli/commands/strategy_commands.py`)
+  - [ ] Update strategy commands to use new StrategyBacktestManager location
+  - [ ] Use ConfigManager for configuration handling
+  - [ ] Use DataManager for data operations
+  - [ ] Use StrategyValidator for validation
+  - [ ] Add factory method in BacktestOrchestrator to choose appropriate manager
+  - [ ] Ensure consistent data handling through DataManager module
 
 ### 2.2 Position Sizing Integration
 
-- [ ] **Add strategy position sizing support** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add strategy position sizing support** (in `cli/core/config_manager.py` and
+      `cli/managers/strategy_backtest_manager.py`)
 
-  - [ ] Load position sizing config from strategy configuration
+  - [ ] Load position sizing config from strategy configuration through ConfigManager
   - [ ] Support strategy-specific position sizing overrides
   - [ ] Handle position sizing inheritance from global config
-  - [ ] Add validation for position sizing parameters
-  - [ ] Include position sizing details in backtest reports
-  - [ ] Add CLI options to override position sizing for testing
+  - [ ] Add validation for position sizing parameters through StrategyValidator
+  - [ ] Include position sizing details in backtest reports via StrategyReporter
+  - [ ] Add CLI options to override position sizing for testing in strategy commands
 
-- [ ] **Create position sizing validation utilities**
-      (`packages/spark-app/tests/_utils/position_sizing_utils.py` - NEW FILE)
+- [ ] **Enhanced position sizing validation utilities** (now in
+      `cli/validation/strategy_validator.py`)
   - [ ] Add `validate_position_sizing_config()` function
   - [ ] Add `merge_position_sizing_config()` for strategy inheritance
   - [ ] Add `calculate_effective_position_size()` for report generation
   - [ ] Add position sizing comparison utilities for strategy comparison
   - [ ] Add position sizing impact analysis for different configurations
+  - [ ] **Integrate with ConfigManager for configuration access**
 
 ### 2.3 Data Management Updates
 
-- [ ] **Enhance data fetching for strategies** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Enhanced data fetching for strategies** (now in `cli/core/data_manager.py`)
 
   - [ ] Use strategy's market and exchange for data fetching
   - [ ] Respect strategy's timeframe for data requirements
   - [ ] Add multi-timeframe data support for strategies with mixed indicator timeframes
   - [ ] Cache data efficiently for multiple strategies on same market
-  - [ ] Add data validation specific to strategy requirements
+  - [ ] Add data validation specific to strategy requirements through DataValidator
+  - [ ] **Centralize all data operations in DataManager module**
 
-- [ ] **Update synthetic data generation** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Update synthetic data generation** (now in `cli/core/data_manager.py`)
   - [ ] Generate data appropriate for strategy's market and timeframe
   - [ ] Create market scenario data for strategy testing (trending, sideways, volatile)
   - [ ] Add support for multi-timeframe synthetic data generation
   - [ ] Include volume and other market data required by strategy indicators
+  - [ ] **Integrate with ScenarioManager for scenario-specific data generation**
 
 ### 2.4 Multi-Scenario Testing Framework
 
-- [ ] **Create comprehensive market scenario generator**
-      (`packages/spark-app/tests/_utils/market_scenario_generator.py` - NEW FILE)
+- [ ] **Enhanced market scenario generator** (now in `cli/core/scenario_manager.py`)
 
   - [ ] Add **bull market scenario** (consistent uptrend with 60-80% up days)
   - [ ] Add **bear market scenario** (consistent downtrend with 60-80% down days)
@@ -150,29 +477,33 @@ indicators. This phase updates the CLI to:
   - [ ] Add **choppy market scenario** (frequent direction changes, whipsaws)
   - [ ] Add **gap-heavy scenario** (frequent price gaps, simulating news events)
   - [ ] Ensure all scenarios generate data for the exact same timeframe duration
+  - [ ] **Integrate with DataManager for centralized data operations**
 
-- [ ] **Add real data parallel testing** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add real data parallel testing** (in `cli/core/data_manager.py`)
 
   - [ ] Fetch real market data for the same symbol and timeframe duration
   - [ ] Ensure real data covers the exact same time period as synthetic scenarios
   - [ ] Add fallback to alternative time periods if recent data insufficient
   - [ ] Cache real data to avoid repeated API calls during testing
-  - [ ] Add data quality validation (sufficient candles, no gaps)
+  - [ ] Add data quality validation (sufficient candles, no gaps) through DataValidator
+  - [ ] **Coordinate with ScenarioManager for scenario execution**
 
-- [ ] **Create scenario-based backtesting pipeline**
-      (`packages/spark-app/tests/_utils/scenario_backtest_manager.py` - NEW FILE)
+- [ ] **Enhanced scenario-based backtesting pipeline** (now in
+      `cli/managers/scenario_backtest_manager.py`)
   - [ ] Run strategy against all synthetic market scenarios
   - [ ] Run strategy against real market data for same duration
   - [ ] Collect performance metrics for each scenario independently
   - [ ] Ensure consistent position sizing and risk parameters across scenarios
   - [ ] Add scenario labeling and metadata tracking
   - [ ] Implement parallel execution for faster scenario testing
+  - [ ] **Integrate with BacktestOrchestrator for workflow coordination**
+  - [ ] **Use ScenarioReporter for comprehensive scenario reporting**
 
 ## 🏗️ **3. Enhanced Reporting System**
 
 ### 3.1 Strategy Report Generation
 
-- [ ] **Create comprehensive strategy reports** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Create comprehensive strategy reports** (now in `cli/reporting/strategy_reporter.py`)
 
   - [ ] Include full strategy configuration in report header
   - [ ] Show all strategy indicators and their individual performance
@@ -180,8 +511,10 @@ indicators. This phase updates the CLI to:
   - [ ] Include risk management settings (stop loss, take profit, max position)
   - [ ] Add strategy-specific metadata (exchange, market, timeframe)
   - [ ] Show strategy vs individual indicator performance comparison
+  - [ ] **Integrate with ConfigManager for configuration access**
+  - [ ] **Use InteractiveReporter for trade selection features**
 
-- [ ] **Add interactive trade analysis features** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add interactive trade analysis features** (now in `cli/reporting/interactive_reporter.py`)
 
   - [ ] Create interactive trade list with clickable trade entries
   - [ ] Add trade highlighting functionality when selected from list
@@ -191,8 +524,9 @@ indicators. This phase updates the CLI to:
   - [ ] Add keyboard navigation (arrow keys) for trade selection
   - [ ] Implement trade filtering and search within the report
   - [ ] Add "zoom to trade" functionality to focus chart on selected trade timeframe
+  - [ ] **Integrate with StrategyReporter for comprehensive strategy context**
 
-- [ ] **Enhance chart interactivity** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Enhance chart interactivity** (in `cli/reporting/interactive_reporter.py`)
 
   - [ ] Add clickable trade markers on price charts
   - [ ] Implement hover tooltips for trade entry/exit points
@@ -201,6 +535,7 @@ indicators. This phase updates the CLI to:
   - [ ] Add trade sequence visualization (connecting entry to exit with lines)
   - [ ] Implement chart zoom and pan controls for detailed trade analysis
   - [ ] Add toggle for showing/hiding different trade types (winning/losing)
+  - [ ] **Coordinate with ScenarioReporter for scenario-specific trade highlighting**
 
 - [ ] **Update HTML report templates** (`packages/spark-app/app/backtesting/reporting/`)
   - [ ] Add strategy configuration section to HTML templates
@@ -209,13 +544,13 @@ indicators. This phase updates the CLI to:
   - [ ] Add strategy-specific charts and metrics
   - [ ] Include configuration vs actual performance comparison
   - [ ] Add strategy optimization suggestions based on results
-  - [ ] **Integrate interactive JavaScript components for trade selection**
+  - [ ] **Integrate interactive JavaScript components from InteractiveReporter**
   - [ ] **Add responsive design for trade list and chart interaction**
   - [ ] **Include CSS styling for highlighted trades and selected states**
 
 ### 3.2 Strategy Comparison Reports
 
-- [ ] **Create strategy comparison reporting** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Create strategy comparison reporting** (now in `cli/reporting/comparison_reporter.py`)
 
   - [ ] Generate side-by-side strategy performance comparison
   - [ ] Include configuration differences (position sizing, indicators, timeframes)
@@ -223,26 +558,32 @@ indicators. This phase updates the CLI to:
   - [ ] Add risk-adjusted performance comparison (Sharpe ratio, max drawdown)
   - [ ] Include efficiency metrics (trades per day, win rate consistency)
   - [ ] Generate strategy combination analysis (portfolio effect)
+  - [ ] **Integrate with ComparisonManager for comparison logic coordination**
+  - [ ] **Use ConfigManager for configuration comparison features**
 
-- [ ] **Add strategy ranking and analysis** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add strategy ranking and analysis** (in `cli/reporting/comparison_reporter.py`)
   - [ ] Rank strategies by multiple criteria (return, Sharpe, drawdown)
   - [ ] Analyze strategy correlation and diversification benefits
   - [ ] Identify best performing strategies by market condition
   - [ ] Generate strategy allocation recommendations
   - [ ] Add sensitivity analysis for position sizing and timeframe changes
+  - [ ] **Coordinate with ScenarioReporter for cross-scenario analysis**
 
 ### 3.3 Configuration Impact Analysis
 
-- [ ] **Add configuration sensitivity analysis** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add configuration sensitivity analysis** (in `cli/reporting/strategy_reporter.py`)
   - [ ] Test strategy performance with different position sizing methods
   - [ ] Analyze impact of timeframe changes on strategy performance
   - [ ] Show effect of different indicator parameters on strategy results
   - [ ] Generate optimization suggestions for strategy configuration
   - [ ] Include risk parameter sensitivity (stop loss, take profit impact)
+  - [ ] **Use ConfigManager for configuration variation testing**
+  - [ ] **Integrate with StrategyValidator for feasibility analysis**
 
 ### 3.4 Interactive Trade Selection Technical Implementation
 
-- [ ] **Create JavaScript modules for trade interaction**
+- [ ] **Create JavaScript modules for trade interaction** (coordinated by
+      `cli/reporting/interactive_reporter.py`)
       (`packages/spark-app/app/backtesting/reporting/static/js/` - NEW DIR)
 
   - [ ] Add `trade-selector.js` for trade list interaction logic
@@ -251,8 +592,9 @@ indicators. This phase updates the CLI to:
   - [ ] Create `trade-navigation.js` for keyboard and sequence navigation
   - [ ] Add `chart-zoom.js` for zoom-to-trade functionality
   - [ ] Create `trade-filter.js` for search and filtering capabilities
+  - [ ] **Generate JavaScript configuration through InteractiveReporter**
 
-- [ ] **Update chart generation for interactivity** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Update chart generation for interactivity** (in `cli/reporting/interactive_reporter.py`)
 
   - [ ] Add unique IDs to all trade markers for JavaScript targeting
   - [ ] Include trade metadata in chart data attributes
@@ -260,8 +602,9 @@ indicators. This phase updates the CLI to:
   - [ ] Add chart configuration for zoom and pan capabilities
   - [ ] Create responsive chart sizing for different screen sizes
   - [ ] Add accessibility attributes for screen readers
+  - [ ] **Coordinate with StrategyReporter for strategy-specific chart features**
 
-- [ ] **Create HTML template components**
+- [ ] **Create HTML template components** (generated by `cli/reporting/interactive_reporter.py`)
       (`packages/spark-app/app/backtesting/reporting/templates/` - UPDATE)
 
   - [ ] Add interactive trade list component with click handlers
@@ -270,8 +613,10 @@ indicators. This phase updates the CLI to:
   - [ ] Create responsive layout for chart and trade list
   - [ ] Add loading states for trade data and chart updates
   - [ ] Include error handling displays for JavaScript failures
+  - [ ] **Integrate with modular reporting system templates**
 
-- [ ] **Add CSS styling for interactive elements**
+- [ ] **Add CSS styling for interactive elements** (coordinated by
+      `cli/reporting/interactive_reporter.py`)
       (`packages/spark-app/app/backtesting/reporting/static/css/` - UPDATE)
   - [ ] Style selected trade states and hover effects
   - [ ] Add highlighting styles for chart markers
@@ -279,11 +624,12 @@ indicators. This phase updates the CLI to:
   - [ ] Add animation styles for smooth transitions
   - [ ] Style trade details popup/sidebar
   - [ ] Add accessibility-friendly focus indicators
+  - [ ] **Generate CSS through InteractiveReporter module system**
 
 ### 3.5 Multi-Scenario Performance Reporting
 
-- [ ] **Create comprehensive scenario comparison reports**
-      (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Create comprehensive scenario comparison reports** (now in
+      `cli/reporting/scenario_reporter.py`)
 
   - [ ] Generate side-by-side performance comparison across all market scenarios
   - [ ] Include **Bull Market**, **Bear Market**, **Sideways**, **High Vol**, **Low Vol**,
@@ -293,8 +639,10 @@ indicators. This phase updates the CLI to:
   - [ ] Add scenario ranking by different performance criteria
   - [ ] Include statistical significance testing between scenarios
   - [ ] Generate scenario robustness score based on consistency across conditions
+  - [ ] **Integrate with ScenarioManager for scenario coordination**
+  - [ ] **Use ComparisonReporter for cross-scenario comparison features**
 
-- [ ] **Add visual scenario performance comparison** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add visual scenario performance comparison** (in `cli/reporting/scenario_reporter.py`)
 
   - [ ] Create radar/spider charts showing strategy performance across all scenarios
   - [ ] Add scenario performance heatmap (green=good, red=poor performance)
@@ -302,9 +650,9 @@ indicators. This phase updates the CLI to:
   - [ ] Create trade distribution charts by scenario type
   - [ ] Add scenario-specific trade highlighting in interactive charts
   - [ ] Include market condition timeline showing when each scenario type occurred
+  - [ ] **Coordinate with InteractiveReporter for scenario-specific interactivity**
 
-- [ ] **Generate strategy robustness analysis**
-      (`packages/spark-app/tests/_utils/strategy_robustness_analyzer.py` - NEW FILE)
+- [ ] **Enhanced strategy robustness analysis** (in `cli/core/scenario_manager.py`)
 
   - [ ] Calculate **consistency score** (low variance across scenarios)
   - [ ] Compute **adaptability score** (performance in diverse conditions)
@@ -312,8 +660,11 @@ indicators. This phase updates the CLI to:
   - [ ] Add **worst-case scenario analysis** (performance in hardest conditions)
   - [ ] Calculate **scenario correlation** (which scenarios strategy struggles with)
   - [ ] Generate **optimization recommendations** based on weak scenarios
+  - [ ] **Integrate with StrategyValidator for robustness validation**
+  - [ ] **Use ScenarioReporter for robustness report generation**
 
-- [ ] **Update HTML templates for multi-scenario display**
+- [ ] **Update HTML templates for multi-scenario display** (coordinated by
+      `cli/reporting/scenario_reporter.py`)
       (`packages/spark-app/app/backtesting/reporting/templates/`)
   - [ ] Add tabbed interface for switching between scenarios
   - [ ] Create scenario comparison dashboard with key metrics
@@ -321,12 +672,13 @@ indicators. This phase updates the CLI to:
   - [ ] Include scenario filtering and sorting controls
   - [ ] Add export functionality for scenario performance data
   - [ ] Create mobile-responsive design for scenario navigation
+  - [ ] **Integrate with modular template system**
 
 ## 🏗️ **4. Validation and Error Handling**
 
 ### 4.1 Configuration Validation
 
-- [ ] **Add comprehensive config validation** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Enhanced comprehensive config validation** (now in `cli/validation/config_validator.py`)
 
   - [ ] Validate all strategy configurations before backtesting
   - [ ] Check that all strategy indicators exist in config
@@ -334,92 +686,109 @@ indicators. This phase updates the CLI to:
   - [ ] Ensure market symbols and exchanges are valid
   - [ ] Check timeframe compatibility between strategy and indicators
   - [ ] Add detailed error messages for configuration issues
+  - [ ] **Integrate with ConfigManager for configuration access**
+  - [ ] **Use StrategyValidator for strategy-specific validation**
 
-- [ ] **Create config validation utilities**
-      (`packages/spark-app/tests/_utils/config_validation.py` - NEW FILE)
+- [ ] **Enhanced config validation utilities** (now in `cli/validation/config_validator.py`)
   - [ ] Add `validate_strategy_indicator_consistency()` function
   - [ ] Add `validate_position_sizing_config()` function
   - [ ] Add `validate_market_exchange_compatibility()` function
   - [ ] Add `validate_timeframe_consistency()` function
   - [ ] Add configuration repair suggestions for common issues
+  - [ ] **Add integration with all other validation modules**
 
 ### 4.2 Enhanced Error Handling
 
-- [ ] **Improve CLI error handling** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Improved CLI error handling** (distributed across command modules in `cli/commands/`)
 
   - [ ] Add specific error handling for strategy configuration issues
   - [ ] Provide helpful error messages with fix suggestions
   - [ ] Add graceful degradation for partial configuration issues
   - [ ] Include error logging with sufficient context for debugging
   - [ ] Add retry mechanisms for data fetching failures
+  - [ ] **Centralize error handling patterns across all command modules**
+  - [ ] **Use validation modules for comprehensive error prevention**
 
-- [ ] **Add pre-flight checks** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add pre-flight checks** (in `cli/core/backtest_orchestrator.py`)
   - [ ] Validate data availability for strategy requirements
   - [ ] Check exchange connectivity for real data commands
   - [ ] Verify indicator factory can create all required indicators
   - [ ] Test position sizer creation with strategy configuration
   - [ ] Validate output directory permissions and disk space
+  - [ ] **Coordinate pre-flight checks across all manager modules**
+  - [ ] **Use DataValidator for data availability checking**
 
 ## 🏗️ **5. Backward Compatibility and Migration**
 
 ### 5.1 Legacy Command Support
 
-- [ ] **Maintain existing indicator commands** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Maintain existing indicator commands** (now in `cli/commands/indicator_commands.py`)
 
   - [ ] Keep `demo`, `real-data`, `compare`, `compare-popular` commands working
   - [ ] Add deprecation warnings for indicator-only commands
   - [ ] Provide migration suggestions to strategy-based commands
   - [ ] Ensure existing scripts and workflows continue working
   - [ ] Add flag to disable deprecation warnings if needed
+  - [ ] **Use backward compatibility shim in main cli.py file**
+  - [ ] **Integrate with new IndicatorBacktestManager location**
 
-- [ ] **Add migration utilities** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add migration utilities** (in `cli/commands/utility_commands.py`)
   - [ ] Add `--suggest-strategy` flag to indicator commands
   - [ ] Show which strategies use the specified indicator
   - [ ] Provide example strategy commands for equivalent functionality
   - [ ] Add automatic strategy creation suggestions for common patterns
+  - [ ] **Use ConfigManager for strategy discovery and suggestions**
 
 ### 5.2 Configuration Migration Support
 
-- [ ] **Add config file migration** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add config file migration** (in `cli/commands/utility_commands.py`)
   - [ ] Add `--migrate-config` command to update old config files
   - [ ] Validate config file version and suggest updates
   - [ ] Add config file format conversion utilities
   - [ ] Provide config validation and repair suggestions
   - [ ] Generate example strategy configurations for common use cases
+  - [ ] **Use ConfigValidator for migration validation**
+  - [ ] **Integrate with ConfigManager for config file operations**
 
 ## 🏗️ **6. Performance and Optimization**
 
 ### 6.1 Caching and Performance
 
-- [ ] **Optimize data caching for strategies** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Optimize data caching for strategies** (in `cli/core/data_manager.py`)
 
   - [ ] Cache market data across multiple strategy tests
   - [ ] Reuse indicator calculations for strategies sharing indicators
   - [ ] Optimize multi-timeframe data handling
   - [ ] Add progress indicators for long-running strategy backtests
   - [ ] Implement parallel strategy execution for comparisons
+  - [ ] **Coordinate caching across all manager modules**
+  - [ ] **Use BacktestOrchestrator for resource optimization**
 
-- [ ] **Add performance monitoring** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Add performance monitoring** (in `cli/utils/progress_trackers.py`)
   - [ ] Measure and report backtest execution time
   - [ ] Track memory usage for large strategy comparisons
   - [ ] Add performance benchmarks for strategy vs indicator testing
   - [ ] Include performance metrics in CLI output
   - [ ] Add performance optimization suggestions
+  - [ ] **Integrate performance tracking across all modules**
 
 ### 6.2 Resource Management
 
-- [ ] **Improve resource cleanup** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Improve resource cleanup** (in `cli/core/backtest_orchestrator.py`)
   - [ ] Ensure proper cleanup after strategy backtests
   - [ ] Add timeout handling for long-running operations
   - [ ] Implement graceful shutdown for interrupted operations
   - [ ] Add disk space management for large report generation
   - [ ] Clean up temporary files and cached data appropriately
+  - [ ] **Coordinate resource management across all manager modules**
+  - [ ] **Use DataManager for centralized data cleanup**
 
 ## 🧪 **7. Testing Infrastructure**
 
 ### 7.1 CLI Testing Framework
 
-- [ ] **Create CLI testing suite** (`packages/spark-app/tests/_utils/test_cli.py` - NEW FILE)
+- [ ] **Create modular CLI testing suite** (`packages/spark-app/tests/_utils/cli/test_modules/` -
+      NEW DIR)
 
   - [ ] Test all new strategy commands with mock data
   - [ ] Test configuration loading and validation
@@ -427,37 +796,47 @@ indicators. This phase updates the CLI to:
   - [ ] Test error handling and edge cases
   - [ ] Test backward compatibility with existing commands
   - [ ] Test report generation and file output
+  - [ ] **Add unit tests for each CLI module individually**
+  - [ ] **Add integration tests for module interactions**
+  - [ ] **Test backward compatibility shim functionality**
 
-- [ ] **Add integration tests**
-      (`packages/spark-app/tests/backtesting/integration/test_cli_integration.py` - NEW FILE)
+- [ ] **Add enhanced integration tests**
+      (`packages/spark-app/tests/backtesting/integration/test_cli_integration.py` - UPDATE)
   - [ ] Test CLI with real config.json file
   - [ ] Test end-to-end strategy backtesting workflow
   - [ ] Test strategy comparison functionality
   - [ ] Test configuration migration and validation
   - [ ] Test CLI performance with multiple strategies
+  - [ ] **Test modular architecture integration**
+  - [ ] **Test cross-module communication and data flow**
 
 ### 7.2 Test Data and Fixtures
 
-- [ ] **Create CLI test fixtures** (`packages/spark-app/tests/_fixtures/cli_fixtures.py` - NEW FILE)
+- [ ] **Create modular CLI test fixtures** (`packages/spark-app/tests/_fixtures/cli_fixtures.py` -
+      UPDATE)
 
   - [ ] Create test strategy configurations
   - [ ] Add test market data for various scenarios
   - [ ] Create mock backtesting results for testing
   - [ ] Add test position sizing configurations
   - [ ] Create test error scenarios and edge cases
+  - [ ] **Add module-specific test fixtures**
+  - [ ] **Create integration test scenarios for module combinations**
 
-- [ ] **Add CLI test utilities** (`packages/spark-app/tests/_helpers/cli_test_helpers.py` - NEW
-      FILE)
+- [ ] **Add enhanced CLI test utilities** (`packages/spark-app/tests/_helpers/cli_test_helpers.py` -
+      UPDATE)
   - [ ] Add CLI command testing utilities
   - [ ] Create mock data generation for CLI tests
   - [ ] Add report validation utilities
   - [ ] Create configuration testing helpers
   - [ ] Add performance testing utilities
+  - [ ] **Add module testing utilities and mocks**
+  - [ ] **Create test utilities for modular architecture validation**
 
 ### 7.3 Interactive Report Testing Framework
 
-- [ ] **Create interactive report testing utilities**
-      (`packages/spark-app/tests/_utils/interactive_report_test.py` - NEW FILE)
+- [ ] **Create enhanced interactive report testing utilities**
+      (`packages/spark-app/tests/_utils/interactive_report_test.py` - UPDATE)
 
   - [ ] Add automated browser testing for JavaScript functionality
   - [ ] Create test scenarios for trade selection and highlighting
@@ -465,28 +844,34 @@ indicators. This phase updates the CLI to:
   - [ ] Create cross-browser compatibility test suite
   - [ ] Add accessibility testing for interactive elements
   - [ ] Create visual regression testing for chart interactions
+  - [ ] **Test integration with modular reporting system**
+  - [ ] **Test InteractiveReporter module functionality**
 
 - [ ] **Add JavaScript testing infrastructure**
-      (`packages/spark-app/app/backtesting/reporting/static/js/tests/` - NEW DIR)
+      (`packages/spark-app/app/backtesting/reporting/static/js/tests/` - UPDATE)
   - [ ] Add unit tests for trade selection JavaScript functions
   - [ ] Create integration tests for chart-list synchronization
   - [ ] Add performance tests for DOM manipulation with large datasets
   - [ ] Create mock data generators for JavaScript testing
   - [ ] Add test utilities for simulating user interactions
+  - [ ] **Test JavaScript generation from InteractiveReporter module**
 
 ## 🏗️ **8. Documentation and Examples**
 
 ### 8.1 CLI Documentation Updates
 
-- [ ] **Update CLI help and documentation** (`packages/spark-app/tests/_utils/cli.py`)
+- [ ] **Update modular CLI help and documentation** (distributed across command modules)
 
   - [ ] Update docstring with new strategy commands
   - [ ] Add comprehensive help text for all new options
   - [ ] Include examples for common use cases
   - [ ] Add troubleshooting section for common issues
   - [ ] Document configuration requirements and format
+  - [ ] **Document new modular architecture and command organization**
+  - [ ] **Add module-specific help and examples**
 
-- [ ] **Create CLI user guide** (`packages/spark-app/tests/_utils/CLI_USER_GUIDE.md` - NEW FILE)
+- [ ] **Create comprehensive CLI user guide**
+      (`packages/spark-app/tests/_utils/cli/CLI_USER_GUIDE.md` - NEW FILE)
   - [ ] Document all available commands and options
   - [ ] Provide step-by-step examples for strategy backtesting
   - [ ] Include configuration setup instructions
@@ -496,71 +881,35 @@ indicators. This phase updates the CLI to:
   - [ ] **Document keyboard shortcuts and navigation controls for reports**
   - [ ] **Include troubleshooting guide for JavaScript/browser compatibility issues**
   - [ ] **Add multi-scenario testing examples and interpretation guide**
+  - [ ] **Document modular architecture and extension points**
+  - [ ] **Add module-by-module documentation with examples**
 
 ### 8.2 Example Configurations
 
-- [ ] **Create example strategy configurations** (`packages/spark-app/tests/_utils/examples/` - NEW
-      DIR)
+- [ ] **Create enhanced example strategy configurations**
+      (`packages/spark-app/tests/_utils/cli/examples/` - NEW DIR)
 
   - [ ] Add simple single-indicator strategy example
   - [ ] Add complex multi-indicator strategy example
   - [ ] Add multi-timeframe strategy example
   - [ ] Add different position sizing strategy examples
   - [ ] Add multi-exchange strategy examples
+  - [ ] **Add examples demonstrating modular CLI usage**
+  - [ ] **Add configuration examples for different module features**
 
-- [ ] **Add CLI usage examples** (`packages/spark-app/tests/_utils/examples/cli_examples.sh` - NEW
-      FILE)
+- [ ] **Add enhanced CLI usage examples**
+      (`packages/spark-app/tests/_utils/cli/examples/cli_examples.sh` - NEW FILE)
   - [ ] Provide shell script examples for common CLI operations
   - [ ] Add batch processing examples for multiple strategies
   - [ ] Include report generation and analysis examples
   - [ ] Document integration with external tools
   - [ ] Add automation and scripting examples
+  - [ ] **Add examples using modular command structure**
+  - [ ] **Document module-specific command patterns**
 
 ### 8.3 Multi-Scenario CLI Output Example
 
-- [ ] **Document expected CLI output format for multi-scenario testing**
-
-  ```bash
-  $ python cli.py strategy eth_multi_timeframe_strategy --days 30
-
-  🚀 Running multi-scenario backtest for eth_multi_timeframe_strategy (30 days)
-  📊 Testing across 8 market scenarios...
-
-  [1/8] 📈 Bull Market Scenario    ✅ Complete (45 trades, +12.5% return)
-  [2/8] 📉 Bear Market Scenario    ✅ Complete (32 trades, -3.2% return)
-  [3/8] 📊 Sideways Scenario       ✅ Complete (28 trades, +2.1% return)
-  [4/8] 🔥 High Volatility         ✅ Complete (67 trades, +8.9% return)
-  [5/8] 😴 Low Volatility          ✅ Complete (15 trades, +1.4% return)
-  [6/8] ⚡ Choppy Market          ✅ Complete (89 trades, -1.8% return)
-  [7/8] 📈💥 Gap-Heavy Scenario    ✅ Complete (42 trades, +5.3% return)
-  [8/8] 🌐 Real Market Data        ✅ Complete (38 trades, +4.7% return)
-
-  📋 Scenario Performance Summary:
-  ┌─────────────────┬────────┬─────────┬──────────┬────────────┬─────────┐
-  │ Scenario        │ Trades │ Return  │ Win Rate │ Max DD     │ Sharpe  │
-  ├─────────────────┼────────┼─────────┼──────────┼────────────┼─────────┤
-  │ Bull Market     │   45   │ +12.5%  │  67.2%   │   -5.3%    │  1.43   │
-  │ Bear Market     │   32   │  -3.2%  │  43.8%   │  -12.1%    │ -0.21   │
-  │ Sideways        │   28   │  +2.1%  │  57.1%   │   -4.8%    │  0.34   │
-  │ High Volatility │   67   │  +8.9%  │  58.2%   │   -8.7%    │  0.89   │
-  │ Low Volatility  │   15   │  +1.4%  │  60.0%   │   -2.1%    │  0.52   │
-  │ Choppy Market   │   89   │  -1.8%  │  44.9%   │   -9.4%    │ -0.15   │
-  │ Gap-Heavy       │   42   │  +5.3%  │  61.9%   │   -6.2%    │  0.71   │
-  │ Real Data       │   38   │  +4.7%  │  55.3%   │   -7.1%    │  0.68   │
-  └─────────────────┴────────┴─────────┴──────────┴────────────┴─────────┘
-
-  🎯 Strategy Robustness Analysis:
-  • Consistency Score: 72/100 (Good - performs well in most conditions)
-  • Adaptability Score: 68/100 (Fair - struggles in choppy/bear markets)
-  • Risk-Adjusted Robustness: 75/100 (Good - maintains positive Sharpe in most scenarios)
-  • Worst-Case Scenario: Bear Market (-3.2% return, -12.1% max drawdown)
-  • Best Scenario: Bull Market (+12.5% return, 1.43 Sharpe ratio)
-
-  📈 HTML Report: /path/to/report.html (opens automatically)
-  💾 Scenario Data: /path/to/scenario_data.json (use --export-data flag)
-
-  ✨ Strategy shows strong bull market performance but needs improvement for bear/choppy conditions
-  ```
+- [ ] **Document expected CLI output format for multi-scenario testing with modular architecture**
 
 ## 🔍 **9. Validation and Testing**
 
