@@ -15,7 +15,7 @@
   "metrics_publish_historical": true,
   "max_parallel_trades": 1,
   "polling_interval": 30,
-  "dry_run": false,
+  "dry_run": true,
   "max_account_risk_pct": 0.1,
   "max_leverage": 1.0,
   "max_position_size_usd": 1000.0,
@@ -92,6 +92,7 @@
       "type": "rsi",
       "enabled": true,
       "timeframe": "4h",
+      "symbol": "ETH-USD",
       "parameters": {
         "period": 14,
         "overbought": 70,
@@ -104,6 +105,7 @@
       "type": "macd",
       "enabled": true,
       "timeframe": "1h",
+      "symbol": "ETH-USD",
       "parameters": {
         "fast_period": 8,
         "slow_period": 21,
