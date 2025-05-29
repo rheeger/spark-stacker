@@ -92,7 +92,7 @@ of concerns.
 
 #### 1.4.1 CLI Architecture Redesign
 
-- [ ] **Create modular CLI directory structure** (`packages/spark-app/tests/_utils/cli/` - NEW DIR)
+- [x] **Create modular CLI directory structure** (`packages/spark-app/tests/_utils/cli/` - NEW DIR)
 
   ```
   cli/
@@ -136,13 +136,6 @@ of concerns.
   ```
 
 - [ ] **Migrate main CLI entry point** (`packages/spark-app/tests/_utils/cli/main.py` - NEW FILE)
-
-  - [ ] Move click app definition from `cli.py`
-  - [ ] Keep only command definitions and routing logic
-  - [ ] Import command handlers from respective modules
-  - [ ] Add global CLI options (--config, --verbose, --debug)
-  - [ ] Add CLI initialization and setup logic
-  - [ ] Maintain backward compatibility with existing `cli.py` script
 
 - [ ] **Create backward compatibility shim** (`packages/spark-app/tests/_utils/cli.py` - UPDATE)
   - [ ] Replace existing monolithic code with import from `cli.main`
