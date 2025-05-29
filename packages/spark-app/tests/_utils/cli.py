@@ -2,7 +2,7 @@
 """
 Spark-App CLI - Unified command line interface for backtest operations
 
-This CLI provides comprehensive backtesting and indicator comparison capabilities:
+This CLI provides comprehensive backtesting and strategy analysis capabilities:
 
 Single Indicator Commands:
     demo <indicator>           - Run demo with synthetic data
@@ -13,8 +13,13 @@ Multi-Indicator Comparison:
     compare <indicators>       - Compare multiple indicators side-by-side
     compare-popular           - Quick comparison of RSI, MACD, and Bollinger Bands
 
+Strategy Commands:
+    strategy <strategy-name>   - Run comprehensive strategy backtesting with multi-scenario analysis
+    compare-strategies         - Compare multiple strategies through multi-scenario testing
+
 Utility Commands:
     list-indicators           - Show all available indicators
+    list-strategies           - Show all strategies from configuration
     backtest                  - Custom backtest configuration
 
 Examples:
@@ -33,8 +38,24 @@ Examples:
     # Quick popular comparison
     python cli.py compare-popular --use-real-data
 
+    # Strategy backtesting (multi-scenario by default)
+    python cli.py strategy eth_multi_timeframe_strategy --days 30
+
+    # Strategy backtesting with specific scenarios
+    python cli.py strategy my_strategy --scenarios "bull,bear,real" --days 14
+
+    # Single scenario testing for quick validation
+    python cli.py strategy my_strategy --scenario-only bull --days 7
+
+    # Compare all strategies
+    python cli.py compare-strategies --all-strategies
+
+    # Compare specific strategies
+    python cli.py compare-strategies --strategy-names "strategy1,strategy2"
+
 All commands generate beautiful HTML reports and automatically open them in your browser.
 """
+import json
 import logging
 import os
 import sys
@@ -42,6 +63,7 @@ import threading
 import time
 import webbrowser
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import click
@@ -2241,6 +2263,304 @@ def list_strategies_cmd(ctx: click.Context, exchange: Optional[str], market: Opt
         # Ensure proper cleanup
         cleanup_resources()
         logger.debug("List strategies command cleanup completed")
+
+
+@cli.command()
+@click.argument("strategy_name", required=True)
+@click.option("--days", default=30, help="Number of days for testing duration across all scenarios")
+@click.option("--scenarios", help="Comma-separated list of scenarios to run (e.g., 'bull,bear,real')")
+@click.option("--scenario-only", help="Run single scenario instead of full suite (bull, bear, sideways, high_vol, low_vol, choppy, gap_heavy, real)")
+@click.option("--override-timeframe", help="Temporarily override strategy timeframe")
+@click.option("--override-market", help="Override strategy market for testing")
+@click.option("--override-position-size", type=float, help="Override position sizing amount")
+@click.option("--use-real-data", is_flag=True, help="Use real market data instead of synthetic scenarios (legacy compatibility)")
+@click.option("--export-data", is_flag=True, help="Save scenario data for external analysis")
+@click.option("--output-dir", help="Directory to save backtest results")
+@click.option("--testnet", is_flag=True, default=None, help="Use Hyperliquid testnet (defaults to HYPERLIQUID_TESTNET env var)")
+@click.pass_context
+def strategy(
+    ctx: click.Context,
+    strategy_name: str,
+    days: int,
+    scenarios: Optional[str],
+    scenario_only: Optional[str],
+    override_timeframe: Optional[str],
+    override_market: Optional[str],
+    override_position_size: Optional[float],
+    use_real_data: bool,
+    export_data: bool,
+    output_dir: Optional[str],
+    testnet: bool,
+):
+    """Run comprehensive strategy backtesting with multi-scenario analysis.
+
+    By default, runs strategy across 7 synthetic market scenarios plus real data.
+    Use --scenario-only to test a single scenario for quick validation.
+
+    STRATEGY_NAME should match a strategy name from your config.json file.
+
+    Examples:
+        python cli.py strategy eth_multi_timeframe_strategy
+        python cli.py strategy my_strategy --days 14 --scenarios "bull,bear,real"
+        python cli.py strategy my_strategy --scenario-only bull --days 7
+    """
+    try:
+        # If testnet is not explicitly set, use environment variable
+        if testnet is None:
+            testnet = os.getenv('HYPERLIQUID_TESTNET', 'false').lower() in ('true', '1', 't', 'yes', 'y')
+
+        # Load configuration
+        config_path = ctx.obj.get('config_path') if ctx.obj else None
+        config = load_config(config_path)
+
+        if not config:
+            logger.error("No configuration file found")
+            print("❌ No configuration file found. Strategy backtesting requires a config.json file.")
+            print("   Use --config option to specify configuration file path.")
+            return
+
+        # Validate strategy exists and get configuration
+        strategy_config = get_strategy_config(config, strategy_name)
+        if not strategy_config:
+            available_strategies = [s.get('name', 'Unknown') for s in config.get('strategies', [])]
+            logger.error(f"Strategy '{strategy_name}' not found in configuration")
+            print(f"❌ Strategy '{strategy_name}' not found in configuration.")
+            if available_strategies:
+                print(f"   Available strategies: {', '.join(available_strategies)}")
+                print(f"   Use 'python cli.py list-strategies' for more details.")
+            else:
+                print("   No strategies found in configuration file.")
+            return
+
+        # Validate strategy configuration
+        validation_errors = validate_strategy_config(config, strategy_name)
+        if validation_errors:
+            print("❌ Strategy configuration validation failed:")
+            for error in validation_errors:
+                print(f"   • {error}")
+            return
+
+        # Apply overrides to strategy config
+        effective_strategy = strategy_config.copy()
+        if override_timeframe:
+            effective_strategy['timeframe'] = override_timeframe
+            print(f"🔧 Override: Using timeframe {override_timeframe}")
+        if override_market:
+            effective_strategy['market'] = override_market
+            print(f"🔧 Override: Using market {override_market}")
+
+        print(f"\n🚀 Running strategy backtest for '{strategy_name}'")
+        print(f"📊 Strategy: {effective_strategy.get('name')}")
+        print(f"📈 Market: {effective_strategy.get('market')}")
+        print(f"🏪 Exchange: {effective_strategy.get('exchange')}")
+        print(f"⏰ Timeframe: {effective_strategy.get('timeframe')}")
+        print(f"🎯 Test Duration: {days} days")
+
+        # Determine which scenarios to run
+        if use_real_data:
+            # Legacy mode - just run real data
+            scenarios_to_run = ['real']
+            print(f"📊 Mode: Real data only (legacy compatibility)")
+        elif scenario_only:
+            # Single scenario mode
+            valid_scenarios = ['bull', 'bear', 'sideways', 'high_vol', 'low_vol', 'choppy', 'gap_heavy', 'real']
+            if scenario_only not in valid_scenarios:
+                print(f"❌ Invalid scenario '{scenario_only}'. Valid options: {', '.join(valid_scenarios)}")
+                return
+            scenarios_to_run = [scenario_only]
+            print(f"📊 Mode: Single scenario ({scenario_only})")
+        elif scenarios:
+            # Custom scenario selection
+            scenarios_to_run = [s.strip() for s in scenarios.split(',')]
+            valid_scenarios = ['bull', 'bear', 'sideways', 'high_vol', 'low_vol', 'choppy', 'gap_heavy', 'real']
+            invalid_scenarios = [s for s in scenarios_to_run if s not in valid_scenarios]
+            if invalid_scenarios:
+                print(f"❌ Invalid scenarios: {invalid_scenarios}. Valid options: {', '.join(valid_scenarios)}")
+                return
+            print(f"📊 Mode: Custom scenarios ({', '.join(scenarios_to_run)})")
+        else:
+            # Default: full multi-scenario testing
+            scenarios_to_run = ['bull', 'bear', 'sideways', 'high_vol', 'low_vol', 'choppy', 'gap_heavy', 'real']
+            print(f"📊 Mode: Full multi-scenario analysis (8 scenarios)")
+
+        # Set output directory
+        if not output_dir:
+            output_dir = get_default_output_dir()
+            logger.info(f"Using default output directory: {output_dir}")
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # TODO: Implement multi-scenario backtesting logic
+        # For now, we'll use a placeholder implementation
+        print(f"\n⚠️  Multi-scenario backtesting not yet implemented.")
+        print(f"📋 This will be implemented in the next phase of development.")
+        print(f"🔧 Current implementation is a placeholder for:")
+        print(f"   • Market scenario generation (bull, bear, sideways, etc.)")
+        print(f"   • Strategy backtesting across all scenarios")
+        print(f"   • Cross-scenario performance analysis")
+        print(f"   • Robustness scoring and comparison")
+
+        print(f"\n💡 For now, you can use existing commands:")
+        print(f"   python cli.py demo <indicator> --symbol {effective_strategy.get('market', 'ETH-USD')}")
+        print(f"   python cli.py real-data <indicator> --symbol {effective_strategy.get('market', 'ETH-USD')} --days {days}")
+
+    except Exception as e:
+        logger.error(f"Strategy backtest failed: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        print(f"❌ Strategy backtest failed: {str(e)}")
+        cleanup_resources()
+        sys.exit(1)
+    finally:
+        cleanup_resources()
+        logger.debug("Strategy command cleanup completed")
+
+
+@cli.command(name="compare-strategies")
+@click.option("--strategy-names", help="Comma-separated list of strategy names to compare")
+@click.option("--all-strategies", is_flag=True, help="Compare all enabled strategies")
+@click.option("--same-market", help="Filter strategies by market (e.g., ETH-USD)")
+@click.option("--same-exchange", help="Filter strategies by exchange (e.g., hyperliquid)")
+@click.option("--scenarios", help="Limit comparison to specific scenarios (e.g., 'bull,bear,real')")
+@click.option("--days", default=30, help="Number of days for testing duration")
+@click.option("--output-dir", help="Directory to save comparison results")
+@click.option("--testnet", is_flag=True, default=None, help="Use Hyperliquid testnet (defaults to HYPERLIQUID_TESTNET env var)")
+@click.pass_context
+def compare_strategies(
+    ctx: click.Context,
+    strategy_names: Optional[str],
+    all_strategies: bool,
+    same_market: Optional[str],
+    same_exchange: Optional[str],
+    scenarios: Optional[str],
+    days: int,
+    output_dir: Optional[str],
+    testnet: bool,
+):
+    """Compare multiple strategies through multi-scenario analysis.
+
+    Runs all specified strategies through the same set of market scenarios
+    for fair comparison and generates comprehensive comparison reports.
+
+    Examples:
+        python cli.py compare-strategies --all-strategies
+        python cli.py compare-strategies --strategy-names "strategy1,strategy2"
+        python cli.py compare-strategies --same-market ETH-USD --scenarios "bull,bear"
+    """
+    try:
+        # If testnet is not explicitly set, use environment variable
+        if testnet is None:
+            testnet = os.getenv('HYPERLIQUID_TESTNET', 'false').lower() in ('true', '1', 't', 'yes', 'y')
+
+        # Load configuration
+        config_path = ctx.obj.get('config_path') if ctx.obj else None
+        config = load_config(config_path)
+
+        if not config:
+            logger.error("No configuration file found")
+            print("❌ No configuration file found. Strategy comparison requires a config.json file.")
+            print("   Use --config option to specify configuration file path.")
+            return
+
+        # Determine which strategies to compare
+        if all_strategies:
+            # Get all enabled strategies
+            strategies_to_compare = list_strategies(
+                config=config,
+                filter_enabled=True,
+                filter_exchange=same_exchange,
+                filter_market=same_market
+            )
+        elif strategy_names:
+            # Parse specified strategy names
+            specified_names = [name.strip() for name in strategy_names.split(',')]
+            strategies_to_compare = []
+
+            for name in specified_names:
+                strategy_config = get_strategy_config(config, name)
+                if not strategy_config:
+                    print(f"❌ Strategy '{name}' not found in configuration")
+                    return
+
+                # Apply filters if specified
+                if same_market and strategy_config.get('market', '').upper() != same_market.upper():
+                    continue
+                if same_exchange and strategy_config.get('exchange', '').lower() != same_exchange.lower():
+                    continue
+
+                strategies_to_compare.append(strategy_config)
+        else:
+            print("❌ Must specify either --all-strategies or --strategy-names")
+            print("   Use 'python cli.py list-strategies' to see available strategies")
+            return
+
+        if not strategies_to_compare:
+            filter_desc = []
+            if same_market:
+                filter_desc.append(f"market={same_market}")
+            if same_exchange:
+                filter_desc.append(f"exchange={same_exchange}")
+
+            filter_text = f" matching filters ({', '.join(filter_desc)})" if filter_desc else ""
+            print(f"❌ No strategies found{filter_text}")
+            return
+
+        # Determine scenarios for comparison
+        if scenarios:
+            scenarios_to_run = [s.strip() for s in scenarios.split(',')]
+            valid_scenarios = ['bull', 'bear', 'sideways', 'high_vol', 'low_vol', 'choppy', 'gap_heavy', 'real']
+            invalid_scenarios = [s for s in scenarios_to_run if s not in valid_scenarios]
+            if invalid_scenarios:
+                print(f"❌ Invalid scenarios: {invalid_scenarios}. Valid options: {', '.join(valid_scenarios)}")
+                return
+        else:
+            # Default: full multi-scenario comparison
+            scenarios_to_run = ['bull', 'bear', 'sideways', 'high_vol', 'low_vol', 'choppy', 'gap_heavy', 'real']
+
+        print(f"\n🚀 Running strategy comparison")
+        print(f"📊 Strategies: {len(strategies_to_compare)} strategies")
+        print(f"🎯 Scenarios: {len(scenarios_to_run)} scenarios ({', '.join(scenarios_to_run)})")
+        print(f"⏰ Duration: {days} days per scenario")
+
+        # Display strategies to be compared
+        print(f"\n📋 Strategies to compare:")
+        for i, strategy in enumerate(strategies_to_compare, 1):
+            name = strategy.get('name', 'Unknown')
+            market = strategy.get('market', 'Unknown')
+            exchange = strategy.get('exchange', 'Unknown')
+            timeframe = strategy.get('timeframe', 'Unknown')
+            print(f"   {i}. {name} ({market} on {exchange}, {timeframe})")
+
+        # Set output directory
+        if not output_dir:
+            output_dir = get_default_output_dir()
+            logger.info(f"Using default output directory: {output_dir}")
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # TODO: Implement multi-strategy comparison logic
+        # For now, we'll use a placeholder implementation
+        print(f"\n⚠️  Multi-strategy comparison not yet implemented.")
+        print(f"📋 This will be implemented in the next phase of development.")
+        print(f"🔧 Current implementation is a placeholder for:")
+        print(f"   • Running all strategies through identical market scenarios")
+        print(f"   • Cross-scenario robustness scoring")
+        print(f"   • Strategy performance ranking and comparison")
+        print(f"   • Portfolio diversification analysis")
+
+        print(f"\n💡 For now, you can compare individual indicators:")
+        print(f"   python cli.py compare 'RSI,MACD,BOLLINGER' --use-real-data --days {days}")
+
+    except Exception as e:
+        logger.error(f"Strategy comparison failed: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        print(f"❌ Strategy comparison failed: {str(e)}")
+        cleanup_resources()
+        sys.exit(1)
+    finally:
+        cleanup_resources()
+        logger.debug("Compare strategies command cleanup completed")
 
 
 if __name__ == "__main__":
