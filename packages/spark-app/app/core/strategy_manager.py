@@ -93,8 +93,15 @@ class StrategyManager:
         self.strategy_indicators.clear()
 
         for strategy in self.strategies:
-            strategy_name = strategy.get("name")
-            indicators = strategy.get("indicators", [])
+            # Handle both StrategyConfig objects and dictionary configurations
+            if hasattr(strategy, 'name'):
+                # StrategyConfig object
+                strategy_name = strategy.name
+                indicators = strategy.indicators
+            else:
+                # Dictionary configuration (legacy support)
+                strategy_name = strategy.get("name")
+                indicators = strategy.get("indicators", [])
 
             if not strategy_name:
                 logger.warning("Strategy missing name field, skipping")
@@ -827,15 +834,26 @@ class StrategyManager:
 
         for strategy in self.strategies:
             try:
-                strategy_name = strategy.get("name", "unknown")
+                # Handle both StrategyConfig objects and dictionary configurations
+                if hasattr(strategy, 'name'):
+                    # StrategyConfig object
+                    strategy_name = strategy.name
+                    enabled = strategy.enabled
+                    market = strategy.market
+                    exchange = strategy.exchange
+                    strategy_dict = strategy.to_dict()  # Convert to dict for run_strategy_indicators
+                else:
+                    # Dictionary configuration (legacy support)
+                    strategy_name = strategy.get("name", "unknown")
+                    enabled = strategy.get("enabled", True)
+                    market = strategy.get("market")
+                    exchange = strategy.get("exchange")
+                    strategy_dict = strategy
 
                 # Validate strategy configuration
-                if not strategy.get("enabled", True):
+                if not enabled:
                     logger.debug(f"Strategy '{strategy_name}' is disabled, skipping")
                     continue
-
-                market = strategy.get("market")
-                exchange = strategy.get("exchange")
 
                 if not market:
                     logger.error(f"Strategy '{strategy_name}' missing market configuration")
@@ -864,7 +882,7 @@ class StrategyManager:
                 logger.info(f"Running strategy '{strategy_name}' for market '{market}' on exchange '{exchange}'")
 
                 # Run strategy indicators
-                signals = self.run_strategy_indicators(strategy, market, indicator_names)
+                signals = self.run_strategy_indicators(strategy_dict, market, indicator_names)
 
                 # Process any signals generated
                 for signal in signals:
@@ -879,7 +897,7 @@ class StrategyManager:
                         logger.error(f"Error processing signal from strategy '{strategy_name}': {e}", exc_info=True)
 
             except Exception as e:
-                logger.error(f"Error in strategy cycle for strategy '{strategy.get('name', 'unknown')}': {e}", exc_info=True)
+                logger.error(f"Error in strategy cycle for strategy '{getattr(strategy, 'name', strategy.get('name', 'unknown')) if hasattr(strategy, 'name') else strategy.get('name', 'unknown')}': {e}", exc_info=True)
 
         logger.info(f"Strategy cycle completed: processed {signal_count} signals from {len(self.strategies)} strategies")
         return signal_count
