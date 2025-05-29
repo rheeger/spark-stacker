@@ -428,8 +428,8 @@ indicators. This phase updates the CLI to:
   - [ ] Test backward compatibility with existing commands
   - [ ] Test report generation and file output
 
-- [ ] **Add integration tests** (`packages/spark-app/tests/integration/test_cli_integration.py` -
-      NEW FILE)
+- [ ] **Add integration tests**
+      (`packages/spark-app/tests/backtesting/integration/test_cli_integration.py` - NEW FILE)
   - [ ] Test CLI with real config.json file
   - [ ] Test end-to-end strategy backtesting workflow
   - [ ] Test strategy comparison functionality
