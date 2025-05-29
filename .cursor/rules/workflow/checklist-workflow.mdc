@@ -1,0 +1,272 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Checklist-Driven Development Workflow
+
+## Core Principle
+
+Follow a **focused, checklist-driven approach** where each development session completes one specific checklist item before moving to the next.
+
+## Workflow Rules
+
+### 1. Focus on One Checkbox at a Time
+**Complete a single task completely** before moving to the next one.
+
+```markdown
+# ❌ Don't work on multiple items simultaneously
+- [ ] Create strategy configuration schema
+- [ ] Update StrategyManager constructor
+- [ ] Add position sizing validation
+
+# ✅ Focus on one item until complete
+- [x] Create strategy configuration schema
+- [ ] Update StrategyManager constructor
+- [ ] Add position sizing validation
+```
+
+### 2. Update the Checklist
+**Mark the checkbox as completed** with `[x]` when finished.
+
+### 3. Commit Your Changes
+**After completing a task**, commit both the implementation and the updated checklist.
+
+### 4. Start Fresh
+**Begin a new chat session** for each checklist item to maintain focus and context.
+
+## Active Checklists
+
+### Current Phase Checklists
+- [Phase 3.5.2: Strategy-Indicator Integration](mdc:packages/shared/docs/checklists/phase3.5.2-strategy-indicator-integration.md)
+
+### Completed Phase Examples
+- [Phase 3.5.1: Indicator Testing & Reporting](mdc:packages/shared/docs/checklists/phase3.5.1-indicator-testing-reporting.md)
+
+## Implementation Workflow
+
+### Step 1: Identify Next Task
+```markdown
+# Find the next unchecked item in the active checklist
+- [x] Symbol conversion utilities created
+- [x] StrategyManager constructor updated
+- [ ] Signal enhancement with strategy context  ← NEXT TASK
+- [ ] Trading engine updates
+- [ ] Configuration validation
+```
+
+### Step 2: Work Implementation
+**Focus exclusively on the identified task:**
+- Read requirements from checklist
+- Implement the specific functionality
+- Write/update tests as specified
+- Update documentation if required
+
+### Step 3: Test Implementation
+**Thoroughly test the completed work:**
+```bash
+cd packages/spark-app
+
+# Run relevant tests
+.venv/bin/python -m pytest tests/relevant_tests/ -v
+
+# Test configuration if applicable
+.venv/bin/python -c "
+# Configuration validation script
+from app.core.strategy_config import StrategyConfigLoader
+# ... validation logic
+"
+
+# Run integration tests if specified
+.venv/bin/python -m pytest tests/integration/ -v
+```
+
+### Step 4: Update Checklist
+**Mark the item as completed:**
+```markdown
+# Before
+- [ ] Signal enhancement with strategy context
+
+# After
+- [x] Signal enhancement with strategy context
+```
+
+### Step 5: Commit Changes
+**Commit both implementation and checklist update:**
+```bash
+# Commit the implementation
+git add packages/spark-app/app/indicators/base_indicator.py
+git add packages/spark-app/tests/indicators/unit/test_base_indicator.py
+git commit -m "phase3.5.2: feat(signals): Add strategy context to Signal class"
+
+# Commit the checklist update
+git add packages/shared/docs/checklists/phase3.5.2-strategy-indicator-integration.md
+git commit -m "phase3.5.2: docs(checklist): Mark signal enhancement as completed"
+
+# Or combine both in one commit
+git add .
+git commit -m "phase3.5.2: feat(signals): Add strategy context to Signal class - complete checklist item 1.5"
+```
+
+### Step 6: End Session
+**Start a new chat session** for the next checklist item to maintain focus.
+
+## Checklist Structure Patterns
+
+### Section Organization
+```markdown
+## 🏗️ **1. Core Architecture Fixes**
+
+### 1.1 Exchange Symbol Conversion Utilities
+- [x] Create symbol conversion utilities
+- [x] Add conversion validation
+- [x] Create unit tests
+
+### 1.2 Strategy Manager Overhaul
+- [x] Update StrategyManager constructor
+- [x] Replace run_cycle() method
+- [ ] Create run_strategy_indicators() method ← CURRENT FOCUS
+```
+
+### Validation Tasks
+```markdown
+## 🔍 **4. Validation & Testing**
+
+### 4.1 Configuration Validation Tests
+- [ ] Test configuration loading
+- [ ] Test strategy-indicator relationships
+- [ ] Test position sizing validation
+
+### 4.2 Unit Test Execution
+- [ ] Run all unit tests with coverage
+- [ ] Verify coverage for new code
+```
+
+### Documentation Tasks
+```markdown
+## 📚 **5. Documentation Updates**
+
+### 5.1 Code Documentation
+- [x] Update docstrings for modified methods
+- [x] Add inline comments for complex logic
+
+### 5.2 Architecture Documentation
+- [ ] Update architectural-fixes.md
+- [ ] Update configuration.md
+```
+
+## Error Handling in Workflow
+
+### Incomplete Implementation
+If a checklist item cannot be completed:
+
+1. **Document the blocker** in the checklist
+2. **Commit partial progress** with clear commit message
+3. **Mark as blocked** in checklist
+4. **Move to next completable item**
+
+```markdown
+- [ ] ⚠️ **BLOCKED**: Create run_strategy_indicators() method
+  - Blocked by: Need clarification on indicator timeframe handling
+  - Partial progress: Method signature defined, tests written
+  - Next: Resolve timeframe inheritance pattern
+```
+
+### Dependencies Between Items
+For items with dependencies:
+
+```markdown
+- [x] Symbol conversion utilities created
+- [x] StrategyManager updated (depends on symbol conversion)
+- [ ] Trading engine updates (depends on StrategyManager changes)
+```
+
+### Testing Failures
+If tests fail during validation:
+
+1. **Fix the implementation** before marking complete
+2. **Update tests** if requirements changed
+3. **Document test changes** in commit message
+
+## Quality Gates
+
+### Before Marking Complete
+- [ ] **Implementation meets requirements** specified in checklist
+- [ ] **Tests pass** for the specific functionality
+- [ ] **No regressions** in existing functionality
+- [ ] **Documentation updated** if specified
+- [ ] **Code follows project standards**
+
+### Before Moving to Next Item
+- [ ] **Checklist updated** with completion status
+- [ ] **Changes committed** with proper commit message
+- [ ] **No uncommitted changes** remaining
+- [ ] **Clean working directory**
+
+## Benefits of This Approach
+
+### 1. **Clear Progress Tracking**
+- Visual progress through checkbox completion
+- Easy to see what's left to do
+- Historical record of completion order
+
+### 2. **Focused Development**
+- One task at a time reduces context switching
+- Clear definition of "done" for each item
+- Prevents incomplete implementations
+
+### 3. **Logical Commit History**
+- Each commit maps to a specific checklist item
+- Easy to understand change purpose
+- Facilitates code review and debugging
+
+### 4. **Team Coordination**
+- Multiple developers can work on different checklist items
+- Clear ownership and progress visibility
+- Reduced merge conflicts
+
+### 5. **Quality Assurance**
+- Testing required before marking complete
+- Documentation updated incrementally
+- Standards enforced at each step
+
+## Checklist Maintenance
+
+### Adding New Items
+```markdown
+# Add new items to appropriate section
+### 1.3 New Feature Implementation
+- [ ] Design new feature architecture
+- [ ] Implement core functionality
+- [ ] Add comprehensive tests
+- [ ] Update documentation
+```
+
+### Updating Existing Items
+```markdown
+# Break down complex items into smaller tasks
+### Original
+- [ ] Update trading engine for strategy context
+
+### Improved
+- [ ] Update process_signal() method signature
+- [ ] Add strategy context routing logic
+- [ ] Update connector selection based on strategy
+- [ ] Add error handling for missing strategy context
+- [ ] Update unit tests for new functionality
+```
+
+### Phase Completion
+When all items in a phase are complete:
+
+1. **Review entire checklist** for completeness
+2. **Run full test suite** for regression testing
+3. **Update phase status** in checklist header
+4. **Create completion commit** with phase summary
+5. **Move to next phase checklist**
+
+## References
+
+- [Current Phase Checklist](mdc:packages/shared/docs/checklists/phase3.5.2-strategy-indicator-integration.md)
+- [Commit Conventions](mdc:.cursor/rules/workflow/commit-conventions.mdc)
+- [Development Roadmap](mdc:packages/shared/docs/roadmap.md)

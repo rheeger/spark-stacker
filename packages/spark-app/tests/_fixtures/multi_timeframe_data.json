@@ -1,0 +1,243 @@
+{
+  "eth_1h_candles": [
+    {
+      "timestamp": "2024-12-28T08:00:00Z",
+      "open": 1645.5,
+      "high": 1652.75,
+      "low": 1642.3,
+      "close": 1650.25,
+      "volume": 125.75
+    },
+    {
+      "timestamp": "2024-12-28T09:00:00Z",
+      "open": 1650.25,
+      "high": 1655.8,
+      "low": 1648.15,
+      "close": 1653.4,
+      "volume": 98.45
+    },
+    {
+      "timestamp": "2024-12-28T10:00:00Z",
+      "open": 1653.4,
+      "high": 1658.9,
+      "low": 1651.2,
+      "close": 1656.75,
+      "volume": 110.25
+    },
+    {
+      "timestamp": "2024-12-28T11:00:00Z",
+      "open": 1656.75,
+      "high": 1661.4,
+      "low": 1654.8,
+      "close": 1659.2,
+      "volume": 87.6
+    }
+  ],
+
+  "eth_4h_candles": [
+    {
+      "timestamp": "2024-12-28T00:00:00Z",
+      "open": 1635.2,
+      "high": 1665.8,
+      "low": 1632.45,
+      "close": 1650.25,
+      "volume": 450.3
+    },
+    {
+      "timestamp": "2024-12-28T04:00:00Z",
+      "open": 1650.25,
+      "high": 1672.15,
+      "low": 1648.1,
+      "close": 1659.2,
+      "volume": 385.75
+    }
+  ],
+
+  "eth_15m_candles": [
+    {
+      "timestamp": "2024-12-28T10:00:00Z",
+      "open": 1653.4,
+      "high": 1655.2,
+      "low": 1652.8,
+      "close": 1654.1,
+      "volume": 28.45
+    },
+    {
+      "timestamp": "2024-12-28T10:15:00Z",
+      "open": 1654.1,
+      "high": 1656.75,
+      "low": 1653.5,
+      "close": 1655.3,
+      "volume": 32.6
+    },
+    {
+      "timestamp": "2024-12-28T10:30:00Z",
+      "open": 1655.3,
+      "high": 1658.9,
+      "low": 1654.9,
+      "close": 1657.45,
+      "volume": 25.85
+    },
+    {
+      "timestamp": "2024-12-28T10:45:00Z",
+      "open": 1657.45,
+      "high": 1659.6,
+      "low": 1656.2,
+      "close": 1658.75,
+      "volume": 23.35
+    }
+  ],
+
+  "btc_4h_candles": [
+    {
+      "timestamp": "2024-12-28T00:00:00Z",
+      "open": 28450.5,
+      "high": 28920.75,
+      "low": 28380.25,
+      "close": 28750.3,
+      "volume": 12.85
+    },
+    {
+      "timestamp": "2024-12-28T04:00:00Z",
+      "open": 28750.3,
+      "high": 29125.6,
+      "low": 28720.15,
+      "close": 28985.75,
+      "volume": 15.4
+    }
+  ],
+
+  "sol_15m_candles": [
+    {
+      "timestamp": "2024-12-28T10:00:00Z",
+      "open": 94.25,
+      "high": 95.8,
+      "low": 94.1,
+      "close": 95.3,
+      "volume": 1250.45
+    },
+    {
+      "timestamp": "2024-12-28T10:15:00Z",
+      "open": 95.3,
+      "high": 96.15,
+      "low": 95.05,
+      "close": 95.85,
+      "volume": 1180.75
+    },
+    {
+      "timestamp": "2024-12-28T10:30:00Z",
+      "open": 95.85,
+      "high": 96.4,
+      "low": 95.6,
+      "close": 96.1,
+      "volume": 1095.3
+    }
+  ],
+
+  "timeframe_mappings": {
+    "1m": 60,
+    "5m": 300,
+    "15m": 900,
+    "1h": 3600,
+    "4h": 14400,
+    "1d": 86400
+  },
+
+  "supported_timeframes": ["1m", "5m", "15m", "1h", "4h", "1d"],
+
+  "strategy_timeframe_configs": {
+    "eth_rsi_1h": {
+      "strategy_timeframe": "1h",
+      "indicator_timeframes": {
+        "test_rsi_1h": "1h"
+      }
+    },
+    "btc_macd_4h": {
+      "strategy_timeframe": "4h",
+      "indicator_timeframes": {
+        "test_macd_4h": "4h"
+      }
+    },
+    "sol_combined_15m": {
+      "strategy_timeframe": "15m",
+      "indicator_timeframes": {
+        "test_rsi_15m": "15m",
+        "test_bollinger_15m": "15m"
+      }
+    },
+    "eth_multi_timeframe_strategy": {
+      "strategy_timeframe": "4h",
+      "indicator_timeframes": {
+        "rsi_4h": "4h",
+        "macd_1h": "1h"
+      }
+    }
+  },
+
+  "indicator_calculations": {
+    "rsi_1h": {
+      "timeframe": "1h",
+      "symbol": "ETH-USD",
+      "period": 14,
+      "current_value": 32.5,
+      "signal": "oversold",
+      "calculation_data": {
+        "gains": [5.25, 3.4, 6.75, 2.95],
+        "losses": [2.15, 8.3, 1.75, 4.6],
+        "avg_gain": 4.59,
+        "avg_loss": 4.2,
+        "rs": 1.093,
+        "rsi": 52.24
+      }
+    },
+    "macd_4h_btc": {
+      "timeframe": "4h",
+      "symbol": "BTC-USD",
+      "fast_period": 8,
+      "slow_period": 21,
+      "signal_period": 7,
+      "current_values": {
+        "macd_line": -15.2,
+        "signal_line": -8.1,
+        "histogram": -7.1
+      },
+      "signal": "bearish_crossover"
+    },
+    "bollinger_15m_sol": {
+      "timeframe": "15m",
+      "symbol": "SOL-USD",
+      "period": 20,
+      "std_dev": 2,
+      "current_values": {
+        "upper_band": 97.25,
+        "middle_band": 95.5,
+        "lower_band": 93.75,
+        "current_price": 96.1,
+        "bandwidth": 3.5,
+        "bb_percent": 0.68
+      },
+      "signal": "approaching_upper_band"
+    }
+  },
+
+  "data_cache_keys": {
+    "eth_1h": "ETH-USD_1h",
+    "eth_4h": "ETH-USD_4h",
+    "eth_15m": "ETH-USD_15m",
+    "btc_4h": "BTC-USD_4h",
+    "sol_15m": "SOL-USD_15m"
+  },
+
+  "exchange_symbol_mappings": {
+    "hyperliquid": {
+      "ETH-USD": "ETH",
+      "BTC-USD": "BTC",
+      "SOL-USD": "SOL"
+    },
+    "coinbase": {
+      "ETH-USD": "ETH-USD",
+      "BTC-USD": "BTC-USD",
+      "SOL-USD": "SOL-USD"
+    }
+  }
+}

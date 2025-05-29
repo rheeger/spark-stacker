@@ -1,517 +1,633 @@
-# User Guide: On-Chain Perpetual Trading System
+# User Guide: Spark Stacker Trading System
 
 ## System Overview
 
-The **On-Chain Perpetual Trading System** is designed to execute high-leverage trades on
-decentralized perpetual futures exchanges while implementing sophisticated hedging strategies to
-protect your capital. The system follows technical indicators to enter trades and automatically
-manages risk through position sizing, stop-losses, and strategic hedge positions.
+The **Spark Stacker Trading System** is designed to execute high-leverage trades on decentralized
+perpetual futures exchanges while implementing sophisticated hedging strategies to protect your
+capital. The system follows technical indicators to enter trades and automatically manages risk
+through position sizing, stop-losses, and strategic hedge positions.
+
+## Architecture Overview
+
+Understanding the relationship between the core components is essential for proper configuration:
+
+### Core Components Relationship
+
+```
+STRATEGY (defines what to trade)
+├── market: "ETH-USD"              # Actual exchange symbol
+├── timeframe: "4h"                # Default timeframe for the strategy
+├── indicators: ["rsi_4h", "macd_1h"]  # Which indicators to use
+├── position_sizing: {...}         # Strategy-specific position sizing (optional)
+└── risk_params: {...}             # Position sizing, stop-loss, etc.
+
+INDICATORS (define how to analyze)
+├── name: "rsi_4h"             # Unique identifier
+├── type: "rsi"                    # Indicator algorithm
+├── timeframe: "4h"                # Data timeframe for this indicator
+├── parameters: {...}              # Algorithm-specific settings
+└── enabled: true                  # Whether to run this indicator
+
+EXCHANGE CONNECTOR (provides data)
+├── Fetches data for market: "ETH-USD"
+├── Provides timeframe-specific candles: "4h", "1h", etc.
+└── Executes trades on the actual exchange
+```
+
+### Key Principles
+
+1. **Strategies define WHAT to trade**: The market symbol (like "ETH-USD"), which indicators to use,
+   risk parameters, and position sizing methods
+2. **Indicators define HOW to analyze**: The specific algorithm, timeframe, and parameters for
+   analysis
+3. **Markets are actual exchange symbols**: Use full symbols like "ETH-USD", "BTC-USD", not just
+   "ETH"
+4. **Timeframes can be set at multiple levels**: Strategy-level defaults and indicator-level
+   specifics
+5. **Position sizing can be strategy-specific**: Each strategy can use different position sizing
+   methods while inheriting from global defaults
 
 ## 1. **Setup & Installation**
 
 ### 1.1 System Requirements
 
-- Python 3.9 or higher
-- Node.js 16+ (if using TradingView webhook integration)
-- Access to Ethereum RPC endpoints (Optimism/Base networks for Synthetix)
-- Exchange accounts (Synthetix wallet, Hyperliquid account)
+- Python 3.11 or higher
+- Node.js 20+ (for the NX monorepo)
+- Access to exchange APIs (Hyperliquid, Coinbase)
+- Yarn package manager
 
 ### 1.2 Installation Process
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/user/on-chain-perp-trading.git
-   cd on-chain-perp-trading
+   git clone https://github.com/user/spark-stacker.git
+   cd spark-stacker
    ```
 
-2. Create and activate a virtual environment:
+2. Install dependencies:
 
    ```bash
+   # Install Node dependencies for the monorepo
+   yarn install
+
+   # Set up Python virtual environment
+   cd packages/spark-app
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-
-   ```bash
    pip install -r requirements.txt
    ```
 
-4. Configure environment variables:
-
-   - Create a `.env` file based on the provided `.env.example`
-   - Add your exchange API keys, wallet details, and network endpoints
-
-   ```env
-   # Synthetix (Optimism) Configuration
-   OPTIMISM_RPC_URL=https://optimism-mainnet.infura.io/v3/YOUR_KEY
-   SYNTHETIX_WALLET_PRIVATE_KEY=your_private_key_here
-
-   # Hyperliquid Configuration
-   HYPERLIQUID_API_KEY=your_api_key
-   HYPERLIQUID_PRIVATE_KEY=your_signed_key
-
-   # TradingView Webhook (Optional)
-   WEBHOOK_SECRET=your_webhook_secret
-   ```
-
-## 2. **Exchange Connections**
-
-### 2.1 Connecting to Synthetix
-
-Synthetix Perps is a decentralized perpetual futures platform running on Optimism and Base networks.
-The trading system interacts with Synthetix through Web3 calls to its smart contracts.
-
-1. Ensure you have:
-
-   - An Optimism L2 wallet with ETH for gas
-   - sUSD (Synthetix USD) for margin/collateral
-   - Properly configured RPC endpoint
-
-2. Verify connection:
-
+3. Configure environment variables:
    ```bash
-   python test_connection.py --exchange synthetix
+   # Copy the example environment file
+   cp packages/shared/.env.example packages/shared/.env
+   # Edit the .env file with your API keys and settings
    ```
 
-3. Key Synthetix features to understand:
-   - Oracle-based pricing (updates every ~8 seconds)
-   - Up to 50× leverage on major assets
-   - Deep liquidity pool (no orderbook)
-   - Funding rates applied to positions
+## 2. **Configuration Setup**
 
-### 2.2 Connecting to Hyperliquid
+### 2.1 Proper Configuration Structure
 
-Hyperliquid is a high-performance on-chain orderbook exchange with its own L1 chain.
+The configuration follows a clear hierarchy. Here's a complete example:
 
-1. Ensure you have:
-
-   - Generated API keys from the Hyperliquid interface
-   - USDC for margin/collateral (transferred to Hyperliquid)
-   - Properly signed your API credentials
-
-2. Verify connection:
-
-   ```bash
-   python test_connection.py --exchange hyperliquid
-   ```
-
-3. Key Hyperliquid features to understand:
-   - On-chain orderbook (~100,000 orders/sec)
-   - ~30+ crypto assets available
-   - Up to 50× leverage on major pairs
-   - Market and limit order support
-
-## 3. **Configuring Trading Strategies**
-
-### 3.1 Strategy Types
-
-The system supports two main ways to generate trading signals:
-
-#### a) Built-in Technical Indicators
-
-Configure the system to use internal calculations based on:
-
-- RSI (Relative Strength Index)
-- MACD (Moving Average Convergence Divergence)
-- Bollinger Bands
-- Moving Averages (EMA, SMA)
-
-Example configuration in `config.yml`:
-
-```yaml
-strategy:
-  type: "indicator"
-  primary_indicator: "RSI"
-  parameters:
-    period: 14
-    overbought: 70
-    oversold: 30
-  confirmation_indicator: "MACD"
-  parameters:
-    fast: 12
-    slow: 26
-    signal: 9
+```json
+{
+  "log_level": "INFO",
+  "webhook_enabled": false,
+  "polling_interval": 30,
+  "dry_run": true,
+  "exchanges": [
+    {
+      "name": "hyperliquid",
+      "exchange_type": "hyperliquid",
+      "wallet_address": "${WALLET_ADDRESS}",
+      "private_key": "${PRIVATE_KEY}",
+      "testnet": true,
+      "enabled": true,
+      "use_as_main": true
+    }
+  ],
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 5000
+  },
+  "strategies": [
+    {
+      "name": "eth_multi_timeframe_strategy",
+      "market": "ETH-USD", // ← ACTUAL EXCHANGE SYMBOL
+      "exchange": "hyperliquid", // ← WHICH EXCHANGE TO USE
+      "enabled": true,
+      "timeframe": "4h", // ← DEFAULT TIMEFRAME
+      "indicators": ["trend_4h", "entry_1h"], // ← WHICH INDICATORS
+      "main_leverage": 1.0,
+      "stop_loss_pct": 5.0,
+      "take_profit_pct": 10.0,
+      "max_position_size": 0.1,
+      "risk_per_trade_pct": 0.02,
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03,
+        "max_position_size_usd": 3000
+      }
+    }
+  ],
+  "indicators": [
+    {
+      "name": "trend_4h", // ← UNIQUE IDENTIFIER
+      "type": "rsi", // ← ALGORITHM TYPE
+      "enabled": true,
+      "timeframe": "4h", // ← DATA TIMEFRAME
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "entry_1h",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "1h", // ← DIFFERENT TIMEFRAME
+      "parameters": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
+      }
+    }
+  ]
+}
 ```
 
-#### b) TradingView Pine Script Integration
+### 2.2 Strategy Configuration Explained
 
-Use your custom TradingView strategies by setting up webhook alerts:
+**Required Fields:**
 
-1. Create a Pine Script strategy in TradingView
-2. Set up an alert with webhook delivery to your system's endpoint
-3. Configure the message format in TradingView:
+- `market`: Full exchange symbol (e.g., "ETH-USD", "BTC-USD")
+- `exchange`: Which exchange to use ("hyperliquid", "coinbase")
+- `indicators`: Array of indicator names to use with this strategy
 
-   ```json
-   {
-     "passphrase": "YOUR_SECRET",
-     "asset": "{{ticker}}",
-     "signal": "{{strategy.order.action}}",
-     "price": {{close}},
-     "confidence": 0.8
-   }
-   ```
+**Optional Fields:**
 
-4. Start the webhook receiver:
+- `timeframe`: Default timeframe (overridden by indicator-specific timeframes)
+- Risk management parameters (leverage, stop-loss, etc.)
 
-   ```bash
-   python webhook_server.py
-   ```
+**Example Multi-Timeframe Strategy:**
 
-### 3.2 Risk Parameters
-
-Configure these critical risk management settings:
-
-```yaml
-risk_management:
-  # Position Sizing & Leverage
-  max_leverage: 10
-  main_position_ratio: 0.8 # Percentage of capital for main position
-  hedge_position_ratio: 0.2 # Percentage of capital for hedge position
-  hedge_leverage_ratio: 0.5 # Hedge leverage as fraction of main leverage
-
-  # Protection Mechanisms
-  stop_loss_percent: -10.0 # Close positions if drawdown exceeds 10%
-  take_profit_percent: 20.0 # Take profit at 20% gain
-  max_daily_loss_percent: -15.0 # Stop trading if daily loss exceeds 15%
-
-  # Liquidation Protection
-  liquidation_warning_threshold: 1.2 # 1.2× maintenance margin
-  hedge_profit_threshold: 5.0 # Close hedge when 5% profit to protect main
+```json
+{
+  "name": "btc_comprehensive_strategy",
+  "market": "BTC-USD",
+  "exchange": "hyperliquid",
+  "enabled": true,
+  "timeframe": "1h", // Default
+  "indicators": [
+    "btc_daily_trend", // Uses 1d timeframe
+    "btc_4h_momentum", // Uses 4h timeframe
+    "btc_1h_entry" // Uses 1h timeframe
+  ],
+  "main_leverage": 2.0,
+  "stop_loss_pct": 3.0,
+  "take_profit_pct": 6.0
+}
 ```
 
-## 4. **Understanding the Hedging Strategy**
+### 2.3 Indicator Configuration Explained
 
-### 4.1 How Hedging Works
+**Required Fields:**
 
-The system protects your principal through a strategic hedging approach:
+- `name`: Unique identifier used by strategies
+- `type`: Algorithm type ("rsi", "macd", "bollinger", "ma")
+- `timeframe`: Data timeframe for this indicator
 
-1. **Main Position**: When a signal is received, the system opens a larger position in the direction
-   of the signal (long or short).
-2. **Hedge Position**: Simultaneously, it opens a smaller position in the opposite direction.
+**Timeframe Examples:**
 
-For example:
+- `"1m"`, `"5m"`, `"15m"`, `"30m"` - Minutes
+- `"1h"`, `"4h"`, `"12h"` - Hours
+- `"1d"`, `"1w"` - Days/Weeks
 
-- $100 available capital
-- $80 (80%) used for main position at 10× leverage = $800 exposure
-- $20 (20%) used for hedge position at 5× leverage = $100 exposure
-- Net exposure: $700 in signal direction ($800 - $100)
+**Multi-Timeframe Indicator Setup:**
 
-This approach:
-
-- Retains significant upside if the signal is correct
-- Provides protection if the signal is wrong
-- Reduces overall volatility of your account equity
-
-### 4.2 Dynamic Hedge Management
-
-The hedge isn't static - the system actively manages it:
-
-- If the main position becomes strongly profitable, the system may reduce the hedge to maximize
-  returns
-- If the trade moves against the main position, the hedge generates profit to offset some losses
-- In extreme adverse moves, the hedge profit helps prevent liquidation of the main position
-
-## 5. **Running the Trading System**
-
-### 5.1 Backtesting Mode
-
-Before committing real capital, test your strategy on historical data:
-
-```bash
-python run_bot.py --mode backtest --strategy my_strategy --start-date 2023-01-01 --end-date 2023-12-31
+```json
+{
+  "indicators": [
+    {
+      "name": "btc_daily_trend",
+      "type": "ma",
+      "timeframe": "1d", // Daily trend
+      "parameters": {
+        "short_period": 20,
+        "long_period": 50
+      }
+    },
+    {
+      "name": "btc_4h_momentum",
+      "type": "rsi",
+      "timeframe": "4h", // 4-hour momentum
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30
+      }
+    },
+    {
+      "name": "btc_1h_entry",
+      "type": "macd",
+      "timeframe": "1h", // 1-hour entry timing
+      "parameters": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
+      }
+    }
+  ]
+}
 ```
 
-The backtesting engine will:
+### 2.4 Market Symbol Mapping
 
-- Load historical price data for your chosen assets
-- Apply the selected indicators and generate signals
-- Simulate trades including main and hedge positions
-- Calculate performance metrics (win rate, profit factor, max drawdown)
-- Generate a detailed report of strategy performance
+**Important**: Always use full exchange symbols, not abbreviated forms:
 
-Review these metrics carefully to assess strategy viability before live trading.
+✅ **Correct:**
 
-### 5.2 De-Minimus Live Trading
+- `"ETH-USD"` - Ethereum vs US Dollar
+- `"BTC-USD"` - Bitcoin vs US Dollar
+- `"AVAX-USD"` - Avalanche vs US Dollar
 
-Once your strategy passes backtesting, test it with minimal real capital on production exchanges:
+❌ **Incorrect:**
 
-```bash
-python run_bot.py --mode live --strategy my_strategy --capital 5.00 --position-size 1.00
+- `"ETH"` - Ambiguous, what's the quote currency?
+- `"RSI-4H"` - This is an indicator name, not a market!
+- `"ETHEREUM"` - Use standard symbols
+
+### 2.5 Common Configuration Patterns
+
+**Pattern 1: Single Timeframe Strategy**
+
+```json
+{
+  "strategies": [
+    {
+      "name": "rsi_4h",
+      "market": "ETH-USD",
+      "timeframe": "4h",
+      "indicators": ["rsi_4h"]
+    }
+  ],
+  "indicators": [
+    {
+      "name": "rsi_4h",
+      "type": "rsi",
+      "timeframe": "4h"
+    }
+  ]
+}
 ```
 
-This approach:
+**Pattern 2: Multi-Indicator Strategy**
 
-- Uses actual production exchanges with real capital
-- Limits risk to very small amounts (e.g., $1.00 per position)
-- Validates the full trade lifecycle in real market conditions
-- Provides more reliable results than testnet or paper trading
-- Allows for monitoring with shorter timeframes (1-minute candles)
-
-Monitor closely for at least several hours with 1-minute timeframes to ensure proper operation.
-
-### 5.3 Full Live Trading Mode
-
-When de-minimus testing proves successful, increase capital allocation:
-
-```bash
-python run_bot.py --mode live --strategy my_strategy --capital 100
+```json
+{
+  "strategies": [
+    {
+      "name": "eth_combined",
+      "market": "ETH-USD",
+      "indicators": ["rsi_4h", "macd_1h", "bb_15m"]
+    }
+  ],
+  "indicators": [
+    { "name": "rsi_4h", "type": "rsi", "timeframe": "4h" },
+    { "name": "macd_1h", "type": "macd", "timeframe": "1h" },
+    { "name": "bb_15m", "type": "bollinger", "timeframe": "15m" }
+  ]
+}
 ```
 
-The system will:
+**Pattern 3: Multiple Market Strategy**
 
-1. Monitor markets and indicators in real-time
-2. Execute main and hedge positions when signals are triggered
-3. Actively manage risk through stop-losses and hedge adjustments
-4. Log all activities and send alerts for critical events
-
-### 5.4 Cloud Deployment
-
-For continuous operation, the system can be deployed to Google Cloud Platform:
-
-```bash
-# Deploy to GCP (requires gcloud CLI and kubectl)
-./deploy_to_gcp.sh --project your-project-id --cluster spark-stacker
+```json
+{
+  "strategies": [
+    {
+      "name": "eth_strategy",
+      "market": "ETH-USD",
+      "indicators": ["rsi_4h"]
+    },
+    {
+      "name": "btc_strategy",
+      "market": "BTC-USD",
+      "indicators": ["btc_macd_1h"]
+    }
+  ],
+  "indicators": [
+    { "name": "rsi_4h", "type": "rsi", "timeframe": "4h" },
+    { "name": "btc_macd_1h", "type": "macd", "timeframe": "1h" }
+  ]
+}
 ```
 
-The cloud deployment:
+### 2.6 Position Sizing Configuration
 
-- Runs continuously with high availability
-- Scales resources as needed
-- Maintains persistent database connections
-- Provides remote monitoring through Grafana dashboards
-- Secures API keys and credentials with Secret Manager
+The system supports both global and strategy-specific position sizing, allowing you to customize
+position sizes based on your risk tolerance and strategy characteristics.
 
-## MACD Strategy Implementation Guide
+#### 2.6.1 Global Position Sizing
 
-This section provides a step-by-step guide for implementing and running our MVP MACD strategy on
-Hyperliquid's ETH-USD market with minimal risk ($1.00 positions) using 1-minute timeframes.
+Set default position sizing behavior in the root `position_sizing` section:
 
-### Strategy Overview
-
-- **Indicator:** MACD with Fast=8, Slow=21, Signal=5 periods
-- **Market:** ETH-USD on Hyperliquid
-- **Timeframe:** 1-minute candles
-- **Position Size:** $1.00 maximum per position
-- **Risk Parameters:** 10× leverage, 5% stop-loss, 10% take-profit, 20% hedge ratio
-
-### Implementation Steps
-
-#### 1. Configure the MACD Strategy
-
-Create a strategy configuration in your `config.yml` file:
-
-```yaml
-strategies:
-  macd_eth_usd:
-    name: 'MACD ETH-USD 1m'
-    type: 'MACD'
-    enabled: true
-    exchange: 'hyperliquid'
-    market: 'ETH-USD'
-    timeframe: '1m'
-    parameters:
-      fast_period: 8
-      slow_period: 21
-      signal_period: 5
-    risk_parameters:
-      max_position_size: 1.00 # $1.00 maximum position
-      leverage: 10
-      stop_loss_percent: -5.0
-      take_profit_percent: 10.0
-      hedge_ratio: 0.2 # 20% of main position as hedge
-      max_position_duration_minutes: 1440 # 24 hours
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 5000
+  }
+}
 ```
 
-#### 2. Configure Hyperliquid Exchange Connection
+#### 2.6.2 Strategy-Specific Position Sizing
 
-Ensure your Hyperliquid API credentials are properly set in your `.env` file:
+Override global defaults with strategy-specific position sizing:
+
+```json
+{
+  "name": "eth_aggressive_strategy",
+  "market": "ETH-USD",
+  "indicators": ["rsi_4h"],
+  "position_sizing": {
+    "method": "risk_based",
+    "risk_per_trade_pct": 0.03,
+    "max_position_size_usd": 3000
+  }
+}
+```
+
+#### 2.6.3 Position Sizing Methods
+
+**1. Fixed USD Amount (`fixed_usd`)**
+
+Trade a consistent dollar amount for each signal:
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "max_position_size_usd": 5000
+  }
+}
+```
+
+- **Best for**: Conservative trading, beginners, consistent exposure
+- **Example**: Always trade $1000 worth, regardless of account size
+
+**2. Risk-Based Sizing (`risk_based`)**
+
+Size positions based on percentage of portfolio at risk:
+
+```json
+{
+  "position_sizing": {
+    "method": "risk_based",
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 10000
+  }
+}
+```
+
+- **Best for**: Professional risk management, scaling with portfolio
+- **Example**: Risk 2% of portfolio per trade, adjusting position size accordingly
+
+**3. Percent Equity (`percent_equity`)**
+
+Size positions as a percentage of total equity:
+
+```json
+{
+  "position_sizing": {
+    "method": "percent_equity",
+    "percent_equity": 0.1,
+    "max_position_size_usd": 15000
+  }
+}
+```
+
+- **Best for**: Growth strategies, scaling with account size
+- **Example**: Use 10% of total equity per position
+
+#### 2.6.4 Multi-Strategy Position Sizing Example
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_amount_usd": 1000,
+    "max_position_size_usd": 5000
+  },
+  "strategies": [
+    {
+      "name": "eth_conservative",
+      "market": "ETH-USD",
+      "indicators": ["rsi_4h"]
+      // Uses global: fixed_usd $1000
+    },
+    {
+      "name": "eth_aggressive",
+      "market": "ETH-USD",
+      "indicators": ["macd_1h"],
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.03
+        // Inherits max_position_size_usd: 5000 from global
+      }
+    },
+    {
+      "name": "btc_scalping",
+      "market": "BTC-USD",
+      "indicators": ["btc_rsi_15m"],
+      "position_sizing": {
+        "fixed_amount_usd": 500
+        // Inherits method: "fixed_usd" from global
+      }
+    }
+  ]
+}
+```
+
+#### 2.6.5 Position Sizing Best Practices
+
+1. **Start Conservative**: Begin with fixed USD amounts or low risk percentages
+2. **Test Different Methods**: Backtest each method to understand performance
+3. **Consider Strategy Type**:
+   - Scalping strategies → Fixed USD or small percentages
+   - Swing trading → Risk-based sizing
+   - Long-term trends → Percent equity
+4. **Set Maximum Limits**: Always use `max_position_size_usd` to prevent oversized positions
+5. **Monitor Performance**: Track how different sizing methods affect your returns
+
+## 3. **Exchange Connections**
+
+### 3.1 Connecting to Hyperliquid
+
+Configure Hyperliquid in your `.env` file:
 
 ```env
-# Hyperliquid Configuration
-HYPERLIQUID_API_KEY=your_api_key
-HYPERLIQUID_PRIVATE_KEY=your_signed_key
-HYPERLIQUID_TESTNET=false  # Using production exchange
+WALLET_ADDRESS=0x...
+PRIVATE_KEY=0x...
+HYPERLIQUID_TESTNET=true  # Set to false for mainnet
 ```
 
-#### 3. Launch in De-Minimus Live Trading Mode
-
-Start the strategy with minimal capital for real-world validation:
+Verify connection:
 
 ```bash
-python run_bot.py --mode live --strategy macd_eth_usd --capital 5.00
+cd packages/spark-app
+.venv/bin/python -c "
+from app.connectors.hyperliquid_connector import HyperliquidConnector
+connector = HyperliquidConnector(testnet=True)
+print('Available markets:', connector.get_available_markets())
+"
 ```
 
-This will allocate $5.00 to the strategy, with each position limited to $1.00 maximum, trading on
-the production Hyperliquid exchange.
+### 3.2 Connecting to Coinbase
 
-#### 4. Monitor Live Performance
+Configure Coinbase in your `.env` file:
 
-Access the strategy monitoring dashboard:
+```env
+COINBASE_API_KEY=your_key
+COINBASE_API_SECRET=your_secret
+COINBASE_PASSPHRASE=your_passphrase
+```
+
+## 4. **Running the Trading System**
+
+### 4.1 Development Mode
+
+Start with dry run mode enabled:
 
 ```bash
-http://localhost:3000/d/macd-strategy-dashboard
+cd packages/spark-app
+.venv/bin/python app/main.py
 ```
 
-The MACD Strategy Dashboard provides:
+Monitor the logs to ensure:
 
-- Real-time strategy status with 1-minute updates
-- Current MACD values and signals
-- Position information (size, entry price, P&L)
-- Execution metrics and performance statistics
-- Alerts for significant events (signals, trades, errors)
+- Indicators are properly loaded
+- Market data is being fetched
+- Strategies are running without errors
 
-#### 5. Deploy to Google Cloud Platform
+### 4.2 Backtesting
 
-Once the strategy is validated through de-minimus testing, deploy for continuous operation:
+Test your strategy configuration:
 
 ```bash
-# Deploy to GKE
-./deploy_to_gcp.sh --strategy macd_eth_usd --cluster spark-stacker
-
-# Monitor remotely
-echo "Grafana dashboard available at: https://monitoring.your-domain.com/d/macd-strategy-dashboard"
+cd packages/spark-app
+.venv/bin/python -m tests._utils.cli backtest-indicator \
+  --indicator rsi_4h \
+  --symbol ETH-USD \
+  --timeframe 4h \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-01
 ```
 
-### Strategy Customization
+### 4.3 Live Trading (Production)
 
-You can fine-tune the strategy by adjusting these parameters:
+Only after successful backtesting and dry run validation:
 
-#### MACD Parameters
-
-- **Fast Period:** Controls responsiveness to recent price changes (lower = more responsive)
-- **Slow Period:** Provides longer-term trend context (higher = smoother)
-- **Signal Period:** Affects signal sensitivity (lower = more signals, higher = fewer false signals)
-
-#### Risk Parameters
-
-- **Leverage:** Amplifies potential gains and losses (10× is recommended for the MVP)
-- **Stop-Loss:** Percentage of adverse movement before closing position (5% recommended)
-- **Take-Profit:** Percentage of favorable movement before taking profits (10% recommended)
-- **Hedge Ratio:** Percentage of counter-position for risk reduction (20% recommended)
-
-### Interpreting Results
-
-The MACD strategy generates signals based on these conditions:
-
-- **Buy Signal:** MACD line crosses above the Signal line
-- **Sell Signal:** MACD line crosses below the Signal line
-
-Performance should be evaluated based on:
-
-- **Win Rate:** Percentage of profitable trades
-- **Profit Factor:** Gross profit divided by gross loss
-- **Maximum Drawdown:** Largest peak-to-trough decline
-- **Sharpe Ratio:** Risk-adjusted return metric
-
-### Monitoring the 1-Minute Strategy
-
-When using 1-minute timeframes:
-
-- **Active Monitoring:** Plan to actively watch the strategy during initial testing
-- **Signal Frequency:** Expect more frequent signals than with longer timeframes
-- **Performance Dashboard:** Use the specialized 1-minute dashboard for real-time analytics
-- **Alert Configuration:** Set up immediate notifications for critical events
-- **Position Tracking:** Monitor position lifecycle closely during the observation period
-
-This short-timeframe approach allows you to validate the full trade lifecycle while sitting at your
-computer, providing faster feedback on strategy performance.
-
-## 6. **Monitoring Your Trades**
-
-### 6.1 Live Dashboard
-
-Access the live dashboard to monitor performance:
+1. Set `"dry_run": false` in your config
+2. Start with small position sizes
+3. Monitor closely for the first few hours
 
 ```bash
-python dashboard.py
+cd packages/spark-app
+.venv/bin/python app/main.py
 ```
 
-The dashboard shows:
+## 5. **Monitoring & Troubleshooting**
 
-- Current open positions (main and hedge)
-- Real-time P&L and margin utilization
-- Recent trade history and performance stats
-- Risk metrics and liquidation warnings
+### 5.1 Log Analysis
 
-### 6.2 Performance Analysis
-
-Generate detailed reports on your trading performance:
+Check logs for common issues:
 
 ```bash
-python analyze_performance.py --start-date 2023-01-01 --end-date 2023-12-31
+# Check if strategies are loading correctly
+grep "strategy" packages/spark-app/_logs/spark_stacker.log
+
+# Check if indicators are being assigned markets
+grep "Assigned symbol" packages/spark-app/_logs/spark_stacker.log
+
+# Check for market data fetching
+grep "Fetching.*historical.*candles" packages/spark-app/_logs/spark_stacker.log
 ```
 
-This analysis includes:
+### 5.2 Common Errors & Solutions
 
-- Win/loss ratio and average trade P&L
-- Strategy performance by market conditions
-- Hedge effectiveness metrics
-- Risk-adjusted return calculations (Sharpe ratio, etc.)
+**Error: "Market RSI-4H not found"**
 
-### 6.3 Logging and Alerts
+- **Cause**: Indicator name being used as market symbol
+- **Fix**: Check strategy configuration uses proper market symbols like "ETH-USD"
 
-The system maintains comprehensive logs:
+**Error: "No indicators registered"**
 
-- Trade execution logs: `_logs/trades.log`
-- System event logs: `_logs/system.log`
-- Error logs: `_logs/error.log`
+- **Cause**: Indicators not properly configured or enabled
+- **Fix**: Verify indicator configuration and `"enabled": true`
 
-Configure alerts via email or messaging services in `config.yml`:
+**Error: "Could not parse symbol from indicator name"**
 
-```yaml
-alerts:
-  enabled: true
-  methods:
-    email: 'your@email.com'
-    telegram: true
-  events:
-    - 'new_position_opened'
-    - 'position_closed'
-    - 'stop_loss_triggered'
-    - 'error_occurred'
+- **Cause**: Legacy symbol parsing logic
+- **Fix**: Use proper strategy-indicator relationships instead
+
+### 5.3 Grafana Monitoring
+
+Access monitoring dashboards:
+
+```bash
+cd packages/monitoring
+make start-monitoring
+# Open http://localhost:3000
 ```
 
-## 7. **Best Practices & Tips**
+View timeframe-specific metrics:
 
-### 7.1 Capital Management
+```promql
+# 4-hour RSI data
+spark_stacker_candle{market="ETH-USD", timeframe="4h", field="close"}
 
-- Start with a small portion of your capital (e.g., 5-10%)
-- Gradually increase as you gain confidence in the system
-- Never commit funds you can't afford to lose
-- Consider dividing capital across multiple strategies
+# 1-hour MACD data
+spark_stacker_macd{market="ETH-USD", timeframe="1h", component="macd_line"}
+```
 
-### 7.2 Risk Optimization
+## 6. **Best Practices**
 
-- Run multiple backtests to optimize risk parameters
-- Start with conservative leverage (e.g., 5× instead of 20×)
-- Use wider stop-losses in volatile markets
-- Consider adjusting hedge ratio based on market volatility
+### 6.1 Configuration Best Practices
 
-### 7.3 System Maintenance
+1. **Use descriptive names**: `"rsi_4h"` instead of `"rsi1"`
+2. **Match timeframes to strategy**: Daily strategies use daily indicators
+3. **Start simple**: Single indicator, single timeframe, then expand
+4. **Test thoroughly**: Always backtest before live trading
 
-- Regularly check for system updates
-- Monitor exchange API changes that may affect connectivity
-- Keep backup copies of your strategy configurations
-- Periodically review and optimize your strategies
+### 6.2 Naming Conventions
 
-## 8. **Troubleshooting**
+**Indicators:**
 
-### Common Issues
+- Format: `{market}_{type}_{timeframe}`
+- Examples: `"rsi_4h"`, `"btc_macd_1h"`, `"avax_bb_15m"`
 
-- **No Trades Executing:** Check indicator thresholds, they may be too restrictive
-- **Connection Errors:** Verify API keys and network connectivity
-- **Unexpected Losses:** Review hedge ratio and leverage settings
-- **Excessive Fees:** Consider using limit orders instead of market orders
-- **Rapid Capital Depletion:** Immediately reduce position size and leverage
+**Strategies:**
 
-### Getting Support
+- Format: `{market}_{strategy_type}`
+- Examples: `"eth_momentum_strategy"`, `"btc_scalping_strategy"`
 
-- Check the FAQ in the repository documentation
-- Review existing issues on GitHub
-- Join the community Discord/Telegram
-- File a detailed bug report for persistent issues
+### 6.3 Risk Management
 
-This user guide covers the essential aspects of operating the On-Chain Perpetual Trading System. For
-more detailed information, refer to the Technical Specification document.
+1. **Start with conservative parameters**: Low leverage, wide stops
+2. **Use multiple timeframes**: Combine trend, momentum, and timing
+3. **Diversify across markets**: Don't put all capital in one asset
+4. **Monitor performance**: Track win rates, drawdown, Sharpe ratio
+
+This user guide provides the foundation for properly configuring and running the Spark Stacker
+trading system. The key is understanding the clear separation between strategies (what to trade),
+indicators (how to analyze), and markets (actual exchange symbols).

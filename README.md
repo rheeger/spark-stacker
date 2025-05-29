@@ -7,7 +7,10 @@ Spark Stacker is an advanced on-chain perpetual trading system with integrated h
 ## Features
 
 - **Multi-Exchange Support**: Supports Hyperliquid and Coinbase with planned expansion to Synthetix
-- **Technical Indicators**: RSI implementation with framework for custom indicators
+- **Strategy-Driven Architecture**: Clear separation between strategies (WHAT to trade) and indicators (HOW to analyze)
+- **Multi-Timeframe Support**: Different indicators can operate on different timeframes within the same strategy
+- **Technical Indicators**: RSI, MACD implementations with framework for custom indicators
+- **Strategy-Specific Position Sizing**: Each strategy can have its own position sizing method and parameters
 - **Risk Management**: Advanced position sizing, leverage control, and hedging
 - **Trading Webhooks**: Support for TradingView alerts integration
 - **Dry Run Mode**: Test strategies without deploying capital
@@ -51,14 +54,48 @@ spark-stacker/
 
 ## Architecture
 
-Spark Stacker is built with a modular architecture:
+Spark Stacker is built with a modular, strategy-driven architecture:
 
+### Core Components
+
+- **Strategies**: Define WHAT to trade (market, exchange, indicators to use, risk parameters)
+- **Indicators**: Define HOW to analyze data (algorithm type, timeframe, parameters)
 - **Connectors**: Exchange-specific implementations with a common interface
-- **Indicators**: Technical indicators for signal generation
-- **Risk Management**: Handles position sizing and risk control
+- **Risk Management**: Handles position sizing and risk control with strategy-specific configurations
 - **Trading Engine**: Core component that coordinates all operations
 - **Webhook Server**: Receives external signals via HTTP
 - **Monitoring System**: Grafana dashboards for performance tracking and analysis
+
+### Strategy-Indicator Relationship
+
+The system follows a clear separation of concerns:
+
+1. **Strategies** specify:
+
+   - Which market to trade ("ETH-USD", "BTC-USD")
+   - Which exchange to use ("hyperliquid", "coinbase")
+   - Which indicators to consult for signals
+   - Risk management parameters
+   - Position sizing method (optional, inherits from global if not specified)
+
+2. **Indicators** specify:
+
+   - The algorithm to use ("rsi", "macd")
+   - The timeframe for data analysis ("1h", "4h", "1d")
+   - Algorithm-specific parameters (period, thresholds, etc.)
+
+3. **Signal Flow**:
+
+   ```
+   Strategy → Indicators → Signals → Trading Engine → Exchange
+   ```
+
+This separation allows:
+
+- Multiple strategies to share the same indicators
+- Strategies to use different timeframes for different indicators
+- Easy addition of new strategies without modifying indicators
+- Strategy-specific position sizing and risk management
 
 ## Prerequisites
 
@@ -77,55 +114,158 @@ All shared configuration files are located in the `packages/shared` directory:
 2. Configure your trading settings in `config.json`
 3. Set `dry_run` to `true` for testing without executing trades
 
-Example configuration:
+#### Basic Configuration Example
 
 ```json
 {
   "log_level": "INFO",
   "webhook_enabled": false,
-  "webhook_port": 8080,
-  "webhook_host": "0.0.0.0",
-  "max_parallel_trades": 1,
-  "polling_interval": 60,
   "dry_run": true,
+  "polling_interval": 60,
+  "max_parallel_trades": 1,
+
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 100.0,
+    "equity_percentage": 0.05,
+    "risk_per_trade_pct": 0.02,
+    "max_position_size_usd": 1000.0
+  },
+
   "exchanges": [
     {
       "name": "hyperliquid",
-      "wallet_address": "YOUR_WALLET_ADDRESS",
-      "private_key": "YOUR_PRIVATE_KEY",
+      "exchange_type": "hyperliquid",
+      "wallet_address": "${WALLET_ADDRESS}",
+      "private_key": "${PRIVATE_KEY}",
       "testnet": true,
-      "use_as_main": true,
-      "use_as_hedge": true
+      "enabled": true,
+      "use_as_main": true
     }
   ],
+
   "strategies": [
     {
-      "name": "rsi_eth_strategy",
-      "market": "ETH",
+      "name": "eth_momentum_strategy",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
       "enabled": true,
+      "timeframe": "4h",
+      "indicators": ["rsi_4h", "macd_1h"],
       "main_leverage": 5.0,
-      "hedge_leverage": 2.0,
-      "hedge_ratio": 0.2,
       "stop_loss_pct": 10.0,
       "take_profit_pct": 20.0,
       "max_position_size": 100.0
     }
   ],
+
   "indicators": [
     {
-      "name": "eth_rsi",
+      "name": "rsi_4h",
       "type": "rsi",
       "enabled": true,
+      "timeframe": "4h",
       "parameters": {
         "period": 14,
         "overbought": 70,
-        "oversold": 30,
-        "signal_period": 1
+        "oversold": 30
+      }
+    },
+    {
+      "name": "macd_1h",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
       }
     }
   ]
 }
 ```
+
+#### Strategy-Specific Position Sizing
+
+Each strategy can override the global position sizing configuration:
+
+```json
+{
+  "position_sizing": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 100.0
+  },
+
+  "strategies": [
+    {
+      "name": "conservative_strategy",
+      "market": "BTC-USD",
+      "exchange": "hyperliquid",
+      "indicators": ["rsi_4h"]
+      // Uses global position sizing (fixed_usd, $100)
+    },
+    {
+      "name": "aggressive_strategy",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "indicators": ["macd_1h"],
+      // Strategy-specific position sizing
+      "position_sizing": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.05,
+        "default_stop_loss_pct": 0.03,
+        "max_position_size_usd": 2000.0
+      }
+    },
+    {
+      "name": "percent_equity_strategy",
+      "market": "SOL-USD",
+      "exchange": "hyperliquid",
+      "indicators": ["rsi_1h"],
+      // Another position sizing method
+      "position_sizing": {
+        "method": "percent_equity",
+        "equity_percentage": 0.1,
+        "max_position_size_usd": 5000.0
+      }
+    }
+  ]
+}
+```
+
+### Key Configuration Principles
+
+#### Strategy-Indicator Relationship
+
+- **Strategies define WHAT to trade**: Market symbol, exchange, which indicators to use, risk parameters
+- **Indicators define HOW to analyze**: Algorithm type, timeframe, and parameters
+- **Use full market symbols**: "ETH-USD", "BTC-USD", not just "ETH"
+- **Connect strategies to indicators**: Use the `indicators` array in strategy config
+- **Timeframe independence**: Strategies can use indicators with different timeframes
+
+#### Position Sizing Configuration
+
+- **Global defaults**: Set in the root `position_sizing` object
+- **Strategy overrides**: Add `position_sizing` object to individual strategies
+- **Inheritance**: Strategies inherit global settings and can override specific parameters
+- **Validation**: Each strategy's position sizing configuration is validated at startup
+
+#### Symbol Conversion
+
+- **Standard format**: Always use "SYMBOL-USD" format in configuration ("ETH-USD", "BTC-USD")
+- **Exchange conversion**: System automatically converts to exchange-specific format:
+  - Hyperliquid: "ETH-USD" → "ETH"
+  - Coinbase: "ETH-USD" → "ETH-USD" (unchanged)
+
+### Position Sizing Methods
+
+| Method           | Description                           | Key Parameters                                      |
+| ---------------- | ------------------------------------- | --------------------------------------------------- |
+| `fixed_usd`      | Fixed dollar amount per trade         | `fixed_usd_amount`                                  |
+| `percent_equity` | Percentage of account equity          | `equity_percentage`                                 |
+| `risk_based`     | Based on stop loss and risk tolerance | `risk_per_trade_pct`, `default_stop_loss_pct`       |
+| `kelly`          | Kelly criterion optimization          | `kelly_win_rate`, `kelly_avg_win`, `kelly_avg_loss` |
 
 ### Local Development
 
@@ -138,12 +278,12 @@ cd spark-stacker
 yarn install
 
 # Set up Python virtual environment
+cd packages/spark-app
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r packages/spark-app/requirements.txt
+pip install -r requirements.txt
 
 # Run the trading application
-cd packages/spark-app
 python app/main.py
 ```
 
@@ -257,3 +397,164 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Disclaimer
 
 This software is provided for educational and informational purposes only. Trading cryptocurrencies involves substantial risk of loss and is not suitable for every investor. The past performance of any trading strategy is not necessarily indicative of future results. Only risk capital should be used for trading and only those with sufficient experience should trade.
+
+## Troubleshooting
+
+### Common Configuration Errors
+
+#### "Market [INDICATOR-NAME] not found" Error
+
+**Problem**: Indicator names being treated as market symbols
+
+```
+ERROR: Market RSI-4H not found
+```
+
+**Solution**: Ensure proper strategy-indicator configuration:
+
+```json
+// ❌ Incorrect - this will cause the error
+"strategies": [
+  {
+    "market": "RSI-4H",  // Wrong! This is an indicator name
+    "indicators": ["rsi_4h"]
+  }
+]
+
+// ✅ Correct configuration
+"strategies": [
+  {
+    "market": "ETH-USD",  // Market symbol
+    "exchange": "hyperliquid",
+    "indicators": ["rsi_4h"]  // Indicator references
+  }
+]
+```
+
+#### Invalid Market Symbol Format
+
+**Problem**: Using single symbols instead of pairs
+
+```json
+// ❌ Incorrect
+"market": "ETH"
+
+// ✅ Correct
+"market": "ETH-USD"
+```
+
+#### Missing Exchange Field
+
+**Problem**: Strategy doesn't specify which exchange to use
+
+```json
+// ❌ Missing exchange
+"strategies": [
+  {
+    "name": "my_strategy",
+    "market": "ETH-USD",
+    "indicators": ["rsi_4h"]
+  }
+]
+
+// ✅ Include exchange
+"strategies": [
+  {
+    "name": "my_strategy",
+    "market": "ETH-USD",
+    "exchange": "hyperliquid",
+    "indicators": ["rsi_4h"]
+  }
+]
+```
+
+#### Indicator Not Found
+
+**Problem**: Strategy references indicator that doesn't exist
+
+```json
+// Strategy references "rsi_daily" but it's not defined
+"strategies": [
+  {
+    "indicators": ["rsi_daily"]  // ❌ Not defined below
+  }
+],
+"indicators": [
+  {
+    "name": "rsi_4h",  // ✅ Different name
+    "type": "rsi"
+  }
+]
+```
+
+#### Invalid Position Sizing Configuration
+
+**Problem**: Strategy-specific position sizing with invalid parameters
+
+```json
+// ❌ Invalid configuration
+"strategies": [
+  {
+    "position_sizing": {
+      "method": "risk_based",
+      // Missing required parameters for risk_based method
+    }
+  }
+]
+
+// ✅ Complete configuration
+"strategies": [
+  {
+    "position_sizing": {
+      "method": "risk_based",
+      "risk_per_trade_pct": 0.02,
+      "default_stop_loss_pct": 0.05,
+      "max_position_size_usd": 1000.0
+    }
+  }
+]
+```
+
+### Testing Configuration
+
+Validate your configuration without trading:
+
+```bash
+cd packages/spark-app
+
+# Test configuration loading
+.venv/bin/python -c "
+import json
+from app.core.strategy_config import StrategyConfigLoader
+
+with open('../shared/config.json') as f:
+    config = json.load(f)
+
+strategies = StrategyConfigLoader.load_strategies(config['strategies'])
+print('✅ Configuration loaded successfully')
+print(f'Loaded {len(strategies)} strategies')
+"
+
+# Test strategy-indicator relationships
+.venv/bin/python -c "
+from app.main import _validate_strategy_indicators
+import json
+
+with open('../shared/config.json') as f:
+    config = json.load(f)
+
+_validate_strategy_indicators(config['strategies'], config['indicators'])
+print('✅ Strategy-indicator validation passed')
+"
+
+# Run in dry-run mode
+python app/main.py --dry-run
+```
+
+### Debugging Tips
+
+1. **Enable debug logging**: Set `log_level: "DEBUG"` in config.json
+2. **Check symbol conversion**: Verify exchange-specific symbol formats
+3. **Validate timeframes**: Ensure indicator timeframes are supported
+4. **Test indicators individually**: Use indicator testing scripts
+5. **Check exchange connectivity**: Verify API credentials and network access

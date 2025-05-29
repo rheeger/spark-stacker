@@ -166,4 +166,4 @@ class RSIIndicator(BaseIndicator):
 
     def __str__(self) -> str:
         """String representation of the indicator."""
-        return f"RSI(period={self.period}, overbought={self.overbought}, oversold={self.oversold})"
+        return f"RSI(period={self.period}, overbought={self.overbought}, oversold={self.oversold}, timeframe={self.get_effective_timeframe()})"

@@ -17,6 +17,8 @@ class RiskManager:
 
     This class handles risk-related calculations and validations before placing trades.
     It helps protect the principal by limiting exposure and implementing smart risk controls.
+
+    Supports strategy-specific position sizing configurations.
     """
 
     def __init__(
@@ -28,6 +30,7 @@ class RiskManager:
         min_margin_buffer_pct: float = 20.0,
         position_sizer: Optional[PositionSizer] = None,
         position_sizing_config: Optional[Dict[str, Any]] = None,
+        strategy_position_sizers: Optional[Dict[str, PositionSizer]] = None,
     ):
         """
         Initialize the risk manager.
@@ -38,8 +41,9 @@ class RiskManager:
             max_position_size_usd: Maximum position size in USD (None for no limit)
             max_positions: Maximum number of concurrent positions
             min_margin_buffer_pct: Minimum margin buffer percentage
-            position_sizer: Optional custom position sizer instance
-            position_sizing_config: Optional position sizing configuration dict
+            position_sizer: Optional custom position sizer instance (used as default)
+            position_sizing_config: Optional position sizing configuration dict (used as default)
+            strategy_position_sizers: Optional dict of strategy name -> PositionSizer mappings
         """
         self.max_account_risk_pct = max_account_risk_pct
         self.max_leverage = max_leverage
@@ -47,7 +51,7 @@ class RiskManager:
         self.max_positions = max_positions
         self.min_margin_buffer_pct = min_margin_buffer_pct
 
-        # Initialize position sizer
+        # Initialize default position sizer
         if position_sizer:
             self.position_sizer = position_sizer
             logger.info(f"Using provided position sizer with method: {position_sizer.config.method.value}")
@@ -70,6 +74,14 @@ class RiskManager:
             self.position_sizer = PositionSizer(sizing_config)
             logger.info("Created default position sizer with fixed USD method")
 
+        # Initialize strategy-specific position sizers
+        self.strategy_position_sizers: Dict[str, PositionSizer] = strategy_position_sizers or {}
+
+        if self.strategy_position_sizers:
+            logger.info(f"Initialized with {len(self.strategy_position_sizers)} strategy-specific position sizers")
+            for strategy_name, sizer in self.strategy_position_sizers.items():
+                logger.info(f"  {strategy_name}: {sizer.config.method.value}")
+
         # Track positions and risk metrics
         self.positions = {}
         self.total_exposure = 0.0
@@ -84,9 +96,12 @@ class RiskManager:
         leverage: float,
         price: Optional[float] = None,
         stop_loss_pct: Optional[float] = None,
+        strategy_name: Optional[str] = None,
     ) -> Tuple[float, float]:
         """
         Calculate position size using the integrated position sizer.
+
+        Uses strategy-specific position sizer if available, otherwise falls back to default.
 
         Args:
             exchange: Exchange connector
@@ -97,10 +112,22 @@ class RiskManager:
             leverage: Initial leverage
             price: Optional price override
             stop_loss_pct: Stop loss percentage
+            strategy_name: Optional strategy name for strategy-specific position sizing
 
         Returns:
             Tuple of (position_size_usd, adjusted_leverage) where position_size_usd is in USD
         """
+        # Select appropriate position sizer based on strategy
+        if strategy_name and strategy_name in self.strategy_position_sizers:
+            position_sizer = self.strategy_position_sizers[strategy_name]
+            logger.debug(f"Using strategy-specific position sizer for '{strategy_name}': {position_sizer.config.method.value}")
+        else:
+            position_sizer = self.position_sizer
+            if strategy_name:
+                logger.debug(f"No specific position sizer for strategy '{strategy_name}', using default: {position_sizer.config.method.value}")
+            else:
+                logger.debug(f"No strategy specified, using default position sizer: {position_sizer.config.method.value}")
+
         # Handle balance input - convert dictionary to total if needed
         try:
             if isinstance(available_balance, dict):
@@ -162,17 +189,17 @@ class RiskManager:
                 logger.warning(f"No leverage tiers found for {symbol}, using default max_leverage: {exchange_max_leverage}")
 
             # Apply the leverage cap based on our findings
-            adjusted_leverage = min(leverage, exchange_max_leverage, self.max_leverage, self.position_sizer.config.max_leverage)
+            adjusted_leverage = min(leverage, exchange_max_leverage, self.max_leverage, position_sizer.config.max_leverage)
             logger.debug(f"Adjusted leverage to {adjusted_leverage} based on limits")
 
         except Exception as e:
             logger.error(f"Unexpected error determining leverage for {symbol}: {e}")
-            adjusted_leverage = min(leverage, self.max_leverage, self.position_sizer.config.max_leverage)
+            adjusted_leverage = min(leverage, self.max_leverage, position_sizer.config.max_leverage)
             logger.debug(f"Using fallback leverage: {adjusted_leverage}")
 
         # Use position sizer to calculate position size in asset units
         try:
-            position_size_units = self.position_sizer.calculate_position_size(
+            position_size_units = position_sizer.calculate_position_size(
                 current_equity=current_equity,
                 current_price=current_price,
                 stop_loss_price=stop_loss_price,
@@ -190,6 +217,8 @@ class RiskManager:
                 position_size_usd = self.max_position_size_usd
 
             logger.info(f"Final position calculation for {symbol}: ${position_size_usd:.2f} USD, leverage={adjusted_leverage:.1f}x")
+            if strategy_name:
+                logger.info(f"  Strategy: {strategy_name}, Position sizer: {position_sizer.config.method.value}")
             return position_size_usd, adjusted_leverage
 
         except Exception as e:
@@ -206,6 +235,7 @@ class RiskManager:
         main_leverage: float,
         hedge_ratio: float,
         max_hedge_leverage: Optional[float] = None,
+        strategy_name: Optional[str] = None,
     ) -> Tuple[float, float]:
         """
         Calculate hedge position size and leverage.
@@ -215,6 +245,7 @@ class RiskManager:
             main_leverage: Leverage of the main position
             hedge_ratio: Ratio of hedge to main position (0-1)
             max_hedge_leverage: Maximum leverage for the hedge position
+            strategy_name: Optional strategy name for strategy-specific hedge logic
 
         Returns:
             Tuple of (hedge_position_size, hedge_leverage)
@@ -237,6 +268,9 @@ class RiskManager:
 
         # Calculate hedge position size based on leverage
         hedge_position_size = hedge_notional / hedge_leverage
+
+        if strategy_name:
+            logger.debug(f"Calculated hedge parameters for strategy '{strategy_name}': size={hedge_position_size:.2f}, leverage={hedge_leverage:.1f}x")
 
         return hedge_position_size, hedge_leverage
 
@@ -497,12 +531,13 @@ class RiskManager:
         return False, "No adjustment needed", {}
 
     @classmethod
-    def from_config(cls, config: Dict[str, Any]) -> 'RiskManager':
+    def from_config(cls, config: Dict[str, Any], strategies: Optional[List[Any]] = None) -> 'RiskManager':
         """
         Create a RiskManager from configuration dictionary.
 
         Args:
             config: Configuration dictionary containing risk management and position sizing settings
+            strategies: Optional list of strategy configuration objects for strategy-specific position sizing
 
         Returns:
             RiskManager instance
@@ -531,7 +566,7 @@ class RiskManager:
                 merged_config['risk_per_trade_pct'] = max_account_risk_pct / 100.0
 
             logger.info("Creating RiskManager with position sizing configuration from config")
-            return cls(
+            risk_manager = cls(
                 max_account_risk_pct=max_account_risk_pct,
                 max_leverage=max_leverage,
                 max_position_size_usd=max_position_size_usd,
@@ -541,10 +576,96 @@ class RiskManager:
             )
         else:
             logger.info("Creating RiskManager with default position sizing configuration")
-            return cls(
+            risk_manager = cls(
                 max_account_risk_pct=max_account_risk_pct,
                 max_leverage=max_leverage,
                 max_position_size_usd=max_position_size_usd,
                 max_positions=max_positions,
                 min_margin_buffer_pct=min_margin_buffer_pct
             )
+
+        # Create strategy-specific position sizers if strategies are provided
+        if strategies:
+            risk_manager._create_strategy_position_sizers(strategies)
+            logger.info(f"RiskManager created with {len(risk_manager.strategy_position_sizers)} strategy-specific position sizers")
+        else:
+            logger.info("RiskManager created without strategy-specific position sizing")
+
+        return risk_manager
+
+    def _create_strategy_position_sizers(self, strategies: List[Any]) -> None:
+        """
+        Create strategy-specific position sizers from strategy configurations.
+
+        Args:
+            strategies: List of strategy configuration objects with position_sizing attributes
+        """
+        logger.info("Creating strategy-specific position sizers...")
+
+        for strategy in strategies:
+            if hasattr(strategy, 'position_sizing') and strategy.position_sizing:
+                try:
+                    strategy_sizer = self._create_position_sizer_for_strategy(strategy)
+                    self.strategy_position_sizers[strategy.name] = strategy_sizer
+                    logger.info(f"Created position sizer for strategy '{strategy.name}': {strategy_sizer.config.method.value}")
+                except Exception as e:
+                    logger.error(f"Failed to create position sizer for strategy '{strategy.name}': {e}")
+                    logger.info(f"Strategy '{strategy.name}' will use default position sizer")
+            else:
+                logger.debug(f"Strategy '{strategy.name}' has no specific position sizing config, will use default")
+
+    def _create_position_sizer_for_strategy(self, strategy: Any) -> PositionSizer:
+        """
+        Create a position sizer for a specific strategy.
+
+        Merges strategy-specific config with global defaults.
+
+        Args:
+            strategy: Strategy configuration object
+
+        Returns:
+            PositionSizer: Position sizer configured for the strategy
+        """
+        # Start with default position sizing config as the baseline
+        # This ensures strategies inherit global settings unless explicitly overridden
+        merged_config = {
+            'position_sizing_method': self.position_sizer.config.method.value,
+            'max_position_size_usd': self.position_sizer.config.max_position_size_usd,
+            'min_position_size_usd': self.position_sizer.config.min_position_size_usd,
+            'max_leverage': self.position_sizer.config.max_leverage,
+            'risk_per_trade_pct': self.position_sizer.config.risk_per_trade_pct,
+        }
+
+        # Add method-specific defaults from global config
+        # Each position sizing method has different required parameters
+        if self.position_sizer.config.method == PositionSizingMethod.FIXED_USD:
+            # Fixed USD method needs the fixed amount parameter
+            merged_config['fixed_usd_amount'] = self.position_sizer.config.fixed_usd_amount
+        elif self.position_sizer.config.method == PositionSizingMethod.PERCENT_EQUITY:
+            # Percentage method needs the equity percentage parameter
+            merged_config['percent_equity'] = self.position_sizer.config.percent_equity
+        elif self.position_sizer.config.method == PositionSizingMethod.RISK_BASED:
+            # Risk-based method uses risk per trade percentage
+            merged_config['risk_per_trade_pct'] = self.position_sizer.config.risk_per_trade_pct
+        elif self.position_sizer.config.method == PositionSizingMethod.VOLATILITY_ADJUSTED:
+            # Volatility adjusted method needs base percentage
+            merged_config['base_percent_equity'] = self.position_sizer.config.base_percent_equity
+
+        # Override inheritance: Strategy-specific config takes precedence
+        # This allows strategies to customize any aspect of position sizing
+        if strategy.position_sizing:
+            for key, value in strategy.position_sizing.items():
+                merged_config[key] = value
+                logger.debug(f"Strategy '{strategy.name}' overrides {key} = {value}")
+
+        # Create and validate the merged configuration
+        try:
+            # Parse merged config into validated PositionSizingConfig object
+            sizing_config = PositionSizingConfig.from_config_dict(merged_config)
+            return PositionSizer(sizing_config)
+        except Exception as e:
+            # If strategy config is invalid, log error and fall back to default
+            # This prevents one bad strategy from breaking the entire system
+            logger.error(f"Invalid position sizing config for strategy '{strategy.name}': {e}")
+            logger.info(f"Using default position sizer for strategy '{strategy.name}'")
+            return self.position_sizer

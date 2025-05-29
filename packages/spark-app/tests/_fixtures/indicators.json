@@ -1,0 +1,194 @@
+{
+  "rsi_indicators": [
+    {
+      "name": "test_rsi",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "test_rsi_1h",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "test_rsi_15m",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "15m",
+      "parameters": {
+        "period": 14,
+        "overbought": 75,
+        "oversold": 25,
+        "signal_period": 1
+      }
+    }
+  ],
+
+  "macd_indicators": [
+    {
+      "name": "test_macd",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
+      }
+    },
+    {
+      "name": "test_macd_4h",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "4h",
+      "parameters": {
+        "fast_period": 8,
+        "slow_period": 21,
+        "signal_period": 7
+      }
+    }
+  ],
+
+  "bollinger_indicators": [
+    {
+      "name": "test_bollinger",
+      "type": "bollinger_bands",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "period": 20,
+        "std_dev": 2,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "test_bollinger_15m",
+      "type": "bollinger_bands",
+      "enabled": true,
+      "timeframe": "15m",
+      "parameters": {
+        "period": 20,
+        "std_dev": 2,
+        "signal_period": 1
+      }
+    }
+  ],
+
+  "all_test_indicators": [
+    {
+      "name": "test_rsi",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "test_rsi_1h",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "test_rsi_15m",
+      "type": "rsi",
+      "enabled": true,
+      "timeframe": "15m",
+      "parameters": {
+        "period": 14,
+        "overbought": 75,
+        "oversold": 25,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "test_macd",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
+      }
+    },
+    {
+      "name": "test_macd_4h",
+      "type": "macd",
+      "enabled": true,
+      "timeframe": "4h",
+      "parameters": {
+        "fast_period": 8,
+        "slow_period": 21,
+        "signal_period": 7
+      }
+    },
+    {
+      "name": "test_bollinger",
+      "type": "bollinger_bands",
+      "enabled": true,
+      "timeframe": "1h",
+      "parameters": {
+        "period": 20,
+        "std_dev": 2,
+        "signal_period": 1
+      }
+    },
+    {
+      "name": "test_bollinger_15m",
+      "type": "bollinger_bands",
+      "enabled": true,
+      "timeframe": "15m",
+      "parameters": {
+        "period": 20,
+        "std_dev": 2,
+        "signal_period": 1
+      }
+    }
+  ],
+
+  "disabled_indicator": {
+    "name": "disabled_rsi",
+    "type": "rsi",
+    "enabled": false,
+    "timeframe": "1h",
+    "parameters": {
+      "period": 14,
+      "overbought": 70,
+      "oversold": 30,
+      "signal_period": 1
+    }
+  },
+
+  "invalid_indicator_type": {
+    "name": "invalid_indicator",
+    "type": "nonexistent_type",
+    "enabled": true,
+    "timeframe": "1h",
+    "parameters": {}
+  }
+}

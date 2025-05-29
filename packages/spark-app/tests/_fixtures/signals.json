@@ -1,0 +1,181 @@
+{
+  "signal_with_strategy_context": {
+    "type": "buy",
+    "strength": 0.8,
+    "price": 1650.25,
+    "timestamp": "2024-12-28T10:30:00Z",
+    "strategy_name": "eth_multi_timeframe_strategy",
+    "market": "ETH-USD",
+    "exchange": "hyperliquid",
+    "timeframe": "4h",
+    "indicator_name": "rsi_4h",
+    "metadata": {
+      "rsi_value": 28.5,
+      "overbought": 70,
+      "oversold": 30,
+      "period": 14
+    }
+  },
+
+  "signal_without_strategy_context": {
+    "type": "sell",
+    "strength": 0.7,
+    "price": 2850.5,
+    "timestamp": "2024-12-28T10:45:00Z",
+    "indicator_name": "macd_1h",
+    "metadata": {
+      "macd_line": -15.2,
+      "signal_line": -8.1,
+      "histogram": -7.1
+    }
+  },
+
+  "multi_timeframe_signals": [
+    {
+      "type": "buy",
+      "strength": 0.75,
+      "price": 1648.3,
+      "timestamp": "2024-12-28T09:00:00Z",
+      "strategy_name": "eth_multi_timeframe_strategy",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "timeframe": "4h",
+      "indicator_name": "rsi_4h",
+      "metadata": {
+        "rsi_value": 31.2,
+        "condition": "oversold"
+      }
+    },
+    {
+      "type": "buy",
+      "strength": 0.65,
+      "price": 1648.35,
+      "timestamp": "2024-12-28T09:15:00Z",
+      "strategy_name": "eth_multi_timeframe_strategy",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "timeframe": "1h",
+      "indicator_name": "macd_1h",
+      "metadata": {
+        "macd_line": 2.5,
+        "signal_line": 1.2,
+        "histogram": 1.3
+      }
+    }
+  ],
+
+  "multi_strategy_signals": [
+    {
+      "type": "buy",
+      "strength": 0.8,
+      "price": 1650.0,
+      "timestamp": "2024-12-28T11:00:00Z",
+      "strategy_name": "rsi_1h",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "timeframe": "1h",
+      "indicator_name": "test_rsi_1h",
+      "metadata": {
+        "rsi_value": 29.8
+      }
+    },
+    {
+      "type": "sell",
+      "strength": 0.85,
+      "price": 28750.5,
+      "timestamp": "2024-12-28T11:05:00Z",
+      "strategy_name": "btc_macd_4h",
+      "market": "BTC-USD",
+      "exchange": "coinbase",
+      "timeframe": "4h",
+      "indicator_name": "test_macd_4h",
+      "metadata": {
+        "macd_line": -25.8,
+        "signal_line": -15.2,
+        "histogram": -10.6
+      }
+    },
+    {
+      "type": "buy",
+      "strength": 0.72,
+      "price": 95.25,
+      "timestamp": "2024-12-28T11:10:00Z",
+      "strategy_name": "sol_combined_15m",
+      "market": "SOL-USD",
+      "exchange": "hyperliquid",
+      "timeframe": "15m",
+      "indicator_name": "test_rsi_15m",
+      "metadata": {
+        "rsi_value": 26.5,
+        "bollinger_position": "below_lower_band"
+      }
+    }
+  ],
+
+  "different_exchanges_signals": [
+    {
+      "type": "buy",
+      "strength": 0.78,
+      "price": 1649.75,
+      "timestamp": "2024-12-28T12:00:00Z",
+      "strategy_name": "hyperliquid_strategy",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "timeframe": "1h",
+      "indicator_name": "test_rsi",
+      "metadata": {
+        "exchange_specific": "ETH"
+      }
+    },
+    {
+      "type": "sell",
+      "strength": 0.82,
+      "price": 1650.25,
+      "timestamp": "2024-12-28T12:05:00Z",
+      "strategy_name": "coinbase_strategy",
+      "market": "ETH-USD",
+      "exchange": "coinbase",
+      "timeframe": "1h",
+      "indicator_name": "test_rsi",
+      "metadata": {
+        "exchange_specific": "ETH-USD"
+      }
+    }
+  ],
+
+  "invalid_signals": [
+    {
+      "type": "buy",
+      "strength": 0.8,
+      "price": 1650.0,
+      "timestamp": "2024-12-28T13:00:00Z",
+      "strategy_name": null,
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "timeframe": "1h",
+      "indicator_name": "test_rsi"
+    },
+    {
+      "type": "sell",
+      "strength": 0.7,
+      "price": 1645.5,
+      "timestamp": "2024-12-28T13:05:00Z",
+      "strategy_name": "test_strategy",
+      "market": null,
+      "exchange": "hyperliquid",
+      "timeframe": "1h",
+      "indicator_name": "test_rsi"
+    },
+    {
+      "type": "buy",
+      "strength": 0.75,
+      "price": 1648.0,
+      "timestamp": "2024-12-28T13:10:00Z",
+      "strategy_name": "test_strategy",
+      "market": "ETH-USD",
+      "exchange": null,
+      "timeframe": "1h",
+      "indicator_name": "test_rsi"
+    }
+  ]
+}

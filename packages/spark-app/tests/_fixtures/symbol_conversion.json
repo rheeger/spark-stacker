@@ -1,0 +1,177 @@
+{
+  "hyperliquid_conversions": {
+    "ETH-USD": "ETH",
+    "BTC-USD": "BTC",
+    "SOL-USD": "SOL",
+    "AVAX-USD": "AVAX",
+    "MATIC-USD": "MATIC",
+    "DOT-USD": "DOT",
+    "LINK-USD": "LINK",
+    "UNI-USD": "UNI",
+    "AAVE-USD": "AAVE",
+    "ATOM-USD": "ATOM"
+  },
+
+  "coinbase_conversions": {
+    "ETH-USD": "ETH-USD",
+    "BTC-USD": "BTC-USD",
+    "SOL-USD": "SOL-USD",
+    "AVAX-USD": "AVAX-USD",
+    "MATIC-USD": "MATIC-USD",
+    "DOT-USD": "DOT-USD",
+    "LINK-USD": "LINK-USD",
+    "UNI-USD": "UNI-USD",
+    "AAVE-USD": "AAVE-USD",
+    "ATOM-USD": "ATOM-USD"
+  },
+
+  "kraken_conversions": {
+    "ETH-USD": "ETHUSD",
+    "BTC-USD": "XBTUSD",
+    "SOL-USD": "SOLUSD",
+    "AVAX-USD": "AVAXUSD",
+    "MATIC-USD": "MATICUSD",
+    "DOT-USD": "DOTUSD",
+    "LINK-USD": "LINKUSD",
+    "UNI-USD": "UNIUSD",
+    "AAVE-USD": "AAVEUSD",
+    "ATOM-USD": "ATOMUSD"
+  },
+
+  "reverse_conversions": {
+    "hyperliquid": {
+      "ETH": "ETH-USD",
+      "BTC": "BTC-USD",
+      "SOL": "SOL-USD",
+      "AVAX": "AVAX-USD"
+    },
+    "coinbase": {
+      "ETH-USD": "ETH-USD",
+      "BTC-USD": "BTC-USD",
+      "SOL-USD": "SOL-USD"
+    },
+    "kraken": {
+      "ETHUSD": "ETH-USD",
+      "XBTUSD": "BTC-USD",
+      "SOLUSD": "SOL-USD"
+    }
+  },
+
+  "invalid_symbols": [
+    "ETH",
+    "BTC",
+    "SOL",
+    "INVALID-SYMBOL",
+    "ETH_USD",
+    "BTC/USD",
+    "",
+    null
+  ],
+
+  "valid_standard_symbols": [
+    "ETH-USD",
+    "BTC-USD",
+    "SOL-USD",
+    "AVAX-USD",
+    "MATIC-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "UNI-USD",
+    "AAVE-USD",
+    "ATOM-USD"
+  ],
+
+  "exchange_specific_formats": {
+    "hyperliquid": {
+      "format": "BASE",
+      "examples": ["ETH", "BTC", "SOL", "AVAX"],
+      "characteristics": {
+        "quote_currency": "USD (implied)",
+        "separator": "none",
+        "case": "uppercase"
+      }
+    },
+    "coinbase": {
+      "format": "BASE-QUOTE",
+      "examples": ["ETH-USD", "BTC-USD", "SOL-USD"],
+      "characteristics": {
+        "quote_currency": "explicit",
+        "separator": "-",
+        "case": "uppercase"
+      }
+    },
+    "kraken": {
+      "format": "BASEQUOTE",
+      "examples": ["ETHUSD", "XBTUSD", "SOLUSD"],
+      "characteristics": {
+        "quote_currency": "explicit",
+        "separator": "none",
+        "case": "uppercase",
+        "special_mappings": {
+          "BTC": "XBT"
+        }
+      }
+    }
+  },
+
+  "conversion_test_cases": [
+    {
+      "description": "Convert standard ETH-USD to Hyperliquid format",
+      "input": "ETH-USD",
+      "exchange": "hyperliquid",
+      "expected": "ETH"
+    },
+    {
+      "description": "Convert standard ETH-USD to Coinbase format",
+      "input": "ETH-USD",
+      "exchange": "coinbase",
+      "expected": "ETH-USD"
+    },
+    {
+      "description": "Convert standard BTC-USD to Kraken format",
+      "input": "BTC-USD",
+      "exchange": "kraken",
+      "expected": "XBTUSD"
+    },
+    {
+      "description": "Convert unknown exchange should return original",
+      "input": "ETH-USD",
+      "exchange": "unknown_exchange",
+      "expected": "ETH-USD"
+    },
+    {
+      "description": "Convert invalid symbol format should handle gracefully",
+      "input": "ETH",
+      "exchange": "hyperliquid",
+      "expected": "ETH",
+      "should_log_warning": true
+    }
+  ],
+
+  "error_cases": [
+    {
+      "description": "Null symbol input",
+      "input": null,
+      "exchange": "hyperliquid",
+      "should_raise": "ValueError"
+    },
+    {
+      "description": "Empty symbol input",
+      "input": "",
+      "exchange": "hyperliquid",
+      "should_raise": "ValueError"
+    },
+    {
+      "description": "Null exchange input",
+      "input": "ETH-USD",
+      "exchange": null,
+      "should_raise": "ValueError"
+    },
+    {
+      "description": "Empty exchange input",
+      "input": "ETH-USD",
+      "exchange": "",
+      "should_raise": "ValueError"
+    }
+  ]
+}

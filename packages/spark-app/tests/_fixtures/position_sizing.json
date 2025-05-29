@@ -1,0 +1,310 @@
+{
+  "global_position_sizing_config": {
+    "method": "fixed_usd",
+    "fixed_usd_amount": 1000.0,
+    "equity_percentage": 0.05,
+    "risk_per_trade_pct": 0.02,
+    "default_stop_loss_pct": 0.05,
+    "fixed_units": 0.1,
+    "kelly_win_rate": 0.6,
+    "kelly_avg_win": 0.03,
+    "kelly_avg_loss": 0.02,
+    "kelly_max_position_pct": 0.25,
+    "max_position_size_usd": 5000.0,
+    "min_position_size_usd": 50.0,
+    "max_leverage": 1.0
+  },
+
+  "strategy_specific_configs": {
+    "rsi_1h": {
+      "method": "fixed_usd",
+      "fixed_usd_amount": 500.0,
+      "max_position_size_usd": 2000.0,
+      "min_position_size_usd": 100.0
+    },
+    "btc_macd_4h": {
+      "method": "equity_percentage",
+      "equity_percentage": 0.08,
+      "max_position_size_usd": 3000.0,
+      "min_position_size_usd": 200.0
+    },
+    "sol_combined_15m": {
+      "method": "kelly",
+      "kelly_win_rate": 0.65,
+      "kelly_avg_win": 0.04,
+      "kelly_avg_loss": 0.025,
+      "kelly_max_position_pct": 0.15,
+      "max_position_size_usd": 1500.0,
+      "min_position_size_usd": 75.0
+    },
+    "conservative_strategy": {
+      "method": "risk_based",
+      "risk_per_trade_pct": 0.01,
+      "default_stop_loss_pct": 0.03,
+      "max_position_size_usd": 1000.0,
+      "min_position_size_usd": 50.0
+    },
+    "aggressive_strategy": {
+      "method": "risk_based",
+      "risk_per_trade_pct": 0.05,
+      "default_stop_loss_pct": 0.08,
+      "max_position_size_usd": 8000.0,
+      "min_position_size_usd": 500.0
+    }
+  },
+
+  "position_sizing_test_cases": [
+    {
+      "description": "Fixed USD position sizing",
+      "strategy_name": "rsi_1h",
+      "account_balance": 10000.0,
+      "signal_price": 1650.0,
+      "expected_position_size_usd": 500.0,
+      "expected_position_size_units": 0.303,
+      "method": "fixed_usd"
+    },
+    {
+      "description": "Equity percentage position sizing",
+      "strategy_name": "btc_macd_4h",
+      "account_balance": 15000.0,
+      "signal_price": 28750.0,
+      "expected_position_size_usd": 1200.0,
+      "expected_position_size_units": 0.042,
+      "method": "equity_percentage"
+    },
+    {
+      "description": "Kelly criterion position sizing",
+      "strategy_name": "sol_combined_15m",
+      "account_balance": 8000.0,
+      "signal_price": 95.5,
+      "expected_position_size_usd": 1200.0,
+      "expected_position_size_units": 12.565,
+      "method": "kelly",
+      "kelly_fraction": 0.15
+    },
+    {
+      "description": "Risk-based position sizing conservative",
+      "strategy_name": "conservative_strategy",
+      "account_balance": 12000.0,
+      "signal_price": 1655.0,
+      "stop_loss_price": 1605.0,
+      "expected_position_size_usd": 240.0,
+      "expected_position_size_units": 0.145,
+      "method": "risk_based",
+      "risk_amount": 120.0
+    },
+    {
+      "description": "Risk-based position sizing aggressive",
+      "strategy_name": "aggressive_strategy",
+      "account_balance": 20000.0,
+      "signal_price": 1660.0,
+      "stop_loss_price": 1520.0,
+      "expected_position_size_usd": 7142.86,
+      "expected_position_size_units": 4.304,
+      "method": "risk_based",
+      "risk_amount": 1000.0
+    }
+  ],
+
+  "position_size_inheritance_tests": [
+    {
+      "description": "Strategy inherits global fixed_usd_amount",
+      "strategy_config": {
+        "method": "fixed_usd"
+      },
+      "global_config": {
+        "method": "equity_percentage",
+        "fixed_usd_amount": 750.0,
+        "equity_percentage": 0.03,
+        "max_position_size_usd": 4000.0
+      },
+      "expected_merged_config": {
+        "method": "fixed_usd",
+        "fixed_usd_amount": 750.0,
+        "equity_percentage": 0.03,
+        "max_position_size_usd": 4000.0
+      }
+    },
+    {
+      "description": "Strategy overrides global values",
+      "strategy_config": {
+        "method": "equity_percentage",
+        "equity_percentage": 0.1,
+        "max_position_size_usd": 2500.0
+      },
+      "global_config": {
+        "method": "fixed_usd",
+        "fixed_usd_amount": 1000.0,
+        "equity_percentage": 0.05,
+        "max_position_size_usd": 5000.0,
+        "min_position_size_usd": 100.0
+      },
+      "expected_merged_config": {
+        "method": "equity_percentage",
+        "fixed_usd_amount": 1000.0,
+        "equity_percentage": 0.1,
+        "max_position_size_usd": 2500.0,
+        "min_position_size_usd": 100.0
+      }
+    },
+    {
+      "description": "Strategy without position sizing config uses global",
+      "strategy_config": {},
+      "global_config": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.025,
+        "default_stop_loss_pct": 0.06,
+        "max_position_size_usd": 3500.0,
+        "min_position_size_usd": 75.0
+      },
+      "expected_merged_config": {
+        "method": "risk_based",
+        "risk_per_trade_pct": 0.025,
+        "default_stop_loss_pct": 0.06,
+        "max_position_size_usd": 3500.0,
+        "min_position_size_usd": 75.0
+      }
+    }
+  ],
+
+  "validation_test_cases": [
+    {
+      "description": "Invalid position sizing method",
+      "config": {
+        "method": "invalid_method",
+        "fixed_usd_amount": 500.0
+      },
+      "should_raise": "ValueError",
+      "error_message": "Invalid position sizing method"
+    },
+    {
+      "description": "Missing required parameter for fixed_usd",
+      "config": {
+        "method": "fixed_usd"
+      },
+      "should_raise": "ValueError",
+      "error_message": "fixed_usd_amount is required"
+    },
+    {
+      "description": "Missing required parameter for equity_percentage",
+      "config": {
+        "method": "equity_percentage",
+        "max_position_size_usd": 1000.0
+      },
+      "should_raise": "ValueError",
+      "error_message": "equity_percentage is required"
+    },
+    {
+      "description": "Negative position size limits",
+      "config": {
+        "method": "fixed_usd",
+        "fixed_usd_amount": 500.0,
+        "max_position_size_usd": -1000.0
+      },
+      "should_raise": "ValueError",
+      "error_message": "position size limits must be positive"
+    },
+    {
+      "description": "Min greater than max position size",
+      "config": {
+        "method": "fixed_usd",
+        "fixed_usd_amount": 500.0,
+        "max_position_size_usd": 1000.0,
+        "min_position_size_usd": 1500.0
+      },
+      "should_raise": "ValueError",
+      "error_message": "min_position_size_usd cannot be greater than max_position_size_usd"
+    }
+  ],
+
+  "edge_cases": [
+    {
+      "description": "Position size exceeds maximum",
+      "strategy_name": "test_strategy",
+      "config": {
+        "method": "fixed_usd",
+        "fixed_usd_amount": 10000.0,
+        "max_position_size_usd": 5000.0
+      },
+      "account_balance": 20000.0,
+      "signal_price": 1650.0,
+      "expected_position_size_usd": 5000.0,
+      "expected_clipped": true
+    },
+    {
+      "description": "Position size below minimum",
+      "strategy_name": "test_strategy",
+      "config": {
+        "method": "fixed_usd",
+        "fixed_usd_amount": 25.0,
+        "min_position_size_usd": 100.0
+      },
+      "account_balance": 5000.0,
+      "signal_price": 1650.0,
+      "expected_position_size_usd": 100.0,
+      "expected_clipped": true
+    },
+    {
+      "description": "Zero account balance",
+      "strategy_name": "test_strategy",
+      "config": {
+        "method": "equity_percentage",
+        "equity_percentage": 0.05
+      },
+      "account_balance": 0.0,
+      "signal_price": 1650.0,
+      "expected_position_size_usd": 0.0,
+      "should_skip_trade": true
+    },
+    {
+      "description": "Kelly criterion with negative expected value",
+      "strategy_name": "test_strategy",
+      "config": {
+        "method": "kelly",
+        "kelly_win_rate": 0.4,
+        "kelly_avg_win": 0.02,
+        "kelly_avg_loss": 0.06,
+        "kelly_max_position_pct": 0.25
+      },
+      "account_balance": 10000.0,
+      "signal_price": 1650.0,
+      "expected_position_size_usd": 0.0,
+      "expected_kelly_fraction": -0.067,
+      "should_skip_trade": true
+    }
+  ],
+
+  "multi_strategy_scenarios": [
+    {
+      "description": "Multiple strategies with different position sizing",
+      "strategies": [
+        {
+          "name": "eth_conservative",
+          "config": {
+            "method": "fixed_usd",
+            "fixed_usd_amount": 300.0
+          },
+          "expected_position_size_usd": 300.0
+        },
+        {
+          "name": "btc_aggressive",
+          "config": {
+            "method": "equity_percentage",
+            "equity_percentage": 0.12
+          },
+          "expected_position_size_usd": 1200.0
+        },
+        {
+          "name": "sol_balanced",
+          "config": {
+            "method": "risk_based",
+            "risk_per_trade_pct": 0.03
+          },
+          "expected_position_size_usd": 900.0
+        }
+      ],
+      "account_balance": 10000.0,
+      "total_expected_exposure": 2400.0
+    }
+  ]
+}

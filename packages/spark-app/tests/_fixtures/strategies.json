@@ -1,0 +1,168 @@
+{
+  "single_strategy_single_indicator": {
+    "name": "test_rsi_strategy",
+    "market": "ETH-USD",
+    "exchange": "hyperliquid",
+    "enabled": true,
+    "timeframe": "1h",
+    "indicators": ["test_rsi"],
+    "main_leverage": 1.0,
+    "hedge_leverage": 1.0,
+    "hedge_ratio": 0,
+    "stop_loss_pct": 5.0,
+    "take_profit_pct": 10.0,
+    "max_position_size": 0.1,
+    "risk_per_trade_pct": 0.02
+  },
+
+  "single_strategy_multiple_indicators": {
+    "name": "test_multi_indicator_strategy",
+    "market": "BTC-USD",
+    "exchange": "coinbase",
+    "enabled": true,
+    "timeframe": "4h",
+    "indicators": ["test_rsi", "test_macd", "test_bollinger"],
+    "main_leverage": 2.0,
+    "hedge_leverage": 1.0,
+    "hedge_ratio": 0.5,
+    "stop_loss_pct": 3.0,
+    "take_profit_pct": 8.0,
+    "max_position_size": 0.2,
+    "risk_per_trade_pct": 0.015,
+    "position_sizing": {
+      "method": "risk_based",
+      "risk_per_trade_pct": 0.015,
+      "default_stop_loss_pct": 0.03,
+      "max_position_size_usd": 2000.0,
+      "min_position_size_usd": 100.0
+    }
+  },
+
+  "multiple_strategies": [
+    {
+      "name": "eth_rsi_1h",
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "enabled": true,
+      "timeframe": "1h",
+      "indicators": ["rsi_1h"],
+      "main_leverage": 1.0,
+      "hedge_leverage": 1.0,
+      "hedge_ratio": 0,
+      "stop_loss_pct": 5.0,
+      "take_profit_pct": 10.0,
+      "max_position_size": 0.1,
+      "risk_per_trade_pct": 0.02,
+      "position_sizing": {
+        "method": "fixed_usd",
+        "fixed_usd_amount": 500.0
+      }
+    },
+    {
+      "name": "btc_macd_4h",
+      "market": "BTC-USD",
+      "exchange": "coinbase",
+      "enabled": true,
+      "timeframe": "4h",
+      "indicators": ["test_macd_4h"],
+      "main_leverage": 1.5,
+      "hedge_leverage": 1.0,
+      "hedge_ratio": 0.3,
+      "stop_loss_pct": 4.0,
+      "take_profit_pct": 12.0,
+      "max_position_size": 0.15,
+      "risk_per_trade_pct": 0.025,
+      "position_sizing": {
+        "method": "equity_percentage",
+        "equity_percentage": 0.08,
+        "max_position_size_usd": 3000.0
+      }
+    },
+    {
+      "name": "sol_combined_15m",
+      "market": "SOL-USD",
+      "exchange": "hyperliquid",
+      "enabled": true,
+      "timeframe": "15m",
+      "indicators": ["test_rsi_15m", "test_bollinger_15m"],
+      "main_leverage": 2.0,
+      "hedge_leverage": 1.5,
+      "hedge_ratio": 0.4,
+      "stop_loss_pct": 6.0,
+      "take_profit_pct": 15.0,
+      "max_position_size": 0.25,
+      "risk_per_trade_pct": 0.03,
+      "position_sizing": {
+        "method": "kelly",
+        "kelly_win_rate": 0.65,
+        "kelly_avg_win": 0.04,
+        "kelly_avg_loss": 0.025,
+        "kelly_max_position_pct": 0.15,
+        "max_position_size_usd": 1500.0
+      }
+    }
+  ],
+
+  "disabled_strategy": {
+    "name": "disabled_test_strategy",
+    "market": "AVAX-USD",
+    "exchange": "hyperliquid",
+    "enabled": false,
+    "timeframe": "1d",
+    "indicators": ["test_rsi"],
+    "main_leverage": 1.0,
+    "hedge_leverage": 1.0,
+    "hedge_ratio": 0,
+    "stop_loss_pct": 8.0,
+    "take_profit_pct": 20.0,
+    "max_position_size": 0.05,
+    "risk_per_trade_pct": 0.01
+  },
+
+  "invalid_market_format": {
+    "name": "invalid_strategy",
+    "market": "ETH",
+    "exchange": "hyperliquid",
+    "enabled": true,
+    "timeframe": "1h",
+    "indicators": ["test_rsi"],
+    "main_leverage": 1.0,
+    "hedge_leverage": 1.0,
+    "hedge_ratio": 0,
+    "stop_loss_pct": 5.0,
+    "take_profit_pct": 10.0,
+    "max_position_size": 0.1,
+    "risk_per_trade_pct": 0.02
+  },
+
+  "missing_exchange": {
+    "name": "no_exchange_strategy",
+    "market": "ETH-USD",
+    "enabled": true,
+    "timeframe": "1h",
+    "indicators": ["test_rsi"],
+    "main_leverage": 1.0,
+    "hedge_leverage": 1.0,
+    "hedge_ratio": 0,
+    "stop_loss_pct": 5.0,
+    "take_profit_pct": 10.0,
+    "max_position_size": 0.1,
+    "risk_per_trade_pct": 0.02
+  },
+
+  "empty_indicators": {
+    "name": "empty_indicators_strategy",
+    "market": "ETH-USD",
+    "exchange": "hyperliquid",
+    "enabled": true,
+    "timeframe": "1h",
+    "indicators": [],
+    "main_leverage": 1.0,
+    "hedge_leverage": 1.0,
+    "hedge_ratio": 0,
+    "stop_loss_pct": 5.0,
+    "take_profit_pct": 10.0,
+    "max_position_size": 0.1,
+    "risk_per_trade_pct": 0.02
+  }
+}
