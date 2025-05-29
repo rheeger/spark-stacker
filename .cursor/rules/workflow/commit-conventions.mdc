@@ -1,6 +1,6 @@
 ---
 description: Git commit message conventions and standards for consistent version control history
-globs:
+globs: 
 alwaysApply: false
 ---
 # Commit Message Conventions
@@ -9,14 +9,84 @@ alwaysApply: false
 
 All commit messages **must** follow this format:
 ```
-phase<X.Y.Z>: <type>(<scope>): <short description>
+phase<X.Y.Z>(<section>.<subsection>): <type>(<scope>): <short description>
 ```
 
 Where:
-- `phase<X.Y.Z>` identifies the checklist phase (e.g., `phase3.5.1`)
+- `phase<X.Y.Z>` identifies the checklist phase (e.g., `phase3.5.2`)
+- `(<section>.<subsection>)` references the specific checklist section (e.g., `(1.1)`, `(2.3)`, `(4.1)`)
 - `<type>` is one of: feat, fix, docs, chore, refactor, test, style, perf
 - `<scope>` is the component being modified (optional)
 - `<short description>` is a concise explanation
+
+## Checklist Section Mapping
+
+**Every commit MUST include the specific checklist section being addressed.** This enables direct traceability from commits back to checklist items.
+
+### Section Reference Format
+```
+phase3.5.2(1.1): feat(symbols): Create symbol conversion utilities
+phase3.5.2(2.3): refactor(strategy): Update StrategyManager constructor
+phase3.5.2(4.1): test(integration): Add configuration validation tests
+```
+
+### Multi-Section Commits
+For commits spanning multiple related sections:
+```
+phase3.5.2(1.1-1.3): feat(symbols): Complete symbol conversion implementation
+phase3.5.1(3.1-3.2): test(indicators): Add RSI and MACD test suites
+```
+
+### Checklist Section Examples
+
+#### Phase 3.5.2: Strategy-Indicator Integration
+Based on [phase3.5.2-strategy-indicator-integration.md](mdc:packages/shared/docs/checklists/phase3.5.2-strategy-indicator-integration.md):
+
+**Section 1: Core Architecture Fixes**
+```
+phase3.5.2(1.1): feat(symbols): Create symbol conversion utilities
+phase3.5.2(1.2): feat(symbols): Add conversion validation
+phase3.5.2(1.3): test(symbols): Create unit tests for conversion utilities
+```
+
+**Section 2: Strategy Manager Overhaul**
+```
+phase3.5.2(2.1): refactor(strategy): Update StrategyManager constructor
+phase3.5.2(2.2): refactor(strategy): Replace run_cycle() method
+phase3.5.2(2.3): feat(strategy): Create run_strategy_indicators() method
+```
+
+**Section 3: Signal Enhancement**
+```
+phase3.5.2(3.1): feat(signals): Add strategy context to Signal class
+phase3.5.2(3.2): refactor(trading): Update signal processing pipeline
+phase3.5.2(3.3): test(signals): Add strategy context validation tests
+```
+
+**Section 4: Validation & Testing**
+```
+phase3.5.2(4.1): test(config): Add configuration validation tests
+phase3.5.2(4.2): test(integration): Run strategy-indicator relationship tests
+phase3.5.2(4.3): test(coverage): Verify coverage for new functionality
+```
+
+#### Phase 4: Monitoring & Control Interface
+```
+phase4(1.1): feat(monitoring): Implement real-time position dashboard
+phase4(1.2): feat(monitoring): Add strategy performance metrics
+phase4(2.1): feat(control): Add strategy enable/disable controls
+phase4(2.2): feat(control): Implement emergency stop functionality
+phase4(3.1): test(monitoring): Add dashboard integration tests
+```
+
+#### Phase 3.5.1: Indicator Testing & Reporting
+```
+phase3.5.1(1.1): feat(testing): Implement market data generator
+phase3.5.1(2.1): feat(reporting): Add HTML report generation
+phase3.5.1(3.1): test(indicators): Add RSI indicator test suite
+phase3.5.1(3.2): test(indicators): Add MACD indicator test suite
+phase3.5.1(4.1): docs(testing): Document indicator testing methodology
+```
 
 ## Phase Mapping
 
@@ -36,7 +106,7 @@ The phase numbers correlate to our project checklist structure in [packages/shar
 ### Subphase Numbering
 For tasks within a specific section of a checklist:
 ```
-phase3.5.1-4.2: feat(testing): Implement standardized data generator
+phase3.5.1(4.2): feat(testing): Implement standardized data generator
 ```
 This indicates work on section 4.2 within phase 3.5.1.
 
@@ -134,116 +204,160 @@ phase4: perf(monitoring): Reduce metrics collection overhead
 
 ### Phase 3.5.2 Examples (Strategy-Indicator Integration)
 ```
-phase3.5.2: feat(strategy): Implement strategy-driven execution flow
-phase3.5.2: feat(symbols): Add exchange symbol conversion utilities
-phase3.5.2: fix(strategy): Remove legacy symbol parsing from main.py
-phase3.5.2: refactor(trading): Update signal processing with strategy context
-phase3.5.2: test(integration): Add strategy-indicator relationship tests
-phase3.5.2: docs(readme): Update configuration examples with position sizing
+phase3.5.2(1.1): feat(symbols): Create symbol conversion utilities
+phase3.5.2(1.2): feat(symbols): Add conversion validation
+phase3.5.2(2.1): refactor(strategy): Update StrategyManager constructor
+phase3.5.2(2.2): refactor(strategy): Replace run_cycle() method
+phase3.5.2(3.1): feat(signals): Add strategy context to Signal class
+phase3.5.2(4.1): test(config): Add configuration validation tests
+phase3.5.2(4.2): test(integration): Run strategy-indicator relationship tests
 ```
 
 ### Phase 4 Examples (Monitoring & Control)
 ```
-phase4: feat(monitoring): Implement real-time position dashboard
-phase4: feat(control): Add strategy enable/disable controls
-phase4: fix(metrics): Resolve Prometheus metric collection issues
-phase4: chore(grafana): Update dashboard JSON exports
-phase4: test(monitoring): Add dashboard integration tests
+phase4(1.1): feat(monitoring): Implement real-time position dashboard
+phase4(1.2): feat(monitoring): Add strategy performance metrics
+phase4(2.1): feat(control): Add strategy enable/disable controls
+phase4(2.2): feat(control): Implement emergency stop functionality
+phase4(3.1): test(monitoring): Add dashboard integration tests
+phase4(3.2): test(control): Add control interface validation tests
 ```
 
 ### Phase 3.5.1 Examples (Indicator Testing)
 ```
-phase3.5.1: feat(testing): Implement market data generator for indicators
-phase3.5.1: feat(reporting): Add HTML report generation with charts
-phase3.5.1: test(indicators): Add comprehensive RSI testing suite
-phase3.5.1: fix(data): Handle missing market data gracefully
-phase3.5.1: docs(testing): Document indicator testing methodology
+phase3.5.1(1.1): feat(testing): Implement market data generator for indicators
+phase3.5.1(2.1): feat(reporting): Add HTML report generation with charts
+phase3.5.1(3.1): test(indicators): Add comprehensive RSI testing suite
+phase3.5.1(3.2): test(indicators): Add MACD indicator validation tests
+phase3.5.1(4.1): docs(testing): Document indicator testing methodology
 ```
+
+## Traceability Benefits
+
+### Direct Checklist Mapping
+Each commit can be traced back to its specific checklist item:
+```bash
+# Find all commits for checklist section 1.1
+git log --oneline --grep="phase3.5.2(1.1)"
+
+# Find all commits for a specific phase
+git log --oneline --grep="phase3.5.2"
+
+# Find all symbol-related work in current phase
+git log --oneline --grep="phase3.5.2.*symbols"
+```
+
+### Progress Tracking
+```bash
+# Check completion status of section 2 (Strategy Manager)
+git log --oneline --grep="phase3.5.2(2\."
+
+# View all testing-related commits
+git log --oneline --grep="phase3.5.2(4\."
+```
+
+### Code Review Context
+Reviewers can immediately understand:
+- Which checklist item is being addressed
+- What section of the architecture is affected
+- The specific scope of changes
 
 ## Checklist Integration
 
 ### Completing Checklist Items
-When completing a checklist item, reference the specific section:
-```
-phase3.5.2-1.1: feat(symbols): Create symbol conversion utilities
-phase3.5.2-2.1: refactor(strategy): Update StrategyManager constructor
-phase3.5.2-3.2: test(strategy): Add strategy manager integration tests
+When marking a checklist item as complete, the commit should reference the exact section:
+```markdown
+# In checklist file:
+- [x] 1.1 Create symbol conversion utilities
+
+# Corresponding commit:
+phase3.5.2(1.1): feat(symbols): Create symbol conversion utilities
 ```
 
-### Multi-Item Commits
-For commits that address multiple related checklist items:
+### Partial Progress
+For partial implementations:
 ```
-phase3.5.2: feat(strategy): Complete strategy configuration schema (items 2.1-2.3)
-phase3.5.1: test(indicators): Add RSI and MACD test suites (items 3.1-3.2)
+phase3.5.2(2.1): feat(strategy): Start StrategyManager constructor update (partial)
+phase3.5.2(2.1): feat(strategy): Complete StrategyManager constructor update
+```
+
+### Documentation Updates
+When updating the checklist itself:
+```
+phase3.5.2(docs): docs(checklist): Mark symbol conversion utilities as completed (1.1-1.3)
+phase3.5.2(docs): docs(checklist): Update progress for Strategy Manager section (2.1-2.3)
 ```
 
 ## Quality Standards
 
 ### ✅ Good Examples
 ```
-phase3.5.2: feat(strategy): Implement strategy-specific position sizing
-phase4: fix(monitoring): Resolve Grafana dashboard loading issue
-phase3.5.1: test(hyperliquid): Add comprehensive API response validation
-phase2: refactor(backtesting): Convert to factory pattern for indicators
+phase3.5.2(1.1): feat(symbols): Create symbol conversion utilities
+phase3.5.2(2.1): refactor(strategy): Update StrategyManager constructor
+phase4(1.1): feat(monitoring): Implement real-time position dashboard
+phase3.5.1(3.1): test(indicators): Add comprehensive RSI testing suite
 ```
 
 ### ❌ Avoid These Patterns
 ```
-Fixed bug                           # No phase, no context
-Update code                         # Too vague
-WIP                                # Work-in-progress shouldn't be committed
-Added new feature                   # No phase, no scope
-phase3: stuff                       # Too vague, no type
-```
-
-## Branch Naming
-
-### Feature Branches
-Match commit convention format:
-```
-phase3.5.2/feat/strategy-position-sizing
-phase4/feat/monitoring-dashboard
-phase3.5.1/fix/indicator-data-handling
-```
-
-### Integration Branches
-For multi-phase work:
-```
-integration/phase3.5.2-strategy-integration
-integration/phase4-monitoring-implementation
+phase3.5.2: feat(strategy): Update manager           # Missing section reference
+phase3.5.2(1): feat(symbols): Add utilities          # Missing subsection
+Fixed bug                                            # No phase or section
+Update code                                         # Too vague, no references
 ```
 
 ## Automation Integration
 
 ### Commit Message Validation
-The project can use git hooks to validate commit messages:
+Updated git hook to enforce section references:
 ```bash
 #!/bin/sh
 # .git/hooks/commit-msg
-commit_regex='^phase[0-9]+(\.[0-9]+)*(-[0-9]+\.[0-9]+)?: (feat|fix|docs|chore|refactor|test|style|perf)(\(.+\))?: .+'
+commit_regex='^phase[0-9]+(\.[0-9]+)*\([0-9]+\.[0-9]+\): (feat|fix|docs|chore|refactor|test|style|perf)(\(.+\))?: .+'
 
 if ! grep -qE "$commit_regex" "$1"; then
     echo "Invalid commit message format!"
-    echo "Format: phase<X.Y.Z>: <type>(<scope>): <description>"
+    echo "Format: phase<X.Y.Z>(<section>.<subsection>): <type>(<scope>): <description>"
+    echo "Example: phase3.5.2(1.1): feat(symbols): Create symbol conversion utilities"
     exit 1
 fi
 ```
 
+### Progress Tracking Scripts
+```bash
+#!/bin/bash
+# scripts/check-checklist-progress.sh
+
+# Extract phase and section from commit message
+phase=$(echo "$1" | grep -oE 'phase[0-9]+(\.[0-9]+)*')
+section=$(echo "$1" | grep -oE '\([0-9]+\.[0-9]+\)' | tr -d '()')
+
+echo "Checking progress for $phase section $section"
+git log --oneline --grep="$phase($section)"
+```
+
 ### Changelog Generation
-Standardized commits enable automated changelog generation:
+Enhanced changelog with section mapping:
 ```markdown
 ## Phase 3.5.2: Strategy-Indicator Integration
 
-### Features
-- **strategy**: Implement strategy-specific position sizing
-- **symbols**: Add exchange symbol conversion utilities
+### Section 1: Core Architecture Fixes
+#### 1.1 Symbol Conversion Utilities
+- **symbols**: Create symbol conversion utilities
+- **symbols**: Add conversion validation
+- **symbols**: Create unit tests
 
-### Fixes
-- **strategy**: Resolve "Market RSI-4H not found" error
-- **trading**: Fix signal processing with strategy context
+#### 1.2 Exchange Integration
+- **strategy**: Update exchange-specific symbol handling
 
-### Documentation
-- **readme**: Update strategy-indicator relationship explanation
+### Section 2: Strategy Manager Overhaul
+#### 2.1 Constructor Updates
+- **strategy**: Update StrategyManager constructor
+- **strategy**: Add configuration validation
+
+#### 2.2 Method Replacements
+- **strategy**: Replace run_cycle() method
+- **strategy**: Create run_strategy_indicators() method
 ```
 
 ## Benefits
