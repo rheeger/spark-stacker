@@ -68,18 +68,18 @@ indicators. This phase updates the CLI to:
 
 ### 1.3 Enhanced List Commands
 
-- [ ] **Update list-indicators command** (`packages/spark-app/tests/_utils/cli.py`)
+- [x] **Update list-indicators command** (`packages/spark-app/tests/_utils/cli.py`)
 
-  - [ ] Show which strategies use each indicator
-  - [ ] Display indicator parameters from config
-  - [ ] Show timeframe and market context per indicator
-  - [ ] Add filtering by strategy or market
+  - [x] Show which strategies use each indicator
+  - [x] Display indicator parameters from config
+  - [x] Show timeframe and market context per indicator
+  - [x] Add filtering by strategy or market
 
-- [ ] **Add list-strategies command** (`packages/spark-app/tests/_utils/cli.py`)
-  - [ ] Show all strategies from config with status (enabled/disabled)
-  - [ ] Display strategy details (market, exchange, timeframe, indicators)
-  - [ ] Show position sizing method and parameters per strategy
-  - [ ] Add filtering and sorting options (by market, exchange, performance)
+- [x] **Add list-strategies command** (`packages/spark-app/tests/_utils/cli.py`)
+  - [x] Show all strategies from config with status (enabled/disabled)
+  - [x] Display strategy details (market, exchange, timeframe, indicators)
+  - [x] Show position sizing method and parameters per strategy
+  - [x] Add filtering and sorting options (by market, exchange, performance)
 
 ### 1.4 CLI Modularization and Refactoring ⚠️ **INTERRUPT - CRITICAL REFACTOR NEEDED**
 

@@ -2135,23 +2135,206 @@ def compare(
         logger.debug("Compare command cleanup completed")
 
 
-@cli.command()
-def list_indicators():
-    """List all available indicators from the factory."""
+@cli.command(name="list-indicators")
+@click.option("--strategy", help="Filter indicators by strategy name")
+@click.option("--market", help="Filter indicators by market (e.g., ETH-USD, BTC-USD)")
+@click.option("--timeframe", help="Filter indicators by timeframe (e.g., 1h, 4h, 1d)")
+@click.option("--detailed", is_flag=True, help="Show detailed indicator information including parameters")
+@click.pass_context
+def list_indicators(ctx: click.Context, strategy: Optional[str], market: Optional[str], timeframe: Optional[str], detailed: bool):
+    """List all available indicators with strategy usage and configuration details."""
     try:
-        indicators = IndicatorFactory.get_available_indicators()
+        # Load configuration for strategy-indicator relationships
+        config_path = ctx.obj.get('config_path') if ctx.obj else None
+        config = load_config(config_path)
 
-        print("\nAvailable Indicators:")
-        for idx, indicator_name in enumerate(indicators, 1):
-            # Display indicator name in uppercase to match the test expectation
-            print(f"{idx}. {indicator_name.upper()}")
+        # Get factory indicators
+        factory_indicators = IndicatorFactory.get_available_indicators()
 
-        print(f"\n✅ Listed {len(indicators)} available indicators. CLI will now exit.")
+        # Prepare indicator information
+        indicator_info = {}
+
+        # Initialize with factory indicators
+        for indicator_name in factory_indicators:
+            indicator_info[indicator_name] = {
+                'name': indicator_name,
+                'available_in_factory': True,
+                'strategies': [],
+                'configs': [],
+                'timeframes': set(),
+                'markets': set()
+            }
+
+        # Add configuration information if available
+        if config:
+            # Map indicators from config
+            config_indicators = config.get('indicators', [])
+            for indicator_config in config_indicators:
+                indicator_name = indicator_config.get('name', 'Unknown')
+
+                # Add to indicator_info if not already present
+                if indicator_name not in indicator_info:
+                    indicator_info[indicator_name] = {
+                        'name': indicator_name,
+                        'available_in_factory': False,
+                        'strategies': [],
+                        'configs': [],
+                        'timeframes': set(),
+                        'markets': set()
+                    }
+
+                # Add config information
+                indicator_info[indicator_name]['configs'].append(indicator_config)
+                if indicator_config.get('timeframe'):
+                    indicator_info[indicator_name]['timeframes'].add(indicator_config['timeframe'])
+                if indicator_config.get('symbol'):
+                    indicator_info[indicator_name]['markets'].add(indicator_config['symbol'])
+
+            # Map strategy usage
+            strategies = config.get('strategies', [])
+            for strategy_config in strategies:
+                strategy_name = strategy_config.get('name', 'Unknown')
+                strategy_indicators = strategy_config.get('indicators', [])
+                strategy_market = strategy_config.get('market', 'Unknown')
+                strategy_timeframe = strategy_config.get('timeframe', 'Unknown')
+
+                for indicator_name in strategy_indicators:
+                    if indicator_name in indicator_info:
+                        indicator_info[indicator_name]['strategies'].append({
+                            'name': strategy_name,
+                            'market': strategy_market,
+                            'timeframe': strategy_timeframe,
+                            'enabled': strategy_config.get('enabled', True)
+                        })
+                        # Add strategy context to markets and timeframes
+                        indicator_info[indicator_name]['markets'].add(strategy_market)
+                        indicator_info[indicator_name]['timeframes'].add(strategy_timeframe)
+
+        # Apply filters
+        filtered_indicators = {}
+        for indicator_name, info in indicator_info.items():
+            # Filter by strategy
+            if strategy:
+                strategy_names = [s['name'] for s in info['strategies']]
+                if strategy not in strategy_names:
+                    continue
+
+            # Filter by market
+            if market:
+                if market.upper() not in [m.upper() for m in info['markets']]:
+                    continue
+
+            # Filter by timeframe
+            if timeframe:
+                if timeframe not in info['timeframes']:
+                    continue
+
+            filtered_indicators[indicator_name] = info
+
+        if not filtered_indicators:
+            filter_desc = []
+            if strategy:
+                filter_desc.append(f"strategy={strategy}")
+            if market:
+                filter_desc.append(f"market={market}")
+            if timeframe:
+                filter_desc.append(f"timeframe={timeframe}")
+
+            filter_text = f" (filtered by: {', '.join(filter_desc)})" if filter_desc else ""
+            print(f"No indicators found{filter_text}")
+            return
+
+        # Display indicators
+        print(f"\nAvailable Indicators{' (filtered)' if any([strategy, market, timeframe]) else ''}:")
+
+        if detailed:
+            # Detailed view with full configuration
+            for i, (indicator_name, info) in enumerate(sorted(filtered_indicators.items()), 1):
+                if i > 1:
+                    print("\n" + "="*60 + "\n")
+
+                print(f"📊 Indicator: {indicator_name.upper()}")
+                print(f"   Factory Available: {'✅' if info['available_in_factory'] else '❌'}")
+
+                # Show timeframes and markets
+                if info['timeframes']:
+                    print(f"   Timeframes: {', '.join(sorted(info['timeframes']))}")
+                if info['markets']:
+                    print(f"   Markets: {', '.join(sorted(info['markets']))}")
+
+                # Show strategy usage
+                if info['strategies']:
+                    print(f"\n   📈 Used by {len(info['strategies'])} strategies:")
+                    for strategy_info in info['strategies']:
+                        status = '✅' if strategy_info['enabled'] else '❌'
+                        print(f"      • {strategy_info['name']} ({strategy_info['market']}, {strategy_info['timeframe']}) {status}")
+                else:
+                    print(f"\n   📈 Used by strategies: None")
+
+                # Show configurations
+                if info['configs']:
+                    print(f"\n   ⚙️  Configurations ({len(info['configs'])}):")
+                    for j, config_item in enumerate(info['configs'], 1):
+                        print(f"      Config {j}:")
+                        print(f"         Type: {config_item.get('type', 'Unknown')}")
+                        print(f"         Timeframe: {config_item.get('timeframe', 'Unknown')}")
+                        print(f"         Symbol: {config_item.get('symbol', 'Unknown')}")
+                        print(f"         Enabled: {'✅' if config_item.get('enabled', True) else '❌'}")
+
+                        # Show parameters if present
+                        params = config_item.get('parameters', {})
+                        if params:
+                            print(f"         Parameters:")
+                            for param, value in params.items():
+                                print(f"            {param}: {value}")
+                else:
+                    print(f"\n   ⚙️  Configurations: None in config file")
+
+        else:
+            # Summary view
+            print()
+            max_name_len = max(len(name) for name in filtered_indicators.keys())
+
+            # Header
+            print(f"{'#':<3} {'Indicator':<{max_name_len}} {'Factory':<8} {'Strategies':<12} {'Timeframes':<15} {'Markets'}")
+            print("-" * (3 + max_name_len + 8 + 12 + 15 + 20))
+
+            for i, (indicator_name, info) in enumerate(sorted(filtered_indicators.items()), 1):
+                factory_status = '✅' if info['available_in_factory'] else '❌'
+                strategy_count = len(info['strategies'])
+                strategies_text = f"{strategy_count} strategies" if strategy_count > 0 else "None"
+
+                timeframes_text = ', '.join(sorted(info['timeframes']))
+                if len(timeframes_text) > 15:
+                    timeframes_text = timeframes_text[:12] + "..."
+
+                markets_text = ', '.join(sorted(info['markets']))
+                if len(markets_text) > 20:
+                    markets_text = markets_text[:17] + "..."
+
+                print(f"{i:<3} {indicator_name.upper():<{max_name_len}} {factory_status:<8} {strategies_text:<12} {timeframes_text:<15} {markets_text}")
+
+        print(f"\n✅ Listed {len(filtered_indicators)} indicators.")
+
+        # Show usage hints
+        if not detailed and filtered_indicators:
+            print("\n💡 Tips:")
+            print(f"   • Use --detailed for full indicator configuration and parameters")
+            print(f"   • Use --strategy, --market, or --timeframe to filter indicators")
+            if config and config.get('indicators'):
+                example_indicator = list(filtered_indicators.keys())[0]
+                print(f"   • Test an indicator with: python cli.py demo {example_indicator}")
+
+        # Show configuration warnings if no config loaded
+        if not config:
+            print("\n⚠️  No configuration file loaded. Strategy usage information unavailable.")
+            print("   Use --config option to load strategy-indicator relationships.")
 
     except Exception as e:
         logger.error(f"Failed to list indicators: {str(e)}")
         import traceback
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        print(f"❌ Failed to list indicators: {str(e)}")
         cleanup_resources()
         sys.exit(1)
     finally:
@@ -2165,9 +2348,12 @@ def list_indicators():
 @click.option("--market", help="Filter by market (e.g., ETH-USD, BTC-USD)")
 @click.option("--enabled/--disabled", default=None, help="Filter by enabled status")
 @click.option("--detailed", is_flag=True, help="Show detailed strategy information")
+@click.option("--sort-by", type=click.Choice(['name', 'market', 'exchange', 'timeframe', 'indicators'], case_sensitive=False),
+             default='name', help="Sort strategies by field (default: name)")
+@click.option("--reverse", is_flag=True, help="Reverse sort order")
 @click.pass_context
-def list_strategies_cmd(ctx: click.Context, exchange: Optional[str], market: Optional[str], enabled: Optional[bool], detailed: bool):
-    """List all available strategies from configuration."""
+def list_strategies_cmd(ctx: click.Context, exchange: Optional[str], market: Optional[str], enabled: Optional[bool], detailed: bool, sort_by: str, reverse: bool):
+    """List all available strategies from configuration with enhanced filtering and sorting."""
     try:
         # Load configuration
         config_path = ctx.obj.get('config_path') if ctx.obj else None
@@ -2207,8 +2393,45 @@ def list_strategies_cmd(ctx: click.Context, exchange: Optional[str], market: Opt
             print(f"No strategies found{filter_text}")
             return
 
+        # Apply sorting
+        def get_sort_key(strategy):
+            if sort_by.lower() == 'name':
+                return strategy.get('name', '').lower()
+            elif sort_by.lower() == 'market':
+                return strategy.get('market', '').lower()
+            elif sort_by.lower() == 'exchange':
+                return strategy.get('exchange', '').lower()
+            elif sort_by.lower() == 'timeframe':
+                # Custom sorting for timeframes (1m, 5m, 15m, 1h, 4h, 1d, etc.)
+                timeframe = strategy.get('timeframe', '').lower()
+                # Convert timeframe to minutes for proper sorting
+                timeframe_minutes = {
+                    '1m': 1, '5m': 5, '15m': 15, '30m': 30,
+                    '1h': 60, '2h': 120, '4h': 240, '6h': 360, '12h': 720,
+                    '1d': 1440, '3d': 4320, '1w': 10080
+                }
+                return timeframe_minutes.get(timeframe, 999999)  # Unknown timeframes go to end
+            elif sort_by.lower() == 'indicators':
+                return len(strategy.get('indicators', []))
+            else:
+                return strategy.get('name', '').lower()
+
+        strategies.sort(key=get_sort_key, reverse=reverse)
+
         # Display strategies
-        print(f"\nAvailable Strategies{' (filtered)' if any([exchange, market, enabled is not None]) else ''}:")
+        sort_desc = f" (sorted by {sort_by}{'reversed' if reverse else ''})"
+        filter_desc = ""
+        if any([exchange, market, enabled is not None]):
+            filter_parts = []
+            if exchange:
+                filter_parts.append(f"exchange={exchange}")
+            if market:
+                filter_parts.append(f"market={market}")
+            if enabled is not None:
+                filter_parts.append(f"enabled={enabled}")
+            filter_desc = f" (filtered by: {', '.join(filter_parts)})"
+
+        print(f"\nAvailable Strategies{filter_desc}{sort_desc}:")
 
         if detailed:
             # Detailed view
@@ -2225,9 +2448,15 @@ def list_strategies_cmd(ctx: click.Context, exchange: Optional[str], market: Opt
             max_market_len = max(len(s.get('market', '')) for s in strategies)
             max_exchange_len = max(len(s.get('exchange', '')) for s in strategies)
 
-            # Header
-            print(f"{'#':<3} {'Name':<{max_name_len}} {'Market':<{max_market_len}} {'Exchange':<{max_exchange_len}} {'Timeframe':<10} {'Status':<8} {'Indicators'}")
-            print("-" * (3 + max_name_len + max_market_len + max_exchange_len + 10 + 8 + 20))
+            # Header with sort indicator
+            name_header = 'Name' + (' 🔽' if sort_by.lower() == 'name' and not reverse else ' 🔼' if sort_by.lower() == 'name' and reverse else '')
+            market_header = 'Market' + (' 🔽' if sort_by.lower() == 'market' and not reverse else ' 🔼' if sort_by.lower() == 'market' and reverse else '')
+            exchange_header = 'Exchange' + (' 🔽' if sort_by.lower() == 'exchange' and not reverse else ' 🔼' if sort_by.lower() == 'exchange' and reverse else '')
+            timeframe_header = 'Timeframe' + (' 🔽' if sort_by.lower() == 'timeframe' and not reverse else ' 🔼' if sort_by.lower() == 'timeframe' and reverse else '')
+            indicators_header = 'Indicators' + (' 🔽' if sort_by.lower() == 'indicators' and not reverse else ' 🔼' if sort_by.lower() == 'indicators' and reverse else '')
+
+            print(f"{'#':<3} {name_header:<{max_name_len}} {market_header:<{max_market_len}} {exchange_header:<{max_exchange_len}} {timeframe_header:<12} {'Status':<8} {indicators_header}")
+            print("-" * (3 + max_name_len + max_market_len + max_exchange_len + 12 + 8 + 25))
 
             for i, strategy in enumerate(strategies, 1):
                 name = strategy.get('name', 'Unknown')
@@ -2239,18 +2468,41 @@ def list_strategies_cmd(ctx: click.Context, exchange: Optional[str], market: Opt
                 if len(indicators) > 20:
                     indicators = indicators[:17] + "..."
 
-                print(f"{i:<3} {name:<{max_name_len}} {market:<{max_market_len}} {exchange:<{max_exchange_len}} {timeframe:<10} {status:<8} {indicators}")
+                print(f"{i:<3} {name:<{max_name_len}} {market:<{max_market_len}} {exchange:<{max_exchange_len}} {timeframe:<12} {status:<8} {indicators}")
 
-        print(f"\n✅ Listed {len(strategies)} strategies. Use --detailed for more information.")
+        print(f"\n✅ Listed {len(strategies)} strategies.")
 
-        # Show usage hints
+        # Show enhanced usage hints
         if not detailed and strategies:
             print("\n💡 Tips:")
             print(f"   • Use --detailed for full strategy configuration")
             print(f"   • Use --exchange, --market, or --enabled/--disabled to filter")
+            print(f"   • Use --sort-by to sort by: name, market, exchange, timeframe, indicators")
+            print(f"   • Use --reverse to reverse the sort order")
             if config.get('strategies'):
-                example_strategy = config['strategies'][0].get('name', 'strategy_name')
+                example_strategy = strategies[0].get('name', 'strategy_name')
                 print(f"   • Run a strategy backtest with: python cli.py strategy {example_strategy}")
+
+        # Show additional statistics
+        if len(strategies) > 1:
+            print(f"\n📊 Statistics:")
+            enabled_count = sum(1 for s in strategies if s.get('enabled', True))
+            disabled_count = len(strategies) - enabled_count
+            print(f"   • Enabled: {enabled_count}, Disabled: {disabled_count}")
+
+            # Exchange distribution
+            exchanges = {}
+            for s in strategies:
+                ex = s.get('exchange', 'Unknown')
+                exchanges[ex] = exchanges.get(ex, 0) + 1
+            print(f"   • Exchanges: {', '.join(f'{ex}({count})' for ex, count in sorted(exchanges.items()))}")
+
+            # Market distribution
+            markets = {}
+            for s in strategies:
+                market = s.get('market', 'Unknown')
+                markets[market] = markets.get(market, 0) + 1
+            print(f"   • Markets: {', '.join(f'{market}({count})' for market, count in sorted(markets.items()))}")
 
     except Exception as e:
         logger.error(f"Failed to list strategies: {str(e)}")
