@@ -1,0 +1,970 @@
+{% extends "base.html" %} {% block title %}{{ strategy_name }} Strategy Report{%
+endblock %} {% block report_title %}{{ strategy_name }} Strategy Performance
+Report{% endblock %} {% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+  /* Strategy-specific styling */
+  .strategy-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+  }
+
+  .strategy-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+  }
+
+  .config-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+
+  .config-card h4 {
+    margin-top: 0;
+    color: #495057;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 0.5rem;
+  }
+
+  .indicator-breakdown {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin: 1rem 0;
+    overflow: hidden;
+  }
+
+  .indicator-header {
+    background: #f1f3f4;
+    padding: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+
+  .indicator-header:hover {
+    background: #e9ecef;
+  }
+
+  .indicator-details {
+    padding: 1rem;
+    display: none;
+  }
+
+  .indicator-details.active {
+    display: block;
+  }
+
+  /* Interactive Trade List Styling */
+  .trade-analysis-container {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+    margin: 2rem 0;
+  }
+
+  .trade-list-container {
+    max-height: 600px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+  }
+
+  .trade-list-header {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .trade-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .trade-item:hover {
+    background: #f8f9fa;
+    transform: translateX(5px);
+  }
+
+  .trade-item.selected {
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    font-weight: bold;
+  }
+
+  .trade-profitable {
+    border-left: 4px solid #4caf50;
+  }
+
+  .trade-loss {
+    border-left: 4px solid #f44336;
+  }
+
+  .trade-number {
+    font-weight: bold;
+    color: #666;
+    margin-right: 0.5rem;
+  }
+
+  .trade-pnl {
+    font-weight: bold;
+    float: right;
+  }
+
+  .trade-pnl.positive {
+    color: #4caf50;
+  }
+
+  .trade-pnl.negative {
+    color: #f44336;
+  }
+
+  .chart-container {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  /* Trade Details Sidebar */
+  .trade-details-sidebar {
+    position: fixed;
+    right: -400px;
+    top: 0;
+    width: 380px;
+    height: 100vh;
+    background: white;
+    border-left: 1px solid #ddd;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+  }
+
+  .trade-details-sidebar.active {
+    right: 0;
+  }
+
+  .trade-details-header {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+  }
+
+  .trade-details-content {
+    padding: 1rem;
+  }
+
+  .trade-detail-item {
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+  }
+
+  .trade-detail-label {
+    font-weight: bold;
+    color: #666;
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .trade-detail-value {
+    color: #333;
+  }
+
+  /* Filter and Search Controls */
+  .trade-controls {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+  }
+
+  .trade-filter {
+    display: inline-block;
+    margin-right: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .trade-filter input,
+  .trade-filter select {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  /* Performance comparison styling */
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+
+  .comparison-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .comparison-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0.5rem 0;
+  }
+
+  .comparison-label {
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .trade-analysis-container {
+      grid-template-columns: 1fr;
+    }
+
+    .strategy-config-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .trade-details-sidebar {
+      width: 100vw;
+      right: -100vw;
+    }
+  }
+
+  /* Print Styles */
+  @media print {
+    .trade-details-sidebar,
+    .trade-controls {
+      display: none;
+    }
+
+    .trade-analysis-container {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<!-- Strategy Header -->
+<div class="strategy-header">
+  <h2>{{ strategy_name }} Strategy Report</h2>
+  <p>
+    Comprehensive analysis of strategy performance, configuration, and
+    optimization opportunities
+  </p>
+</div>
+
+<!-- Strategy Configuration Section -->
+<section class="strategy-configuration">
+  <h3>Strategy Configuration</h3>
+  <div class="strategy-config-grid">
+    <!-- Basic Configuration -->
+    <div class="config-card">
+      <h4>Basic Settings</h4>
+      <div class="setting-item">
+        <span class="setting-label">Market:</span>
+        <span class="setting-value">{{ strategy_config.market }}</span>
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">Exchange:</span>
+        <span class="setting-value">{{ strategy_config.exchange }}</span>
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">Timeframe:</span>
+        <span class="setting-value">{{ strategy_config.timeframe }}</span>
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">Status:</span>
+        <span class="setting-value">
+          {% if strategy_config.enabled %}
+          <span class="status-enabled">✓ Enabled</span>
+          {% else %}
+          <span class="status-disabled">✗ Disabled</span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- Position Sizing Configuration -->
+    <div class="config-card">
+      <h4>Position Sizing</h4>
+      <div class="setting-item">
+        <span class="setting-label">Method:</span>
+        <span class="setting-value"
+          >{{ strategy_config.position_sizing.method }}</span
+        >
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">Amount:</span>
+        <span class="setting-value"
+          >{{ strategy_config.position_sizing.amount }}</span
+        >
+      </div>
+      {% if position_sizing_analysis %}
+      <div class="setting-item">
+        <span class="setting-label">Actual Avg Size:</span>
+        <span class="setting-value"
+          >{{ position_sizing_analysis.actual_average_size }}</span
+        >
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">Consistency:</span>
+        <span class="setting-value"
+          >{{ (position_sizing_analysis.size_consistency * 100)|round(1)
+          }}%</span
+        >
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Risk Management Configuration -->
+    <div class="config-card">
+      <h4>Risk Management</h4>
+      <div class="setting-item">
+        <span class="setting-label">Stop Loss:</span>
+        <span class="setting-value"
+          >{{ strategy_config.risk_management.stop_loss or 'Not Set' }}</span
+        >
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">Take Profit:</span>
+        <span class="setting-value"
+          >{{ strategy_config.risk_management.take_profit or 'Not Set' }}</span
+        >
+      </div>
+      <div class="setting-item">
+        <span class="setting-label">Max Position:</span>
+        <span class="setting-value"
+          >{{ strategy_config.risk_management.max_position_size or 'Not Set'
+          }}</span
+        >
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Strategy Performance Overview -->
+<section class="performance-overview">
+  <h3>Performance Overview</h3>
+  <div class="comparison-grid">
+    <div class="comparison-card">
+      <div class="comparison-value pnl-value">
+        ${{ performance_metrics.total_pnl }}
+      </div>
+      <div class="comparison-label">Total P&L</div>
+    </div>
+    <div class="comparison-card">
+      <div class="comparison-value">{{ performance_metrics.win_rate }}%</div>
+      <div class="comparison-label">Win Rate</div>
+    </div>
+    <div class="comparison-card">
+      <div class="comparison-value">{{ performance_metrics.total_trades }}</div>
+      <div class="comparison-label">Total Trades</div>
+    </div>
+    <div class="comparison-card">
+      <div class="comparison-value">
+        {{ performance_metrics.profit_factor }}
+      </div>
+      <div class="comparison-label">Profit Factor</div>
+    </div>
+    <div class="comparison-card">
+      <div class="comparison-value drawdown-value">
+        {{ performance_metrics.max_drawdown }}%
+      </div>
+      <div class="comparison-label">Max Drawdown</div>
+    </div>
+    <div class="comparison-card">
+      <div class="comparison-value">{{ performance_metrics.sharpe_ratio }}</div>
+      <div class="comparison-label">Sharpe Ratio</div>
+    </div>
+  </div>
+</section>
+
+<!-- Indicator Breakdown -->
+<section class="indicator-breakdown-section">
+  <h3>Indicator Analysis</h3>
+  {% for indicator_name, indicator_data in indicator_breakdown.items() %}
+  <div class="indicator-breakdown">
+    <div
+      class="indicator-header"
+      onclick="toggleIndicator('{{ indicator_name }}')"
+    >
+      <strong>{{ indicator_name }}</strong>
+      <span class="indicator-stats">
+        Signals: {{ indicator_data.signal_count }} | Accuracy: {{
+        (indicator_data.signal_accuracy * 100)|round(1) }}%
+        <span class="toggle-icon">▼</span>
+      </span>
+    </div>
+    <div class="indicator-details" id="indicator-{{ indicator_name }}">
+      <div class="settings-grid">
+        <div class="setting-item">
+          <span class="setting-label">Timeframe:</span>
+          <span class="setting-value">{{ indicator_data.timeframe }}</span>
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">Contribution to Returns:</span>
+          <span class="setting-value"
+            >{{ (indicator_data.contribution_to_returns * 100)|round(1)
+            }}%</span
+          >
+        </div>
+        {% for param_name, param_value in indicator_data.parameters.items() %}
+        <div class="setting-item">
+          <span class="setting-label"
+            >{{ param_name|replace('_', ' ')|title }}:</span
+          >
+          <span class="setting-value">{{ param_value }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<!-- Interactive Trade Analysis -->
+<section class="interactive-trade-analysis">
+  <h3>Interactive Trade Analysis</h3>
+
+  <!-- Trade Controls -->
+  <div class="trade-controls">
+    <div class="trade-filter">
+      <input
+        type="text"
+        id="trade-search"
+        placeholder="Search trades..."
+        onkeyup="filterTrades()"
+      />
+    </div>
+    <div class="trade-filter">
+      <select id="trade-type-filter" onchange="filterTrades()">
+        <option value="all">All Trades</option>
+        <option value="profitable">Profitable Only</option>
+        <option value="losses">Losses Only</option>
+      </select>
+    </div>
+    <div class="trade-filter">
+      <select id="trade-sort" onchange="sortTrades()">
+        <option value="chronological">Chronological</option>
+        <option value="pnl-desc">P&L (High to Low)</option>
+        <option value="pnl-asc">P&L (Low to High)</option>
+        <option value="duration">Duration</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Trade Analysis Container -->
+  <div class="trade-analysis-container">
+    <!-- Trade List -->
+    <div class="trade-list-container">
+      <div class="trade-list-header">
+        Trade List ({{ trades|length }} trades)
+      </div>
+      <div id="trade-list">
+        {% for trade in trades %}
+        <div
+          class="trade-item {{ 'trade-profitable' if trade.pnl > 0 else 'trade-loss' }}"
+          data-trade-id="{{ loop.index }}"
+          data-pnl="{{ trade.pnl }}"
+          data-duration="{{ trade.duration_minutes }}"
+          onclick="selectTrade({{ loop.index }}, this)"
+        >
+          <span class="trade-number">#{{ loop.index }}</span>
+          {{ trade.entry_time[:10] }}
+          <span
+            class="trade-pnl {{ 'positive' if trade.pnl > 0 else 'negative' }}"
+          >
+            ${{ trade.pnl }}
+          </span>
+          <div class="trade-meta">
+            {{ trade.exit_reason }} • {{ (trade.duration_minutes/60)|round(1)
+            }}h
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Chart Container -->
+    <div class="chart-container">
+      <div id="strategy-chart"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Strategy vs Individual Indicators Comparison -->
+{% if strategy_comparison %}
+<section class="strategy-comparison">
+  <h3>Strategy vs Individual Indicators</h3>
+  <div class="comparison-grid">
+    <div class="comparison-card">
+      <h4>Strategy Performance</h4>
+      <div class="comparison-value">
+        {{ strategy_comparison.strategy_performance.total_pnl }}
+      </div>
+      <div class="comparison-label">Total Return</div>
+    </div>
+    {% for indicator_name, individual_perf in
+    strategy_comparison.individual_indicators.items() %} {% if not
+    individual_perf.error %}
+    <div class="comparison-card">
+      <h4>{{ indicator_name }}</h4>
+      <div class="comparison-value">{{ individual_perf.total_pnl }}</div>
+      <div class="comparison-label">Individual Return</div>
+    </div>
+    {% endif %} {% endfor %}
+  </div>
+
+  <!-- Synergy Analysis -->
+  {% if strategy_comparison.synergy_analysis %}
+  <div class="config-card">
+    <h4>Indicator Synergy Analysis</h4>
+    <div class="setting-item">
+      <span class="setting-label">Multi-Indicator Trades:</span>
+      <span class="setting-value"
+        >{{ strategy_comparison.synergy_analysis.multi_indicator_trades }}</span
+      >
+    </div>
+    <div class="setting-item">
+      <span class="setting-label">Single-Indicator Trades:</span>
+      <span class="setting-value"
+        >{{ strategy_comparison.synergy_analysis.single_indicator_trades
+        }}</span
+      >
+    </div>
+    <div class="setting-item">
+      <span class="setting-label">Synergy Effect:</span>
+      <span class="setting-value"
+        >{{ (strategy_comparison.synergy_analysis.synergy_effect * 100)|round(1)
+        }}%</span
+      >
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+<!-- Optimization Suggestions -->
+{% if optimization_suggestions %}
+<section class="optimization-suggestions">
+  <h3>Optimization Suggestions</h3>
+  {% for suggestion in optimization_suggestions %}
+  <div class="config-card">
+    <h4>
+      {{ suggestion.type|replace('_', ' ')|title }}
+      <span class="priority-badge priority-{{ suggestion.priority }}">
+        ({{ suggestion.priority|title }} Priority)
+      </span>
+    </h4>
+    <p>{{ suggestion.suggestion }}</p>
+    {% if suggestion.current_value %}
+    <div class="setting-item">
+      <span class="setting-label">Current:</span>
+      <span class="setting-value">{{ suggestion.current_value }}</span>
+    </div>
+    {% endif %} {% if suggestion.target_value %}
+    <div class="setting-item">
+      <span class="setting-label">Target:</span>
+      <span class="setting-value">{{ suggestion.target_value }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- Trade Details Sidebar -->
+<div class="trade-details-sidebar" id="trade-details-sidebar">
+  <div class="trade-details-header">
+    <span>Trade Details</span>
+    <button class="close-button" onclick="closeTradeSidebar()">×</button>
+  </div>
+  <div class="trade-details-content" id="trade-details-content">
+    <!-- Trade details will be populated by JavaScript -->
+  </div>
+</div>
+
+<style>
+  /* Additional styles for elements used in template */
+  .status-enabled {
+    color: #4caf50;
+  }
+
+  .status-disabled {
+    color: #f44336;
+  }
+
+  .pnl-value {
+    color: #4caf50;
+  }
+
+  .pnl-value.negative {
+    color: #f44336;
+  }
+
+  .drawdown-value {
+    color: #f44336;
+  }
+
+  .indicator-stats {
+    float: right;
+  }
+
+  .trade-meta {
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 0.25rem;
+  }
+
+  .priority-badge {
+    font-size: 0.8em;
+  }
+
+  .priority-high {
+    color: #f44336;
+  }
+
+  .priority-medium {
+    color: #ff9800;
+  }
+
+  .priority-low {
+    color: #4caf50;
+  }
+
+  .close-button {
+    float: right;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+
+  #strategy-chart {
+    height: 600px;
+    width: 100%;
+  }
+</style>
+
+<script>
+  // Chart data and configuration
+  const chartData = {{ chart_data|tojson if chart_data else '{}' }};
+  const trades = {{ trades|tojson if trades else '[]' }};
+
+  let selectedTradeIndex = null;
+  let chart = null;
+
+  // Initialize the chart
+  function initializeChart() {
+      const layout = {
+          title: 'Strategy Performance Chart',
+          xaxis: { title: 'Time' },
+          yaxis: { title: 'Price' },
+          showlegend: true,
+          hovermode: 'closest'
+      };
+
+      const traces = [];
+
+      // Add price data
+      if (chartData.price_data) {
+          traces.push({
+              x: chartData.price_data.timestamps,
+              y: chartData.price_data.close_prices,
+              type: 'scatter',
+              mode: 'lines',
+              name: 'Price',
+              line: { color: 'blue' }
+          });
+      }
+
+      // Add trade markers
+      const entryTimes = trades.map(trade => trade.entry_time);
+      const entryPrices = trades.map(trade => trade.entry_price);
+      const exitTimes = trades.map(trade => trade.exit_time);
+      const exitPrices = trades.map(trade => trade.exit_price);
+
+      traces.push({
+          x: entryTimes,
+          y: entryPrices,
+          type: 'scatter',
+          mode: 'markers',
+          name: 'Entry',
+          marker: {
+              color: 'green',
+              size: 8,
+              symbol: 'triangle-up'
+          },
+          customdata: trades.map((trade, index) => index),
+          hovertemplate: 'Entry: $%{y}<br>%{x}<extra></extra>'
+      });
+
+      traces.push({
+          x: exitTimes,
+          y: exitPrices,
+          type: 'scatter',
+          mode: 'markers',
+          name: 'Exit',
+          marker: {
+              color: 'red',
+              size: 8,
+              symbol: 'triangle-down'
+          },
+          customdata: trades.map((trade, index) => index),
+          hovertemplate: 'Exit: $%{y}<br>%{x}<extra></extra>'
+      });
+
+      Plotly.newPlot('strategy-chart', traces, layout, {responsive: true});
+
+      // Add click event listener for trade markers
+      document.getElementById('strategy-chart').on('plotly_click', function(data) {
+          if (data.points && data.points.length > 0) {
+              const point = data.points[0];
+              if (point.customdata !== undefined) {
+                  const tradeIndex = point.customdata + 1; // +1 for 1-based indexing
+                  selectTradeFromChart(tradeIndex);
+              }
+          }
+      });
+  }
+
+  // Trade selection functions
+  function selectTrade(tradeIndex, element) {
+      // Remove previous selection
+      document.querySelectorAll('.trade-item').forEach(item => {
+          item.classList.remove('selected');
+      });
+
+      // Add selection to clicked trade
+      element.classList.add('selected');
+      selectedTradeIndex = tradeIndex;
+
+      // Highlight trade on chart
+      highlightTradeOnChart(tradeIndex - 1); // Convert to 0-based index
+
+      // Show trade details
+      showTradeDetails(tradeIndex - 1);
+  }
+
+  function selectTradeFromChart(tradeIndex) {
+      // Find and select the corresponding trade in the list
+      const tradeElement = document.querySelector(`[data-trade-id="${tradeIndex}"]`);
+      if (tradeElement) {
+          selectTrade(tradeIndex, tradeElement);
+          // Scroll to the trade in the list
+          tradeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+  }
+
+  function highlightTradeOnChart(tradeIndex) {
+      if (!chart || tradeIndex >= trades.length) return;
+
+      const trade = trades[tradeIndex];
+
+      // Add highlighting shapes for the selected trade
+      const update = {
+          shapes: [
+              {
+                  type: 'line',
+                  x0: trade.entry_time,
+                  y0: 0,
+                  x1: trade.entry_time,
+                  y1: 1,
+                  xref: 'x',
+                  yref: 'paper',
+                  line: { color: 'green', width: 3, dash: 'dash' }
+              },
+              {
+                  type: 'line',
+                  x0: trade.exit_time,
+                  y0: 0,
+                  x1: trade.exit_time,
+                  y1: 1,
+                  xref: 'x',
+                  yref: 'paper',
+                  line: { color: 'red', width: 3, dash: 'dash' }
+              }
+          ]
+      };
+
+      Plotly.relayout('strategy-chart', update);
+  }
+
+  function showTradeDetails(tradeIndex) {
+      if (tradeIndex >= trades.length) return;
+
+      const trade = trades[tradeIndex];
+      const content = document.getElementById('trade-details-content');
+
+      const duration = trade.duration_minutes / 60;
+      const pnlClass = trade.pnl > 0 ? 'positive' : 'negative';
+
+      content.innerHTML = `
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Trade #${tradeIndex + 1}</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Entry Time:</span>
+              <span class="trade-detail-value">${trade.entry_time}</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Exit Time:</span>
+              <span class="trade-detail-value">${trade.exit_time}</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Entry Price:</span>
+              <span class="trade-detail-value">$${trade.entry_price}</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Exit Price:</span>
+              <span class="trade-detail-value">$${trade.exit_price}</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">P&L:</span>
+              <span class="trade-detail-value ${pnlClass}">$${trade.pnl}</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Duration:</span>
+              <span class="trade-detail-value">${duration.toFixed(1)} hours</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Position Size:</span>
+              <span class="trade-detail-value">${trade.position_size}</span>
+          </div>
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Exit Reason:</span>
+              <span class="trade-detail-value">${trade.exit_reason}</span>
+          </div>
+          ${trade.involved_indicators ? `
+          <div class="trade-detail-item">
+              <span class="trade-detail-label">Indicators:</span>
+              <span class="trade-detail-value">${trade.involved_indicators.join(', ')}</span>
+          </div>
+          ` : ''}
+      `;
+
+      document.getElementById('trade-details-sidebar').classList.add('active');
+  }
+
+  function closeTradeSidebar() {
+      document.getElementById('trade-details-sidebar').classList.remove('active');
+  }
+
+  // Filter and search functions
+  function filterTrades() {
+      const searchTerm = document.getElementById('trade-search').value.toLowerCase();
+      const typeFilter = document.getElementById('trade-type-filter').value;
+
+      const tradeItems = document.querySelectorAll('.trade-item');
+
+      tradeItems.forEach(item => {
+          const pnl = parseFloat(item.dataset.pnl);
+          const tradeText = item.textContent.toLowerCase();
+
+          let showTrade = true;
+
+          // Apply search filter
+          if (searchTerm && !tradeText.includes(searchTerm)) {
+              showTrade = false;
+          }
+
+          // Apply type filter
+          if (typeFilter === 'profitable' && pnl <= 0) {
+              showTrade = false;
+          } else if (typeFilter === 'losses' && pnl >= 0) {
+              showTrade = false;
+          }
+
+          item.style.display = showTrade ? 'block' : 'none';
+      });
+  }
+
+  function sortTrades() {
+      const sortBy = document.getElementById('trade-sort').value;
+      const tradeList = document.getElementById('trade-list');
+      const tradeItems = Array.from(tradeList.children);
+
+      tradeItems.sort((a, b) => {
+          switch (sortBy) {
+              case 'pnl-desc':
+                  return parseFloat(b.dataset.pnl) - parseFloat(a.dataset.pnl);
+              case 'pnl-asc':
+                  return parseFloat(a.dataset.pnl) - parseFloat(b.dataset.pnl);
+              case 'duration':
+                  return parseFloat(b.dataset.duration) - parseFloat(a.dataset.duration);
+              default: // chronological
+                  return parseInt(a.dataset.tradeId) - parseInt(b.dataset.tradeId);
+          }
+      });
+
+      tradeItems.forEach(item => tradeList.appendChild(item));
+  }
+
+  // Indicator toggle function
+  function toggleIndicator(indicatorName) {
+      const details = document.getElementById(`indicator-${indicatorName}`);
+      const header = details.previousElementSibling;
+      const icon = header.querySelector('.toggle-icon');
+
+      if (details.classList.contains('active')) {
+          details.classList.remove('active');
+          icon.textContent = '▼';
+      } else {
+          details.classList.add('active');
+          icon.textContent = '▲';
+      }
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', function(event) {
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          event.preventDefault();
+
+          const visibleTrades = Array.from(document.querySelectorAll('.trade-item'))
+              .filter(item => item.style.display !== 'none');
+
+          if (visibleTrades.length === 0) return;
+
+          let currentIndex = selectedTradeIndex ?
+              visibleTrades.findIndex(item => item.dataset.tradeId == selectedTradeIndex) : -1;
+
+          if (event.key === 'ArrowUp') {
+              currentIndex = currentIndex > 0 ? currentIndex - 1 : visibleTrades.length - 1;
+          } else {
+              currentIndex = currentIndex < visibleTrades.length - 1 ? currentIndex + 1 : 0;
+          }
+
+          const targetTrade = visibleTrades[currentIndex];
+          const tradeId = parseInt(targetTrade.dataset.tradeId);
+          selectTrade(tradeId, targetTrade);
+          targetTrade.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (event.key === 'Escape') {
+          closeTradeSidebar();
+      }
+  });
+
+  // Initialize everything when the page loads
+  document.addEventListener('DOMContentLoaded', function() {
+      initializeChart();
+  });
+</script>
+{% endblock %}

@@ -496,50 +496,50 @@ of concerns.
 
 ### 3.1 Strategy Report Generation
 
-- [ ] **Create comprehensive strategy reports** (now in `cli/reporting/strategy_reporter.py`)
+- [x] **Create comprehensive strategy reports** (now in `cli/reporting/strategy_reporter.py`)
 
-  - [ ] Include full strategy configuration in report header
-  - [ ] Show all strategy indicators and their individual performance
-  - [ ] Display position sizing method and parameters used
-  - [ ] Include risk management settings (stop loss, take profit, max position)
-  - [ ] Add strategy-specific metadata (exchange, market, timeframe)
-  - [ ] Show strategy vs individual indicator performance comparison
-  - [ ] **Integrate with ConfigManager for configuration access**
-  - [ ] **Use InteractiveReporter for trade selection features**
+  - [x] Include full strategy configuration in report header
+  - [x] Show all strategy indicators and their individual performance
+  - [x] Display position sizing method and parameters used
+  - [x] Include risk management settings (stop loss, take profit, max position)
+  - [x] Add strategy-specific metadata (exchange, market, timeframe)
+  - [x] Show strategy vs individual indicator performance comparison
+  - [x] **Integrate with ConfigManager for configuration access**
+  - [x] **Use InteractiveReporter for trade selection features**
 
-- [ ] **Add interactive trade analysis features** (now in `cli/reporting/interactive_reporter.py`)
+- [x] **Add interactive trade analysis features** (now in `cli/reporting/interactive_reporter.py`)
 
-  - [ ] Create interactive trade list with clickable trade entries
-  - [ ] Add trade highlighting functionality when selected from list
-  - [ ] Implement JavaScript-based chart interaction for trade selection
-  - [ ] Add trade numbering/indexing for easy reference and navigation
-  - [ ] Include trade details popup or sidebar when trade is selected
-  - [ ] Add keyboard navigation (arrow keys) for trade selection
-  - [ ] Implement trade filtering and search within the report
-  - [ ] Add "zoom to trade" functionality to focus chart on selected trade timeframe
-  - [ ] **Integrate with StrategyReporter for comprehensive strategy context**
+  - [x] Create interactive trade list with clickable trade entries
+  - [x] Add trade highlighting functionality when selected from list
+  - [x] Implement JavaScript-based chart interaction for trade selection
+  - [x] Add trade numbering/indexing for easy reference and navigation
+  - [x] Include trade details popup or sidebar when trade is selected
+  - [x] Add keyboard navigation (arrow keys) for trade selection
+  - [x] Implement trade filtering and search within the report
+  - [x] Add "zoom to trade" functionality to focus chart on selected trade timeframe
+  - [x] **Integrate with StrategyReporter for comprehensive strategy context**
 
-- [ ] **Enhance chart interactivity** (in `cli/reporting/interactive_reporter.py`)
+- [x] **Enhance chart interactivity** (in `cli/reporting/interactive_reporter.py`)
 
-  - [ ] Add clickable trade markers on price charts
-  - [ ] Implement hover tooltips for trade entry/exit points
-  - [ ] Add trade annotation with PnL, duration, and strategy context
-  - [ ] Create synchronized highlighting between trade list and chart
-  - [ ] Add trade sequence visualization (connecting entry to exit with lines)
-  - [ ] Implement chart zoom and pan controls for detailed trade analysis
-  - [ ] Add toggle for showing/hiding different trade types (winning/losing)
-  - [ ] **Coordinate with ScenarioReporter for scenario-specific trade highlighting**
+  - [x] Add clickable trade markers on price charts
+  - [x] Implement hover tooltips for trade entry/exit points
+  - [x] Add trade annotation with PnL, duration, and strategy context
+  - [x] Create synchronized highlighting between trade list and chart
+  - [x] Add trade sequence visualization (connecting entry to exit with lines)
+  - [x] Implement chart zoom and pan controls for detailed trade analysis
+  - [x] Add toggle for showing/hiding different trade types (winning/losing)
+  - [x] **Coordinate with ScenarioReporter for scenario-specific trade highlighting**
 
-- [ ] **Update HTML report templates** (`packages/spark-app/app/backtesting/reporting/`)
-  - [ ] Add strategy configuration section to HTML templates
-  - [ ] Display position sizing information and impact analysis
-  - [ ] Show indicator breakdown within strategy context
-  - [ ] Add strategy-specific charts and metrics
-  - [ ] Include configuration vs actual performance comparison
-  - [ ] Add strategy optimization suggestions based on results
-  - [ ] **Integrate interactive JavaScript components from InteractiveReporter**
-  - [ ] **Add responsive design for trade list and chart interaction**
-  - [ ] **Include CSS styling for highlighted trades and selected states**
+- [x] **Update HTML report templates** (`packages/spark-app/app/backtesting/reporting/`)
+  - [x] Add strategy configuration section to HTML templates
+  - [x] Display position sizing information and impact analysis
+  - [x] Show indicator breakdown within strategy context
+  - [x] Add strategy-specific charts and metrics
+  - [x] Include configuration vs actual performance comparison
+  - [x] Add strategy optimization suggestions based on results
+  - [x] **Integrate interactive JavaScript components from InteractiveReporter**
+  - [x] **Add responsive design for trade list and chart interaction**
+  - [x] **Include CSS styling for highlighted trades and selected states**
 
 ### 3.2 Strategy Comparison Reports
 

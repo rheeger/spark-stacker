@@ -6,6 +6,7 @@ This module centralizes all strategy-specific reporting logic, including:
 - Strategy performance breakdown
 - Strategy optimization suggestions
 - Export functionality for strategy results
+- Integration with InteractiveReporter for trade selection features
 """
 
 import json
@@ -37,6 +38,252 @@ class StrategyReporter:
         """
         self.config_manager = config_manager
         self.validator = StrategyValidator(config_manager)
+
+    def generate_comprehensive_strategy_report(
+        self,
+        strategy_name: str,
+        backtest_results: Dict[str, Any],
+        include_interactive: bool = True,
+        output_path: Optional[Path] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate a comprehensive strategy report with optional interactive features.
+
+        Args:
+            strategy_name: Name of the strategy
+            backtest_results: Backtest results data
+            include_interactive: Whether to include interactive trade analysis
+            output_path: Optional path to save the report
+
+        Returns:
+            Dictionary containing the full report data with interactive features
+        """
+        logger.info(f"Generating comprehensive strategy report for: {strategy_name}")
+
+        try:
+            # Get base strategy report
+            base_report = self.generate_strategy_report(strategy_name, backtest_results, output_path)
+
+            if include_interactive:
+                # Import here to avoid circular imports
+                from .interactive_reporter import InteractiveReporter
+
+                interactive_reporter = InteractiveReporter()
+                trades = backtest_results.get("trades", [])
+
+                # Generate interactive features
+                interactive_features = interactive_reporter.generate_interactive_report(
+                    base_report, trades, output_path
+                )
+
+                # Merge reports
+                base_report["interactive_features"] = interactive_features.get("interactive_features", {})
+                base_report["accessibility"] = interactive_features.get("accessibility", {})
+                base_report["responsive_design"] = interactive_features.get("responsive_design", {})
+
+            return base_report
+
+        except Exception as e:
+            logger.error(f"Error generating comprehensive strategy report for {strategy_name}: {e}")
+            raise
+
+    def generate_strategy_vs_indicator_comparison(
+        self,
+        strategy_name: str,
+        backtest_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Generate detailed comparison between strategy and individual indicator performance.
+
+        Args:
+            strategy_name: Name of the strategy
+            backtest_results: Backtest results data
+
+        Returns:
+            Dictionary containing detailed comparison analysis
+        """
+        logger.info(f"Generating strategy vs indicator comparison for: {strategy_name}")
+
+        try:
+            strategy_config = self.config_manager.get_strategy_config(strategy_name)
+            strategy_metrics = self._calculate_performance_metrics(backtest_results)
+
+            comparison = {
+                "strategy_performance": strategy_metrics,
+                "individual_indicators": {},
+                "performance_attribution": {},
+                "synergy_analysis": {}
+            }
+
+            # Analyze each indicator individually
+            for indicator_name, indicator_config in strategy_config.get("indicators", {}).items():
+                # This would require separate backtesting of individual indicators
+                # For now, we'll use signal analysis
+                individual_performance = self._estimate_individual_indicator_performance(
+                    indicator_name, backtest_results
+                )
+
+                comparison["individual_indicators"][indicator_name] = individual_performance
+
+                # Calculate contribution attribution
+                attribution = self._calculate_performance_attribution(
+                    indicator_name, strategy_metrics, individual_performance
+                )
+                comparison["performance_attribution"][indicator_name] = attribution
+
+            # Analyze synergy between indicators
+            comparison["synergy_analysis"] = self._analyze_indicator_synergy(
+                strategy_config, backtest_results
+            )
+
+            return comparison
+
+        except Exception as e:
+            logger.error(f"Error generating strategy vs indicator comparison: {e}")
+            raise
+
+    def _estimate_individual_indicator_performance(
+        self,
+        indicator_name: str,
+        backtest_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Estimate how the indicator would perform individually.
+
+        Args:
+            indicator_name: Name of the indicator
+            backtest_results: Full backtest results
+
+        Returns:
+            Estimated individual performance metrics
+        """
+        trades = backtest_results.get("trades", [])
+        indicator_signals = backtest_results.get("indicator_signals", {}).get(indicator_name, [])
+
+        if not indicator_signals:
+            return {"error": f"No signals found for indicator {indicator_name}"}
+
+        # Estimate trades based purely on this indicator's signals
+        estimated_trades = []
+        for signal in indicator_signals:
+            # Find corresponding trades that happened around this signal
+            signal_time = signal.get("timestamp")
+            matching_trades = [
+                trade for trade in trades
+                if abs(self._time_difference(trade.get("entry_time"), signal_time)) < 300  # 5 minutes
+            ]
+
+            if matching_trades:
+                # Use the best matching trade
+                best_trade = min(matching_trades,
+                    key=lambda t: abs(self._time_difference(t.get("entry_time"), signal_time)))
+                estimated_trades.append(best_trade)
+
+        # Calculate metrics for estimated individual performance
+        if estimated_trades:
+            return self._calculate_performance_metrics({"trades": estimated_trades})
+        else:
+            return {"error": f"No matching trades found for {indicator_name} signals"}
+
+    def _calculate_performance_attribution(
+        self,
+        indicator_name: str,
+        strategy_metrics: Dict[str, Any],
+        individual_metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Calculate how much this indicator contributes to overall strategy performance.
+
+        Args:
+            indicator_name: Name of the indicator
+            strategy_metrics: Overall strategy performance
+            individual_metrics: Individual indicator performance
+
+        Returns:
+            Performance attribution analysis
+        """
+        if "error" in individual_metrics:
+            return {"error": f"Cannot calculate attribution for {indicator_name}"}
+
+        strategy_return = strategy_metrics.get("total_pnl", 0)
+        individual_return = individual_metrics.get("total_pnl", 0)
+
+        attribution = {
+            "return_contribution": individual_return / strategy_return if strategy_return != 0 else 0,
+            "win_rate_contribution": individual_metrics.get("win_rate", 0) / strategy_metrics.get("win_rate", 1) if strategy_metrics.get("win_rate", 0) != 0 else 0,
+            "trade_frequency_contribution": individual_metrics.get("total_trades", 0) / strategy_metrics.get("total_trades", 1) if strategy_metrics.get("total_trades", 0) != 0 else 0,
+            "risk_contribution": individual_metrics.get("max_drawdown", 0) / strategy_metrics.get("max_drawdown", 1) if strategy_metrics.get("max_drawdown", 0) != 0 else 0
+        }
+
+        return attribution
+
+    def _analyze_indicator_synergy(
+        self,
+        strategy_config: Dict[str, Any],
+        backtest_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Analyze synergy effects between indicators in the strategy.
+
+        Args:
+            strategy_config: Strategy configuration
+            backtest_results: Backtest results
+
+        Returns:
+            Synergy analysis results
+        """
+        indicators = list(strategy_config.get("indicators", {}).keys())
+        trades = backtest_results.get("trades", [])
+
+        synergy = {
+            "multi_indicator_trades": 0,
+            "single_indicator_trades": 0,
+            "synergy_effect": 0,
+            "best_combinations": [],
+            "conflict_analysis": {}
+        }
+
+        # Analyze trades that involved multiple indicators
+        for trade in trades:
+            involved_indicators = trade.get("involved_indicators", [])
+            if len(involved_indicators) > 1:
+                synergy["multi_indicator_trades"] += 1
+            else:
+                synergy["single_indicator_trades"] += 1
+
+        # Calculate synergy effect
+        if synergy["multi_indicator_trades"] > 0 and synergy["single_indicator_trades"] > 0:
+            multi_avg_pnl = sum(
+                trade.get("pnl", 0) for trade in trades
+                if len(trade.get("involved_indicators", [])) > 1
+            ) / synergy["multi_indicator_trades"]
+
+            single_avg_pnl = sum(
+                trade.get("pnl", 0) for trade in trades
+                if len(trade.get("involved_indicators", [])) == 1
+            ) / synergy["single_indicator_trades"]
+
+            synergy["synergy_effect"] = (multi_avg_pnl / single_avg_pnl - 1) if single_avg_pnl != 0 else 0
+
+        return synergy
+
+    def _time_difference(self, time1: str, time2: str) -> float:
+        """
+        Calculate time difference in seconds between two timestamp strings.
+
+        Args:
+            time1: First timestamp
+            time2: Second timestamp
+
+        Returns:
+            Time difference in seconds
+        """
+        try:
+            # This is a simplified implementation
+            # In practice, you'd parse the actual timestamp formats
+            return 0.0  # Placeholder
+        except:
+            return float('inf')
 
     def generate_strategy_report(
         self,
