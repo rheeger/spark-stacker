@@ -140,10 +140,18 @@ class StrategyBacktestManager:
             raise ValueError("No strategy loaded. Call load_strategy_from_config first.")
 
         try:
-            # Apply any overrides
+            # Apply any overrides to the current strategy
             effective_config = self.current_strategy.to_dict()
             if overrides:
-                effective_config.update(overrides)
+                # Deep merge overrides
+                for key, value in overrides.items():
+                    if isinstance(value, dict) and key in effective_config and isinstance(effective_config[key], dict):
+                        effective_config[key].update(value)
+                    else:
+                        effective_config[key] = value
+
+                # Update the current strategy with overrides
+                self.current_strategy = StrategyConfig.from_config_dict(effective_config)
                 logger.info(f"Applied configuration overrides: {overrides}")
 
             # Initialize indicators
@@ -189,7 +197,8 @@ class StrategyBacktestManager:
 
             # Use strategy-specific position sizing or fall back to global config
             if not position_sizing_config:
-                position_sizing_config = self.config_manager.get_global_config().get('position_sizing', {})
+                global_config = self.config_manager.load_config()
+                position_sizing_config = global_config.get('position_sizing', {})
 
             # Create position sizing configuration
             sizing_config = PositionSizingConfig.from_config_dict(position_sizing_config)
@@ -247,7 +256,7 @@ class StrategyBacktestManager:
             elif isinstance(start_date, str):
                 start_date = datetime.strptime(start_date, "%Y-%m-%d")
 
-            # Get market data
+            # Get market data using CLI DataManager
             market_data = self._get_market_data(
                 symbol=self.current_strategy.market,
                 timeframe=self.current_strategy.timeframe,
@@ -314,7 +323,7 @@ class StrategyBacktestManager:
         end_date: datetime,
         use_real_data: bool
     ) -> pd.DataFrame:
-        """Get market data for the strategy."""
+        """Get market data for the strategy using CLI DataManager."""
         try:
             if use_real_data:
                 # Use CLI data manager to fetch real data
@@ -450,7 +459,7 @@ class StrategyBacktestManager:
                     current_candle=current_candle
                 )
 
-            # Calculate position size
+            # Calculate position size using position sizer
             current_equity = simulation_engine.calculate_equity({symbol: current_candle["close"]})
             current_price = current_candle["close"]
             position_size = self.position_sizer.calculate_position_size(
@@ -493,7 +502,7 @@ class StrategyBacktestManager:
                     current_candle=current_candle
                 )
 
-            # Calculate position size
+            # Calculate position size using position sizer
             current_equity = simulation_engine.calculate_equity({symbol: current_candle["close"]})
             current_price = current_candle["close"]
             position_size = self.position_sizer.calculate_position_size(

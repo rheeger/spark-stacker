@@ -9,9 +9,25 @@ This module contains CLI commands for strategy backtesting and management:
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import click
+
+# Import app components
+from ....app.backtesting.backtest_engine import BacktestEngine
+from ..core.backtest_orchestrator import BacktestOrchestrator
+# Import required managers and core modules
+from ..core.config_manager import ConfigManager
+from ..core.data_manager import DataManager
+from ..core.scenario_manager import ScenarioManager
+from ..managers.comparison_manager import ComparisonManager
+from ..managers.scenario_backtest_manager import ScenarioBacktestManager
+from ..managers.strategy_backtest_manager import StrategyBacktestManager
+from ..reporting.comparison_reporter import ComparisonReporter
+from ..reporting.scenario_reporter import ScenarioReporter
+from ..reporting.strategy_reporter import StrategyReporter
+from ..validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
 
@@ -54,93 +70,174 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
         # Run single scenario with overrides
         python cli/main.py strategy --strategy-name "MACD_ETH_Long" --scenario-only --scenarios "bull" --override-timeframe "4h"
     """
-    # Import configuration loading from main module
-    from ..main import (get_strategy_config, load_config,
-                        validate_strategy_config)
+    try:
+        # Initialize managers and components
+        config_manager = ConfigManager(ctx.obj.get('config_path'))
+        data_manager = DataManager()
+        strategy_validator = StrategyValidator(config_manager)
+        backtest_engine = BacktestEngine()
 
-    # Load configuration
-    config = load_config(ctx.obj.get('config_path'))
-    if not config:
-        raise click.ClickException("Could not load configuration. Use --config to specify config file path.")
+        # Determine output directory
+        if not output_dir:
+            output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
 
-    # Validate strategy exists
-    strategy_config = get_strategy_config(config, strategy_name)
-    if not strategy_config:
-        available_strategies = [s.get('name', 'unnamed') for s in config.get('strategies', [])]
-        raise click.ClickException(
-            f"Strategy '{strategy_name}' not found in configuration.\n"
-            f"Available strategies: {', '.join(available_strategies)}"
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Initialize strategy backtest manager
+        strategy_manager = StrategyBacktestManager(
+            backtest_engine=backtest_engine,
+            config_manager=config_manager,
+            data_manager=data_manager,
+            strategy_validator=strategy_validator,
+            output_dir=output_path
         )
 
-    # Validate strategy configuration
-    validation_errors = validate_strategy_config(config, strategy_name)
-    if validation_errors:
-        raise click.ClickException(
-            f"Strategy configuration validation failed:\n" +
-            "\n".join([f"  • {error}" for error in validation_errors])
-        )
+        # Load strategy configuration
+        click.echo(f"🔍 Loading strategy: {strategy_name}")
+        strategy_config = strategy_manager.load_strategy_from_config(strategy_name)
 
-    # Apply overrides if specified
-    effective_config = strategy_config.copy()
-    if override_timeframe:
-        effective_config['timeframe'] = override_timeframe
-        click.echo(f"⚠️  Overriding timeframe: {strategy_config.get('timeframe')} → {override_timeframe}")
+        # Build configuration overrides
+        overrides = {}
+        if override_timeframe:
+            overrides['timeframe'] = override_timeframe
+            click.echo(f"⚠️  Overriding timeframe: {strategy_config.timeframe} → {override_timeframe}")
 
-    if override_market:
-        effective_config['market'] = override_market
-        click.echo(f"⚠️  Overriding market: {strategy_config.get('market')} → {override_market}")
+        if override_market:
+            overrides['market'] = override_market
+            click.echo(f"⚠️  Overriding market: {strategy_config.market} → {override_market}")
 
-    if override_position_size:
-        effective_config['max_position_size'] = override_position_size
-        click.echo(f"⚠️  Overriding position size: {strategy_config.get('max_position_size')} → {override_position_size}")
+        if override_position_size:
+            overrides['max_position_size'] = override_position_size
+            click.echo(f"⚠️  Overriding position size: {strategy_config.position_sizing.get('max_position_size', 'default')} → {override_position_size}")
 
-    # Determine output directory
-    if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        # Initialize strategy components with overrides
+        click.echo("🔧 Initializing strategy components...")
+        strategy_manager.initialize_strategy_components(overrides)
 
-    os.makedirs(output_dir, exist_ok=True)
+        click.echo(f"🎯 Running backtest for strategy: {strategy_name}")
+        click.echo(f"📊 Market: {strategy_config.market}")
+        click.echo(f"⏱️  Timeframe: {strategy_config.timeframe}")
+        click.echo(f"📅 Duration: {days} days")
 
-    # Parse scenarios
-    if scenarios.lower() == "all":
-        scenario_list = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
-    else:
-        scenario_list = [s.strip() for s in scenarios.split(",")]
+        # Parse scenarios
+        if scenarios.lower() == "all":
+            scenario_list = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
+        else:
+            scenario_list = [s.strip() for s in scenarios.split(",")]
 
-    # Validate scenario names
-    valid_scenarios = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
-    invalid_scenarios = [s for s in scenario_list if s not in valid_scenarios]
-    if invalid_scenarios:
-        raise click.ClickException(
-            f"Invalid scenarios: {', '.join(invalid_scenarios)}\n"
-            f"Valid scenarios: {', '.join(valid_scenarios)}"
-        )
+        # Validate scenario names
+        valid_scenarios = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
+        invalid_scenarios = [s for s in scenario_list if s not in valid_scenarios]
+        if invalid_scenarios:
+            raise click.ClickException(
+                f"Invalid scenarios: {', '.join(invalid_scenarios)}\n"
+                f"Valid scenarios: {', '.join(valid_scenarios)}"
+            )
 
-    click.echo(f"🎯 Running backtest for strategy: {strategy_name}")
-    click.echo(f"📊 Market: {effective_config.get('market', 'Unknown')}")
-    click.echo(f"⏱️  Timeframe: {effective_config.get('timeframe', 'Unknown')}")
-    click.echo(f"📅 Duration: {days} days")
-    click.echo(f"🎲 Scenarios: {', '.join(scenario_list)}")
+        click.echo(f"🎲 Scenarios: {', '.join(scenario_list)}")
 
-    if scenario_only and len(scenario_list) > 1:
-        click.echo("⚠️  --scenario-only flag specified but multiple scenarios selected. Running all specified scenarios.")
+        # Handle legacy use-real-data flag
+        if use_real_data and "real" not in scenario_list:
+            scenario_list = ["real"]
+            click.echo("⚠️  Legacy --use-real-data flag detected, running real data scenario only")
 
-    # TODO: Implement actual strategy backtesting logic
-    # This will be integrated with the StrategyBacktestManager in subsequent tasks
-    click.echo("\n📝 Strategy backtesting implementation pending...")
-    click.echo("   This will be implemented in subsequent tasks with:")
-    click.echo("   • StrategyBacktestManager integration")
-    click.echo("   • ScenarioManager for multi-scenario testing")
-    click.echo("   • StrategyReporter for comprehensive reporting")
-    click.echo(f"   • Results will be saved to: {output_dir}")
+        # Check for multi-scenario vs single scenario
+        if scenario_only and len(scenario_list) > 1:
+            click.echo("⚠️  --scenario-only flag specified but multiple scenarios selected. Running all specified scenarios.")
 
-    if export_data:
-        click.echo(f"📁 Scenario data export enabled - will save to: {output_dir}/scenario_data/")
+        # Run backtesting based on scenario configuration
+        if len(scenario_list) == 1 and scenario_list[0] == "real":
+            # Single real data backtest (legacy compatibility)
+            click.echo("\n🚀 Running single real data backtest...")
+            result = strategy_manager.backtest_strategy(
+                days=days,
+                use_real_data=True,
+                leverage=1.0
+            )
 
-    # For now, show what would be implemented
-    click.echo(f"\n✅ Strategy command handler created successfully!")
-    click.echo(f"   Strategy: {strategy_name}")
-    click.echo(f"   Configuration validated: ✅")
-    click.echo(f"   Scenarios configured: {len(scenario_list)}")
+            # Generate strategy report
+            strategy_reporter = StrategyReporter(config_manager, output_path)
+            report_path = strategy_reporter.generate_strategy_report(
+                strategy_name=strategy_name,
+                backtest_result=result,
+                output_format='html'
+            )
+
+            click.echo(f"✅ Backtest completed successfully!")
+            click.echo(f"📊 Total trades: {result.metrics.get('total_trades', 0)}")
+            click.echo(f"💰 Total return: {result.metrics.get('total_return_pct', 0):.2f}%")
+            click.echo(f"📈 Win rate: {result.metrics.get('win_rate', 0):.1f}%")
+            click.echo(f"📋 Report saved to: {report_path}")
+
+        else:
+            # Multi-scenario testing
+            click.echo(f"\n🚀 Running multi-scenario backtest across {len(scenario_list)} scenarios...")
+
+            # Initialize scenario manager and scenario backtest manager
+            scenario_manager = ScenarioManager(
+                data_manager=data_manager,
+                config_manager=config_manager,
+                default_duration_days=days
+            )
+
+            scenario_backtest_manager = ScenarioBacktestManager(
+                config_manager=config_manager,
+                data_manager=data_manager,
+                scenario_manager=scenario_manager,
+                strategy_manager=strategy_manager,
+                output_dir=output_path
+            )
+
+            # Run scenario testing
+            scenario_results = scenario_backtest_manager.run_strategy_scenarios(
+                strategy_name=strategy_name,
+                days=days,
+                scenario_filter=scenario_list
+            )
+
+            # Generate scenario report
+            scenario_reporter = ScenarioReporter(config_manager, data_manager, output_path)
+            report_path = scenario_reporter.generate_scenario_report(
+                strategy_name=strategy_name,
+                scenario_results=scenario_results,
+                output_format='html'
+            )
+
+            # Display summary
+            click.echo(f"✅ Multi-scenario backtest completed!")
+            click.echo(f"📊 Scenarios tested: {len(scenario_results)}")
+
+            # Show key metrics across scenarios
+            for scenario_name, result in scenario_results.items():
+                if hasattr(result, 'backtest_result'):
+                    metrics = result.backtest_result.metrics
+                    click.echo(f"  {scenario_name}: {metrics.get('total_return_pct', 0):.1f}% return, {metrics.get('total_trades', 0)} trades")
+                elif hasattr(result, 'total_return'):
+                    click.echo(f"  {scenario_name}: {result.total_return:.1f}% return, {result.total_trades} trades")
+
+            click.echo(f"📋 Comprehensive report saved to: {report_path}")
+
+            # Calculate and display robustness score
+            total_returns = []
+            for result in scenario_results.values():
+                if hasattr(result, 'backtest_result'):
+                    total_returns.append(result.backtest_result.metrics.get('total_return_pct', 0))
+                elif hasattr(result, 'total_return'):
+                    total_returns.append(result.total_return)
+
+            if total_returns:
+                avg_return = sum(total_returns) / len(total_returns)
+                return_variance = sum((r - avg_return) ** 2 for r in total_returns) / len(total_returns) if len(total_returns) > 1 else 0
+                consistency_score = max(0, 100 - (return_variance / (avg_return ** 2) * 100)) if avg_return != 0 else 0
+                click.echo(f"🎯 Strategy robustness score: {consistency_score:.1f}% (higher is better)")
+
+        if export_data:
+            click.echo(f"📁 Scenario data exported to: {output_path}/scenario_data/")
+
+    except Exception as e:
+        logger.error(f"Strategy backtesting failed: {e}")
+        raise click.ClickException(f"Strategy backtesting failed: {str(e)}")
 
 
 @click.command("compare-strategies")
@@ -174,100 +271,123 @@ def compare_strategies(ctx, strategy_names: Optional[str], all_strategies: bool,
         # Compare with specific scenarios
         python cli/main.py compare-strategies --all-strategies --scenarios "bull,bear,real"
     """
-    # Import configuration loading from main module
-    from ..main import list_strategies, load_config
+    try:
+        # Initialize managers and components
+        config_manager = ConfigManager(ctx.obj.get('config_path'))
+        data_manager = DataManager()
 
-    # Load configuration
-    config = load_config(ctx.obj.get('config_path'))
-    if not config:
-        raise click.ClickException("Could not load configuration. Use --config to specify config file path.")
+        # Determine output directory
+        if not output_dir:
+            output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
 
-    # Determine strategies to compare
-    if all_strategies:
-        strategies_to_compare = list_strategies(
-            config,
-            filter_exchange=same_exchange,
-            filter_market=same_market,
-            filter_enabled=True
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Determine strategies to compare
+        if all_strategies:
+            strategies_to_compare = config_manager.list_strategies(
+                filter_exchange=same_exchange,
+                filter_market=same_market,
+                filter_enabled=True
+            )
+        elif strategy_names:
+            strategy_name_list = [name.strip() for name in strategy_names.split(",")]
+            strategies_to_compare = []
+
+            for name in strategy_name_list:
+                strategy_config = config_manager.get_strategy_config(name)
+                if not strategy_config:
+                    available_strategies = [s.get('name', 'unnamed') for s in config_manager.list_strategies()]
+                    raise click.ClickException(
+                        f"Strategy '{name}' not found in configuration.\n"
+                        f"Available strategies: {', '.join(available_strategies)}"
+                    )
+
+                # Apply filters if specified
+                if same_market and strategy_config.get('market', '').upper() != same_market.upper():
+                    continue
+                if same_exchange and strategy_config.get('exchange', '').lower() != same_exchange.lower():
+                    continue
+
+                strategies_to_compare.append(strategy_config)
+        else:
+            raise click.ClickException("Must specify either --strategy-names or --all-strategies")
+
+        if not strategies_to_compare:
+            raise click.ClickException("No strategies found matching the specified criteria")
+
+        # Parse scenarios
+        if scenarios.lower() == "all":
+            scenario_list = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
+        else:
+            scenario_list = [s.strip() for s in scenarios.split(",")]
+
+        # Validate scenario names
+        valid_scenarios = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
+        invalid_scenarios = [s for s in scenario_list if s not in valid_scenarios]
+        if invalid_scenarios:
+            raise click.ClickException(
+                f"Invalid scenarios: {', '.join(invalid_scenarios)}\n"
+                f"Valid scenarios: {', '.join(valid_scenarios)}"
+            )
+
+        # Display comparison setup
+        click.echo(f"🔍 Comparing {len(strategies_to_compare)} strategies:")
+        for i, strategy in enumerate(strategies_to_compare, 1):
+            click.echo(f"   {i}. {strategy.get('name', 'unnamed')} ({strategy.get('market', 'unknown')}, {strategy.get('exchange', 'unknown')})")
+
+        click.echo(f"\n📅 Duration: {days} days")
+        click.echo(f"🎲 Scenarios: {', '.join(scenario_list)}")
+
+        if same_market:
+            click.echo(f"🎯 Market filter: {same_market}")
+        if same_exchange:
+            click.echo(f"🏢 Exchange filter: {same_exchange}")
+
+        # Initialize comparison manager
+        comparison_manager = ComparisonManager(
+            config_manager=config_manager,
+            data_manager=data_manager,
+            output_dir=output_path
         )
-    elif strategy_names:
-        strategy_name_list = [name.strip() for name in strategy_names.split(",")]
-        strategies_to_compare = []
 
-        for name in strategy_name_list:
-            strategy_config = None
-            for s in config.get('strategies', []):
-                if s.get('name') == name:
-                    strategy_config = s
-                    break
+        # Run strategy comparison
+        click.echo(f"\n🚀 Running strategy comparison across {len(scenario_list)} scenarios...")
+        strategy_names_list = [s['name'] for s in strategies_to_compare]
 
-            if not strategy_config:
-                available_strategies = [s.get('name', 'unnamed') for s in config.get('strategies', [])]
-                raise click.ClickException(
-                    f"Strategy '{name}' not found in configuration.\n"
-                    f"Available strategies: {', '.join(available_strategies)}"
-                )
-
-            # Apply filters if specified
-            if same_market and strategy_config.get('market', '').upper() != same_market.upper():
-                continue
-            if same_exchange and strategy_config.get('exchange', '').lower() != same_exchange.lower():
-                continue
-
-            strategies_to_compare.append(strategy_config)
-    else:
-        raise click.ClickException("Must specify either --strategy-names or --all-strategies")
-
-    if not strategies_to_compare:
-        raise click.ClickException("No strategies found matching the specified criteria")
-
-    # Parse scenarios
-    if scenarios.lower() == "all":
-        scenario_list = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
-    else:
-        scenario_list = [s.strip() for s in scenarios.split(",")]
-
-    # Validate scenario names
-    valid_scenarios = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
-    invalid_scenarios = [s for s in scenario_list if s not in valid_scenarios]
-    if invalid_scenarios:
-        raise click.ClickException(
-            f"Invalid scenarios: {', '.join(invalid_scenarios)}\n"
-            f"Valid scenarios: {', '.join(valid_scenarios)}"
+        comparison_results = comparison_manager.run_strategy_comparison(
+            strategy_names=strategy_names_list,
+            scenarios=scenario_list,
+            days=days
         )
 
-    # Determine output directory
-    if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        # Generate comparison report
+        comparison_reporter = ComparisonReporter(config_manager, data_manager, output_path)
+        report_path = comparison_reporter.generate_comparison_report(
+            comparison_results=comparison_results,
+            output_format='html'
+        )
 
-    os.makedirs(output_dir, exist_ok=True)
+        # Display summary results
+        click.echo(f"✅ Strategy comparison completed!")
+        click.echo(f"📊 Strategies compared: {len(comparison_results.strategy_results)}")
+        click.echo(f"🎲 Scenarios tested: {len(scenario_list)}")
 
-    # Display comparison setup
-    click.echo(f"🔍 Comparing {len(strategies_to_compare)} strategies:")
-    for i, strategy in enumerate(strategies_to_compare, 1):
-        click.echo(f"   {i}. {strategy.get('name', 'unnamed')} ({strategy.get('market', 'unknown')}, {strategy.get('exchange', 'unknown')})")
+        # Show ranking summary
+        click.echo(f"\n🏆 Strategy Rankings (by average return):")
+        sorted_strategies = sorted(
+            comparison_results.strategy_results.items(),
+            key=lambda x: x[1].overall_metrics.get('average_return_pct', 0),
+            reverse=True
+        )
 
-    click.echo(f"\n📅 Duration: {days} days")
-    click.echo(f"🎲 Scenarios: {', '.join(scenario_list)}")
+        for i, (strategy_name, results) in enumerate(sorted_strategies[:5], 1):  # Top 5
+            avg_return = results.overall_metrics.get('average_return_pct', 0)
+            consistency = results.overall_metrics.get('consistency_score', 0)
+            click.echo(f"   {i}. {strategy_name}: {avg_return:.1f}% avg return, {consistency:.1f}% consistency")
 
-    if same_market:
-        click.echo(f"🎯 Market filter: {same_market}")
-    if same_exchange:
-        click.echo(f"🏢 Exchange filter: {same_exchange}")
+        click.echo(f"\n📋 Detailed comparison report saved to: {report_path}")
 
-    # TODO: Implement actual strategy comparison logic
-    # This will be integrated with the ComparisonManager in subsequent tasks
-    click.echo("\n📝 Strategy comparison implementation pending...")
-    click.echo("   This will be implemented in subsequent tasks with:")
-    click.echo("   • ComparisonManager for unified comparison logic")
-    click.echo("   • ScenarioManager for consistent scenario testing")
-    click.echo("   • ComparisonReporter for side-by-side analysis")
-    click.echo("   • Statistical significance testing")
-    click.echo("   • Cross-scenario robustness scoring")
-    click.echo(f"   • Results will be saved to: {output_dir}")
-
-    # For now, show what would be implemented
-    click.echo(f"\n✅ Strategy comparison handler created successfully!")
-    click.echo(f"   Strategies to compare: {len(strategies_to_compare)}")
-    click.echo(f"   Scenarios configured: {len(scenario_list)}")
-    click.echo(f"   Fair comparison across all scenarios: ✅")
+    except Exception as e:
+        logger.error(f"Strategy comparison failed: {e}")
+        raise click.ClickException(f"Strategy comparison failed: {str(e)}")
