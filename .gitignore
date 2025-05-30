@@ -140,3 +140,6 @@ vitest.config.*.timestamp*
 
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
+# Test output files
+test_*.json
+**/test_*.json
