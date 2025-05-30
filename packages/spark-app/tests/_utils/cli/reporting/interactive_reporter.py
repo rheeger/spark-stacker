@@ -56,7 +56,7 @@ class InteractiveReporter:
                 "interactive_features": {
                     "trade_list": self._generate_trade_list(trades),
                     "chart_config": self._generate_chart_config(trades),
-                    "javascript_components": self._generate_javascript_components(trades),
+                    "javascript_components": self._generate_modular_javascript_components(trades),
                     "css_styling": self._generate_css_styling(),
                     "html_template": self._generate_html_template(report_data, trades)
                 },
@@ -190,341 +190,211 @@ class InteractiveReporter:
             }
         }
 
-    def _generate_javascript_components(self, trades: List[Dict[str, Any]]) -> Dict[str, str]:
-        """Generate JavaScript code for interactive features."""
+    def _generate_modular_javascript_components(self, trades: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Generate JavaScript code for modular interactive features."""
+        import json
 
-        # Trade selector JavaScript
-        trade_selector_js = """
-        class TradeSelector {
-            constructor(tradeData, chartInstance) {
-                this.trades = tradeData;
-                this.chart = chartInstance;
-                this.selectedTrade = null;
-                this.initializeEventListeners();
-            }
-
-            initializeEventListeners() {
-                // Trade list click handlers
-                document.querySelectorAll('.trade-item').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        const tradeId = e.currentTarget.dataset.tradeId;
-                        this.selectTrade(tradeId);
-                    });
-                });
-
-                // Chart marker click handlers
-                this.chart.on('click', (event) => {
-                    if (event.target && event.target.dataset.tradeId) {
-                        this.selectTrade(event.target.dataset.tradeId);
-                    }
-                });
-
-                // Keyboard navigation
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                        this.navigateTrades(e.key === 'ArrowUp' ? -1 : 1);
-                        e.preventDefault();
-                    }
-                });
-            }
-
-            selectTrade(tradeId) {
-                // Clear previous selection
-                this.clearSelection();
-
-                // Highlight trade in list
-                const tradeItem = document.querySelector(`[data-trade-id="${tradeId}"]`);
-                if (tradeItem) {
-                    tradeItem.classList.add('selected');
-                    tradeItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-
-                // Highlight markers on chart
-                this.highlightTradeMarkers(tradeId);
-
-                // Show trade details
-                this.showTradeDetails(tradeId);
-
-                // Zoom to trade if enabled
-                if (this.shouldZoomToTrade()) {
-                    this.zoomToTrade(tradeId);
-                }
-
-                this.selectedTrade = tradeId;
-            }
-
-            clearSelection() {
-                document.querySelectorAll('.trade-item.selected').forEach(item => {
-                    item.classList.remove('selected');
-                });
-
-                document.querySelectorAll('.chart-marker.highlighted').forEach(marker => {
-                    marker.classList.remove('highlighted');
-                });
-            }
-
-            highlightTradeMarkers(tradeId) {
-                const markers = document.querySelectorAll(`[data-trade-id="${tradeId}"]`);
-                markers.forEach(marker => {
-                    marker.classList.add('highlighted');
-                });
-            }
-
-            showTradeDetails(tradeId) {
-                const trade = this.trades.find(t => t.id === tradeId);
-                if (trade) {
-                    const detailsPanel = document.getElementById('trade-details');
-                    detailsPanel.innerHTML = this.generateTradeDetailsHTML(trade);
-                    detailsPanel.style.display = 'block';
-                }
-            }
-
-            zoomToTrade(tradeId) {
-                const trade = this.trades.find(t => t.id === tradeId);
-                if (trade && this.chart) {
-                    const startTime = new Date(trade.entry_time);
-                    const endTime = new Date(trade.exit_time);
-                    const padding = (endTime - startTime) * 0.2; // 20% padding
-
-                    this.chart.zoomToTimeRange(
-                        new Date(startTime.getTime() - padding),
-                        new Date(endTime.getTime() + padding)
-                    );
-                }
-            }
-
-            navigateTrades(direction) {
-                const currentIndex = this.selectedTrade ?
-                    this.trades.findIndex(t => t.id === this.selectedTrade) : -1;
-                const newIndex = Math.max(0, Math.min(this.trades.length - 1, currentIndex + direction));
-
-                if (newIndex !== currentIndex && this.trades[newIndex]) {
-                    this.selectTrade(this.trades[newIndex].id);
-                }
-            }
-
-            generateTradeDetailsHTML(trade) {
-                return `
-                    <h3>Trade ${trade.index} Details</h3>
-                    <div class="trade-detail-grid">
-                        <div class="detail-item">
-                            <label>Entry Time:</label>
-                            <span>${trade.entry_time}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Exit Time:</label>
-                            <span>${trade.exit_time}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Duration:</label>
-                            <span>${Math.round(trade.duration_minutes / 60 * 100) / 100} hours</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Entry Price:</label>
-                            <span>$${trade.entry_price.toFixed(2)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Exit Price:</label>
-                            <span>$${trade.exit_price.toFixed(2)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>P&L:</label>
-                            <span class="${trade.pnl >= 0 ? 'profit' : 'loss'}">
-                                ${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)}
-                            </span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Position Size:</label>
-                            <span>$${trade.position_size.toFixed(2)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Exit Reason:</label>
-                            <span>${trade.exit_reason}</span>
-                        </div>
-                    </div>
-                `;
-            }
-
-            shouldZoomToTrade() {
-                return document.getElementById('zoom-to-trade-checkbox')?.checked || false;
+        # Generate configuration for the modules
+        module_config = {
+            "tradeSelector": {
+                "tradeItemSelector": ".trade-item",
+                "selectedClass": "selected",
+                "autoScroll": True,
+                "smoothScroll": True
+            },
+            "chartHighlighter": {
+                "highlightClass": "highlighted",
+                "glowEffect": True,
+                "glowColor": "#2196f3",
+                "glowSize": "6px",
+                "pulseAnimation": False,
+                "animationDuration": "0.3s",
+                "zIndexHighlight": 1000,
+                "markerSelector": "[data-trade-id]"
+            },
+            "tradeDetails": {
+                "displayMode": "sidebar",
+                "position": "right",
+                "width": "380px",
+                "animationDuration": 300,
+                "responsive": True
+            },
+            "tradeNavigation": {
+                "enableKeyboardNavigation": True,
+                "enableNavigationHistory": True,
+                "wrapNavigation": True
+            },
+            "chartZoom": {
+                "zoomEnabled": True,
+                "autoZoomOnSelect": False,
+                "zoomPadding": 0.2,
+                "showZoomControls": True
+            },
+            "tradeFilter": {
+                "enableSearch": True,
+                "enableFilters": True,
+                "searchFields": ["entry_time", "exit_time", "exit_reason", "pnl", "position_size"],
+                "debounceDelay": 300
             }
         }
-        """
 
-        # Chart highlighter JavaScript
-        chart_highlighter_js = """
-        class ChartHighlighter {
-            constructor(chartInstance) {
-                this.chart = chartInstance;
-                this.highlightedElements = new Set();
-            }
+        # Format trade data for JavaScript
+        trade_data = [self._format_trade_for_js(trade, i) for i, trade in enumerate(trades)]
 
-            highlightTrade(tradeId) {
-                this.clearHighlights();
+        # Generate main coordination script
+        coordination_script = f"""
+        // Spark Stacker Interactive Report Coordination
+        class InteractiveReportManager {{
+            constructor() {{
+                this.modules = {{}};
+                this.tradeData = {json.dumps(trade_data)};
+                this.config = {json.dumps(module_config, indent=2)};
+                this.initialized = false;
+            }}
 
-                const elements = this.chart.querySelectorAll(`[data-trade-id="${tradeId}"]`);
-                elements.forEach(element => {
-                    element.classList.add('highlighted');
-                    this.highlightedElements.add(element);
-                });
+            async initialize() {{
+                if (this.initialized) return;
 
-                // Add glow effect
-                this.addGlowEffect(elements);
-            }
+                try {{
+                    const chartInstance = this.detectChart();
+                    await this.initializeModules(chartInstance);
+                    this.setupModuleCommunication();
+                    this.setupGlobalAPI();
+                    this.initialized = true;
 
-            clearHighlights() {
-                this.highlightedElements.forEach(element => {
-                    element.classList.remove('highlighted');
-                    this.removeGlowEffect(element);
-                });
-                this.highlightedElements.clear();
-            }
+                    console.log('Interactive Report initialized');
+                    document.dispatchEvent(new CustomEvent('interactiveReportReady'));
+                }} catch (error) {{
+                    console.error('Failed to initialize Interactive Report:', error);
+                }}
+            }}
 
-            addGlowEffect(elements) {
-                elements.forEach(element => {
-                    element.style.filter = 'drop-shadow(0 0 6px currentColor)';
-                    element.style.zIndex = '1000';
-                });
-            }
+            detectChart() {{
+                const selectors = ['.js-plotly-plot', '.chart-container', '#chart'];
+                for (const selector of selectors) {{
+                    const element = document.querySelector(selector);
+                    if (element) return element;
+                }}
+                return null;
+            }}
 
-            removeGlowEffect(element) {
-                element.style.filter = '';
-                element.style.zIndex = '';
-            }
-        }
-        """
+            async initializeModules(chartInstance) {{
+                const dependencies = {{}};
 
-        # Trade filter JavaScript
-        trade_filter_js = """
-        class TradeFilter {
-            constructor(trades) {
-                this.allTrades = trades;
-                this.filteredTrades = trades;
-                this.filters = {
-                    profitability: 'all', // 'all', 'profitable', 'losing'
-                    duration: 'all',      // 'all', 'short', 'medium', 'long'
-                    search: ''
-                };
-                this.initializeFilters();
-            }
+                // Initialize modules in dependency order
+                if (window.TradeSelector) {{
+                    this.modules.tradeSelector = new window.TradeSelector(this.config.tradeSelector);
+                    dependencies.tradeSelector = this.modules.tradeSelector;
+                }}
 
-            initializeFilters() {
-                // Profitability filter
-                document.getElementById('profit-filter')?.addEventListener('change', (e) => {
-                    this.filters.profitability = e.target.value;
-                    this.applyFilters();
-                });
+                if (window.ChartHighlighter) {{
+                    this.modules.chartHighlighter = new window.ChartHighlighter(this.config.chartHighlighter);
+                    dependencies.chartHighlighter = this.modules.chartHighlighter;
+                }}
 
-                // Duration filter
-                document.getElementById('duration-filter')?.addEventListener('change', (e) => {
-                    this.filters.duration = e.target.value;
-                    this.applyFilters();
-                });
+                if (window.TradeDetails) {{
+                    this.modules.tradeDetails = new window.TradeDetails(this.config.tradeDetails);
+                    dependencies.tradeDetails = this.modules.tradeDetails;
+                }}
 
-                // Search filter
-                document.getElementById('trade-search')?.addEventListener('input', (e) => {
-                    this.filters.search = e.target.value.toLowerCase();
-                    this.applyFilters();
-                });
-            }
+                if (window.TradeNavigation) {{
+                    this.modules.tradeNavigation = new window.TradeNavigation(this.config.tradeNavigation);
+                    dependencies.tradeNavigation = this.modules.tradeNavigation;
+                }}
 
-            applyFilters() {
-                this.filteredTrades = this.allTrades.filter(trade => {
-                    // Profitability filter
-                    if (this.filters.profitability === 'profitable' && trade.pnl <= 0) return false;
-                    if (this.filters.profitability === 'losing' && trade.pnl >= 0) return false;
+                if (window.ChartZoom) {{
+                    this.modules.chartZoom = new window.ChartZoom(this.config.chartZoom);
+                    dependencies.chartZoom = this.modules.chartZoom;
+                }}
 
-                    // Duration filter
-                    const durationHours = trade.duration_minutes / 60;
-                    if (this.filters.duration === 'short' && durationHours > 4) return false;
-                    if (this.filters.duration === 'medium' && (durationHours <= 4 || durationHours > 24)) return false;
-                    if (this.filters.duration === 'long' && durationHours <= 24) return false;
+                if (window.TradeFilter) {{
+                    this.modules.tradeFilter = new window.TradeFilter(this.config.tradeFilter);
+                    dependencies.tradeFilter = this.modules.tradeFilter;
+                }}
 
-                    // Search filter
-                    if (this.filters.search) {
-                        const searchText = `${trade.entry_time} ${trade.exit_time} ${trade.exit_reason}`.toLowerCase();
-                        if (!searchText.includes(this.filters.search)) return false;
-                    }
+                // Initialize all modules with dependencies
+                for (const [name, module] of Object.entries(this.modules)) {{
+                    if (module && typeof module.initialize === 'function') {{
+                        try {{
+                            if (name === 'chartHighlighter' || name === 'chartZoom') {{
+                                module.initialize(chartInstance, dependencies);
+                            }} else {{
+                                module.initialize(this.tradeData, dependencies);
+                            }}
+                        }} catch (error) {{
+                            console.error(`Failed to initialize ${{name}}:`, error);
+                        }}
+                    }}
+                }}
+            }}
 
-                    return true;
-                });
+            setupModuleCommunication() {{
+                document.addEventListener('tradeSelected', (event) => {{
+                    console.log('Trade selected:', event.detail.tradeId);
+                }});
 
-                this.updateTradeList();
-                this.updateChartVisibility();
-            }
+                document.addEventListener('tradesFiltered', (event) => {{
+                    console.log('Trades filtered:', event.detail.filteredTrades.length);
+                }});
+            }}
 
-            updateTradeList() {
-                const tradeList = document.getElementById('trade-list');
-                if (!tradeList) return;
+            setupGlobalAPI() {{
+                window.sparkStackerInteractive = {{
+                    selectTrade: (tradeId) => this.modules.tradeSelector?.selectTrade(tradeId),
+                    clearSelection: () => this.modules.tradeSelector?.clearSelection(),
+                    applyFilter: (type, value) => this.modules.tradeFilter?.setFilter(type, value),
+                    zoomToTrade: (tradeId) => this.modules.chartZoom?.zoomToTrade(tradeId),
+                    getModule: (name) => this.modules[name],
+                    debug: () => ({{ modules: this.modules, config: this.config }})
+                }};
+            }}
+        }}
 
-                // Hide all trades
-                tradeList.querySelectorAll('.trade-item').forEach(item => {
-                    item.style.display = 'none';
-                });
-
-                // Show filtered trades
-                this.filteredTrades.forEach(trade => {
-                    const item = document.querySelector(`[data-trade-id="${trade.id}"]`);
-                    if (item) {
-                        item.style.display = 'block';
-                    }
-                });
-
-                // Update count
-                const countElement = document.getElementById('filtered-count');
-                if (countElement) {
-                    countElement.textContent = `${this.filteredTrades.length} of ${this.allTrades.length} trades`;
-                }
-            }
-
-            updateChartVisibility() {
-                // Hide all chart markers
-                document.querySelectorAll('.chart-marker').forEach(marker => {
-                    marker.style.display = 'none';
-                });
-
-                // Show markers for filtered trades
-                this.filteredTrades.forEach(trade => {
-                    document.querySelectorAll(`[data-trade-id="${trade.id}"]`).forEach(marker => {
-                        marker.style.display = 'block';
-                    });
-                });
-            }
-        }
-        """
-
-        # Main initialization JavaScript
-        main_js = f"""
+        // Auto-initialize
         document.addEventListener('DOMContentLoaded', function() {{
-            // Initialize trade data
-            const tradeData = {json.dumps([self._format_trade_for_js(trade, i) for i, trade in enumerate(trades)])};
-
-            // Initialize chart (placeholder - would integrate with actual charting library)
-            const chartElement = document.getElementById('main-chart');
-
-            // Initialize components
-            const tradeSelector = new TradeSelector(tradeData, chartElement);
-            const chartHighlighter = new ChartHighlighter(chartElement);
-            const tradeFilter = new TradeFilter(tradeData);
-
-            // Global functions for external access
-            window.sparkStackerInteractive = {{
-                selectTrade: (tradeId) => tradeSelector.selectTrade(tradeId),
-                clearSelection: () => tradeSelector.clearSelection(),
-                filterTrades: (filters) => tradeFilter.applyFilters(filters),
-                highlightTrade: (tradeId) => chartHighlighter.highlightTrade(tradeId)
-            }};
-
-            console.log('Spark Stacker Interactive Report initialized');
+            window.interactiveReportManager = new InteractiveReportManager();
+            setTimeout(() => window.interactiveReportManager.initialize(), 100);
         }});
         """
 
         return {
-            "trade_selector": trade_selector_js,
-            "chart_highlighter": chart_highlighter_js,
-            "trade_filter": trade_filter_js,
-            "main_initialization": main_js
+            "coordination_script": coordination_script,
+            "module_config": json.dumps(module_config, indent=2),
+            "trade_data": json.dumps(trade_data)
         }
+
+    def generate_javascript_module_files(self, output_dir: Path) -> List[Path]:
+        """Generate separate JavaScript module files in the specified directory."""
+        js_dir = output_dir / "static" / "js"
+        js_dir.mkdir(parents=True, exist_ok=True)
+
+        created_files = []
+
+        # Copy module files from templates to output directory
+        module_files = [
+            "trade-selector.js",
+            "chart-highlighter.js",
+            "trade-details.js",
+            "trade-navigation.js",
+            "chart-zoom.js",
+            "trade-filter.js"
+        ]
+
+        template_dir = Path(__file__).parent.parent.parent.parent / "app" / "backtesting" / "reporting" / "static" / "js"
+
+        for module_file in module_files:
+            src_path = template_dir / module_file
+            dst_path = js_dir / module_file
+
+            if src_path.exists():
+                import shutil
+                shutil.copy2(src_path, dst_path)
+                created_files.append(dst_path)
+                logger.info(f"Copied JavaScript module: {module_file}")
+            else:
+                logger.warning(f"Module file not found: {src_path}")
+
+        return created_files
 
     def _generate_css_styling(self) -> str:
         """Generate CSS styling for interactive elements."""
@@ -1017,10 +887,11 @@ class InteractiveReporter:
 
         # Combine all JavaScript components
         all_js = "\n\n".join([
-            js_components["trade_selector"],
-            js_components["chart_highlighter"],
-            js_components["trade_filter"],
-            js_components["main_initialization"]
+            js_components["module_imports"],
+            js_components["module_loader"],
+            js_components["coordination_script"],
+            js_components["module_config"],
+            js_components["trade_data"]
         ])
 
         # Generate trade list items HTML

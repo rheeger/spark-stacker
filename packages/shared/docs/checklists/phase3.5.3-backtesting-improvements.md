@@ -564,28 +564,28 @@ of concerns.
 
 ### 3.3 Configuration Impact Analysis
 
-- [ ] **Add configuration sensitivity analysis** (in `cli/reporting/strategy_reporter.py`)
-  - [ ] Test strategy performance with different position sizing methods
-  - [ ] Analyze impact of timeframe changes on strategy performance
-  - [ ] Show effect of different indicator parameters on strategy results
-  - [ ] Generate optimization suggestions for strategy configuration
-  - [ ] Include risk parameter sensitivity (stop loss, take profit impact)
-  - [ ] **Use ConfigManager for configuration variation testing**
-  - [ ] **Integrate with StrategyValidator for feasibility analysis**
+- [x] **Add configuration sensitivity analysis** (in `cli/reporting/strategy_reporter.py`)
+  - [x] Test strategy performance with different position sizing methods
+  - [x] Analyze impact of timeframe changes on strategy performance
+  - [x] Show effect of different indicator parameters on strategy results
+  - [x] Generate optimization suggestions for strategy configuration
+  - [x] Include risk parameter sensitivity (stop loss, take profit impact)
+  - [x] **Use ConfigManager for configuration variation testing**
+  - [x] **Integrate with StrategyValidator for feasibility analysis**
 
 ### 3.4 Interactive Trade Selection Technical Implementation
 
-- [ ] **Create JavaScript modules for trade interaction** (coordinated by
+- [x] **Create JavaScript modules for trade interaction** (coordinated by
       `cli/reporting/interactive_reporter.py`)
       (`packages/spark-app/app/backtesting/reporting/static/js/` - NEW DIR)
 
-  - [ ] Add `trade-selector.js` for trade list interaction logic
-  - [ ] Create `chart-highlighter.js` for chart marker highlighting
-  - [ ] Add `trade-details.js` for popup/sidebar functionality
-  - [ ] Create `trade-navigation.js` for keyboard and sequence navigation
-  - [ ] Add `chart-zoom.js` for zoom-to-trade functionality
-  - [ ] Create `trade-filter.js` for search and filtering capabilities
-  - [ ] **Generate JavaScript configuration through InteractiveReporter**
+  - [x] Add `trade-selector.js` for trade list interaction logic
+  - [x] Create `chart-highlighter.js` for chart marker highlighting
+  - [x] Add `trade-details.js` for popup/sidebar functionality
+  - [x] Create `trade-navigation.js` for keyboard and sequence navigation
+  - [x] Add `chart-zoom.js` for zoom-to-trade functionality
+  - [x] Create `trade-filter.js` for search and filtering capabilities
+  - [x] **Generate JavaScript configuration through InteractiveReporter**
 
 - [ ] **Update chart generation for interactivity** (in `cli/reporting/interactive_reporter.py`)
 
