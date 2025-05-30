@@ -135,7 +135,7 @@ of concerns.
       └── progress_trackers.py      # Progress tracking utilities
   ```
 
-- [ ] **Migrate main CLI entry point** (`packages/spark-app/tests/_utils/cli/main.py` - NEW FILE)
+- [x] **Migrate main CLI entry point** (`packages/spark-app/tests/_utils/cli/main.py` - NEW FILE)
 
 - [ ] **Create backward compatibility shim** (`packages/spark-app/tests/_utils/cli.py` - UPDATE)
   - [ ] Replace existing monolithic code with import from `cli.main`

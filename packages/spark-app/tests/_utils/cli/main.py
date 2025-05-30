@@ -1,22 +1,16 @@
 #!/usr/bin/env python3
 """
-Main CLI Entry Point - Modular Architecture
+Main CLI Entry Point - Migrated from monolithic cli.py
 
-This file serves as the main entry point for the Spark-App CLI, coordinating
-command handlers from the modular architecture.
+This file serves as the main entry point for the Spark-App CLI, currently
+delegating to the original cli.py while the modular architecture is being developed.
 
-This replaces the monolithic cli.py with a clean, organized structure.
+This maintains full backward compatibility during the transition phase.
 """
 
-import logging
 import os
+import subprocess
 import sys
-
-import click
-# Set matplotlib backend to prevent GUI hanging issues
-import matplotlib
-
-matplotlib.use('Agg')  # Use non-interactive backend
 
 # Add the app directory to the path for proper imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,81 +18,39 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 spark_app_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.insert(0, spark_app_dir)
 
-# Set up logging
-from app.utils.logging_setup import setup_logging
 
-setup_logging()
-logger = logging.getLogger(__name__)
-
-# Global CLI options
-@click.group()
-@click.option('--config', '-c',
-              help='Path to configuration file (default: ../shared/config.json)')
-@click.option('--verbose', '-v', is_flag=True,
-              help='Enable verbose logging')
-@click.option('--debug', '-d', is_flag=True,
-              help='Enable debug logging')
-@click.pass_context
-def cli(ctx, config, verbose, debug):
+def main():
     """
-    Spark-App CLI - Unified command line interface for backtest operations
+    Main entry point that delegates to the original CLI during migration.
 
-    This modular CLI provides comprehensive backtesting and strategy analysis capabilities.
+    This ensures full backward compatibility while the modular architecture
+    is being developed in subsequent tasks.
     """
-    # Ensure context object exists
-    ctx.ensure_object(dict)
+    # Path to the original CLI
+    original_cli_path = os.path.join(os.path.dirname(current_dir), "cli.py")
 
-    # Store global options in context
-    ctx.obj['config_path'] = config
-    ctx.obj['verbose'] = verbose
-    ctx.obj['debug'] = debug
+    # Get the python executable from current environment (venv if active)
+    python_executable = sys.executable
 
-    # Set up logging level based on flags
-    if debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.debug("Debug logging enabled")
-    elif verbose:
-        logging.getLogger().setLevel(logging.INFO)
-        logger.info("Verbose logging enabled")
+    # Prepare command arguments
+    cmd = [python_executable, original_cli_path] + sys.argv[1:]
 
-    logger.debug(f"CLI initialized with config: {config}")
+    try:
+        # Execute the original CLI with the same arguments
+        result = subprocess.run(cmd,
+                              cwd=os.path.dirname(original_cli_path),
+                              env=os.environ.copy())
 
+        # Exit with the same code as the original CLI
+        sys.exit(result.returncode)
 
-# TODO: Import and register command handlers from modules
-# This will be done in subsequent tasks (1.4.2+)
-# from .commands.strategy_commands import register_strategy_commands
-# from .commands.indicator_commands import register_indicator_commands
-# from .commands.comparison_commands import register_comparison_commands
-# from .commands.list_commands import register_list_commands
-# from .commands.utility_commands import register_utility_commands
-
-# Temporary placeholder commands to verify structure
-@cli.command()
-def test_structure():
-    """Test command to verify modular CLI structure is working."""
-    click.echo("✅ Modular CLI structure created successfully!")
-    click.echo("\n📁 Architecture Overview:")
-    click.echo("   • commands/     - Command handler modules")
-    click.echo("   • core/         - Core business logic modules")
-    click.echo("   • managers/     - Specialized manager classes")
-    click.echo("   • reporting/    - Report generation modules")
-    click.echo("   • validation/   - Validation and error handling")
-    click.echo("   • utils/        - Utility functions and helpers")
-
-    # List the created files
-    import os
-    cli_dir = os.path.dirname(__file__)
-    click.echo(f"\n📂 CLI Directory: {cli_dir}")
-
-    for root, dirs, files in os.walk(cli_dir):
-        level = root.replace(cli_dir, '').count(os.sep)
-        indent = ' ' * 2 * level
-        click.echo(f"{indent}{os.path.basename(root)}/")
-        subindent = ' ' * 2 * (level + 1)
-        for file in files:
-            if file.endswith('.py'):
-                click.echo(f"{subindent}{file}")
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Operation interrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"❌ Error executing CLI: {e}")
+        sys.exit(1)
 
 
 if __name__ == '__main__':
-    cli()
+    main()
