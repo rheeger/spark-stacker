@@ -543,24 +543,24 @@ of concerns.
 
 ### 3.2 Strategy Comparison Reports
 
-- [ ] **Create strategy comparison reporting** (now in `cli/reporting/comparison_reporter.py`)
+- [x] **Create strategy comparison reporting** (now in `cli/reporting/comparison_reporter.py`)
 
-  - [ ] Generate side-by-side strategy performance comparison
-  - [ ] Include configuration differences (position sizing, indicators, timeframes)
-  - [ ] Show relative performance metrics and rankings
-  - [ ] Add risk-adjusted performance comparison (Sharpe ratio, max drawdown)
-  - [ ] Include efficiency metrics (trades per day, win rate consistency)
-  - [ ] Generate strategy combination analysis (portfolio effect)
-  - [ ] **Integrate with ComparisonManager for comparison logic coordination**
-  - [ ] **Use ConfigManager for configuration comparison features**
+  - [x] Generate side-by-side strategy performance comparison
+  - [x] Include configuration differences (position sizing, indicators, timeframes)
+  - [x] Show relative performance metrics and rankings
+  - [x] Add risk-adjusted performance comparison (Sharpe ratio, max drawdown)
+  - [x] Include efficiency metrics (trades per day, win rate consistency)
+  - [x] Generate strategy combination analysis (portfolio effect)
+  - [x] **Integrate with ComparisonManager for comparison logic coordination**
+  - [x] **Use ConfigManager for configuration comparison features**
 
-- [ ] **Add strategy ranking and analysis** (in `cli/reporting/comparison_reporter.py`)
-  - [ ] Rank strategies by multiple criteria (return, Sharpe, drawdown)
-  - [ ] Analyze strategy correlation and diversification benefits
-  - [ ] Identify best performing strategies by market condition
-  - [ ] Generate strategy allocation recommendations
-  - [ ] Add sensitivity analysis for position sizing and timeframe changes
-  - [ ] **Coordinate with ScenarioReporter for cross-scenario analysis**
+- [x] **Add strategy ranking and analysis** (in `cli/reporting/comparison_reporter.py`)
+  - [x] Rank strategies by multiple criteria (return, Sharpe, drawdown)
+  - [x] Analyze strategy correlation and diversification benefits
+  - [x] Identify best performing strategies by market condition
+  - [x] Generate strategy allocation recommendations
+  - [x] Add sensitivity analysis for position sizing and timeframe changes
+  - [x] **Coordinate with ScenarioReporter for cross-scenario analysis**
 
 ### 3.3 Configuration Impact Analysis
 
