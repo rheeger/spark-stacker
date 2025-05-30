@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from app.core.strategy_config import StrategyConfig
+from app.indicators.indicator_factory import IndicatorFactory
 
 from ..core.config_manager import ConfigManager
 
@@ -103,6 +104,87 @@ class ConfigValidator:
             config_manager: ConfigManager instance for configuration access
         """
         self.config_manager = config_manager
+        # Import StrategyValidator here to avoid circular imports
+        from .strategy_validator import StrategyValidator
+        self.strategy_validator = StrategyValidator(config_manager)
+
+    def get_available_indicator_types(self) -> List[str]:
+        """
+        Get dynamically available indicator types from IndicatorFactory.
+
+        Returns:
+            List of available indicator type names
+        """
+        try:
+            return IndicatorFactory.get_available_indicators()
+        except Exception as e:
+            logger.warning(f"Could not get available indicators from factory: {e}")
+            # Fallback to common indicator types if factory fails
+            return ['rsi', 'macd', 'bollinger', 'ma', 'sma', 'ema']
+
+    def _check_indicator_availability(self, strategy_name: str, result: ConfigValidationResult) -> None:
+        """Check if all strategy indicators are available in the IndicatorFactory."""
+        try:
+            config = self.config_manager.load_config()
+            strategy_config = config.get('strategies', {}).get(strategy_name, {})
+            indicators = strategy_config.get('indicators', {})
+
+            # Get currently available indicator types from the factory
+            available_types = self.get_available_indicator_types()
+
+            logger.debug(f"Available indicator types: {available_types}")
+
+            for indicator_name, indicator_config in indicators.items():
+                indicator_type = indicator_config.get('type')
+                if not indicator_type:
+                    result.add_issue(ConfigIssue(
+                        severity='error',
+                        category='structure',
+                        message=f'Indicator {indicator_name} missing type specification',
+                        location=f'strategies.{strategy_name}.indicators.{indicator_name}',
+                        fix_suggestion='Add indicator type',
+                        auto_fixable=True
+                    ))
+                elif indicator_type not in available_types:
+                    result.add_issue(ConfigIssue(
+                        severity='error',
+                        category='compatibility',
+                        message=f'Unknown indicator type: {indicator_type}. Available types: {", ".join(available_types)}',
+                        location=f'strategies.{strategy_name}.indicators.{indicator_name}',
+                        fix_suggestion=f'Use one of the available indicator types: {", ".join(available_types)}',
+                        auto_fixable=False
+                    ))
+                else:
+                    # Indicator type is valid, check if it can actually be created
+                    try:
+                        test_indicator = IndicatorFactory.create_indicator(
+                            name=f"test_{indicator_name}",
+                            indicator_type=indicator_type,
+                            params=indicator_config.get('parameters', {})
+                        )
+                        if test_indicator is None:
+                            result.add_issue(ConfigIssue(
+                                severity='warning',
+                                category='compatibility',
+                                message=f'Indicator {indicator_name} of type {indicator_type} could not be created with given parameters',
+                                location=f'strategies.{strategy_name}.indicators.{indicator_name}',
+                                fix_suggestion='Check indicator parameters and ensure they are valid',
+                                auto_fixable=False
+                            ))
+                        else:
+                            logger.debug(f"Successfully validated indicator {indicator_name} ({indicator_type})")
+                    except Exception as e:
+                        result.add_issue(ConfigIssue(
+                            severity='warning',
+                            category='compatibility',
+                            message=f'Error creating indicator {indicator_name}: {e}',
+                            location=f'strategies.{strategy_name}.indicators.{indicator_name}',
+                            fix_suggestion='Review indicator configuration and parameters',
+                            auto_fixable=False
+                        ))
+
+        except Exception as e:
+            logger.warning(f"Could not check indicator availability for {strategy_name}: {e}")
 
     def validate_full_config(self, config_path: Optional[str] = None) -> ConfigValidationResult:
         """
@@ -123,11 +205,21 @@ class ConfigValidator:
         )
 
         try:
-            # Load configuration
+            # Load configuration using ConfigManager
             if config_path:
-                config = self.config_manager.load_config_from_path(config_path)
+                # For custom config paths, we need to temporarily set the path
+                # Store original config path
+                original_path = getattr(self.config_manager, 'config_path', None)
+                try:
+                    # Set custom path and load
+                    self.config_manager.config_path = config_path
+                    config = self.config_manager.load_config(force_reload=True)
+                finally:
+                    # Restore original path
+                    if original_path:
+                        self.config_manager.config_path = original_path
             else:
-                config = self.config_manager.get_full_config()
+                config = self.config_manager.load_config()
 
             if not config:
                 result.add_issue(ConfigIssue(
@@ -155,8 +247,13 @@ class ConfigValidator:
             # Validate strategies section
             self._validate_strategies_section(config, result)
 
-            # Validate individual strategies
-            self._validate_individual_strategies(config, result)
+            # Validate individual strategies using StrategyValidator integration
+            self._validate_individual_strategies_with_strategy_validator(config, result)
+
+            # Use utility validation functions
+            self._validate_strategy_indicator_consistency_all(config, result)
+            self._validate_timeframe_consistency_all(config, result)
+            self._validate_market_exchange_compatibility_all(config, result)
 
             # Check compatibility between components
             self._validate_component_compatibility(config, result)
@@ -432,8 +529,8 @@ class ConfigValidator:
                 auto_fixable=False
             ))
 
-    def _validate_individual_strategies(self, config: Dict[str, Any], result: ConfigValidationResult) -> None:
-        """Validate individual strategy configurations."""
+    def _validate_individual_strategies_with_strategy_validator(self, config: Dict[str, Any], result: ConfigValidationResult) -> None:
+        """Validate individual strategy configurations using StrategyValidator."""
         strategies = config.get('strategies', {})
 
         for strategy_name, strategy_config in strategies.items():
@@ -475,7 +572,7 @@ class ConfigValidator:
                     auto_fixable=False
                 ))
 
-            # Validate indicators
+            # Validate indicators using StrategyValidator integration
             indicators = strategy_config.get('indicators', {})
             if not indicators:
                 result.add_issue(ConfigIssue(
@@ -487,7 +584,40 @@ class ConfigValidator:
                     auto_fixable=False
                 ))
             else:
-                self._validate_strategy_indicators(strategy_name, indicators, location, result)
+                # Use StrategyValidator for detailed indicator validation
+                try:
+                    # Create StrategyConfig object for validation
+                    strategy_config_obj = StrategyConfig(
+                        name=strategy_name,
+                        **strategy_config
+                    )
+                    strategy_result = self.strategy_validator.validate_strategy_config(strategy_config_obj)
+
+                    # Convert validation results to ConfigIssues
+                    for error in strategy_result.errors:
+                        result.add_issue(ConfigIssue(
+                            severity='error',
+                            category='structure',
+                            message=f'Strategy {strategy_name}: {error}',
+                            location=location,
+                            fix_suggestion='Fix strategy configuration error',
+                            auto_fixable=False
+                        ))
+
+                    for warning in strategy_result.warnings:
+                        result.add_issue(ConfigIssue(
+                            severity='warning',
+                            category='best_practice',
+                            message=f'Strategy {strategy_name}: {warning}',
+                            location=location,
+                            fix_suggestion='Consider optimization',
+                            auto_fixable=False
+                        ))
+
+                except Exception as e:
+                    logger.warning(f"Could not validate strategy {strategy_name} with StrategyValidator: {e}")
+                    # Fall back to basic validation
+                    self._validate_strategy_indicators(strategy_name, indicators, location, result)
 
     def _validate_strategy_indicators(
         self,
@@ -798,3 +928,511 @@ class ConfigValidator:
                 fix_suggestion='Consider strategy portfolio alignment between configurations',
                 auto_fixable=False
             ))
+
+    def _validate_strategy_indicator_consistency_all(self, config: Dict[str, Any], result: ConfigValidationResult) -> None:
+        """Validate strategy-indicator consistency for all strategies."""
+        strategies = config.get('strategies', {})
+
+        for strategy_name in strategies.keys():
+            try:
+                consistency_result = self.validate_strategy_indicator_consistency(strategy_name)
+                # Merge results
+                for issue in consistency_result.issues:
+                    result.add_issue(issue)
+            except Exception as e:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='compatibility',
+                    message=f'Could not validate strategy-indicator consistency for {strategy_name}: {e}',
+                    location=f'strategies.{strategy_name}',
+                    fix_suggestion='Check strategy configuration',
+                    auto_fixable=False
+                ))
+
+    def _validate_timeframe_consistency_all(self, config: Dict[str, Any], result: ConfigValidationResult) -> None:
+        """Validate timeframe consistency for all strategies."""
+        strategies = config.get('strategies', {})
+
+        for strategy_name in strategies.keys():
+            try:
+                timeframe_result = self.validate_timeframe_consistency(strategy_name)
+                # Merge results
+                for issue in timeframe_result.issues:
+                    result.add_issue(issue)
+            except Exception as e:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='compatibility',
+                    message=f'Could not validate timeframe consistency for {strategy_name}: {e}',
+                    location=f'strategies.{strategy_name}',
+                    fix_suggestion='Check strategy timeframe configuration',
+                    auto_fixable=False
+                ))
+
+    def _validate_market_exchange_compatibility_all(self, config: Dict[str, Any], result: ConfigValidationResult) -> None:
+        """Validate market and exchange compatibility for all strategies."""
+        strategies = config.get('strategies', {})
+
+        for strategy_name in strategies.keys():
+            try:
+                compatibility_result = self.validate_market_exchange_compatibility(strategy_name)
+                # Merge results
+                for issue in compatibility_result.issues:
+                    result.add_issue(issue)
+            except Exception as e:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='compatibility',
+                    message=f'Could not validate market-exchange compatibility for {strategy_name}: {e}',
+                    location=f'strategies.{strategy_name}',
+                    fix_suggestion='Check strategy market and exchange configuration',
+                    auto_fixable=False
+                ))
+
+    def validate_strategy_indicator_consistency(self, strategy_name: str) -> ConfigValidationResult:
+        """
+        Validate strategy-indicator consistency for a specific strategy.
+
+        Args:
+            strategy_name: Name of strategy to validate
+
+        Returns:
+            ConfigValidationResult with consistency validation results
+        """
+        result = ConfigValidationResult(
+            is_valid=True,
+            issues=[],
+            performance_score=0.0,
+            optimization_suggestions=[],
+            repair_suggestions=[]
+        )
+
+        try:
+            # Use StrategyValidator for detailed strategy-indicator consistency checking
+            strategy_result = self.strategy_validator.validate_strategy_indicator_consistency(strategy_name)
+
+            # Convert StrategyValidator results to ConfigValidationResult format
+            for error in strategy_result.errors:
+                result.add_issue(ConfigIssue(
+                    severity='error',
+                    category='compatibility',
+                    message=error,
+                    location=f'strategies.{strategy_name}.indicators',
+                    fix_suggestion='Review strategy-indicator compatibility',
+                    auto_fixable=False
+                ))
+
+            for warning in strategy_result.warnings:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='compatibility',
+                    message=warning,
+                    location=f'strategies.{strategy_name}.indicators',
+                    fix_suggestion='Consider optimizing strategy-indicator configuration',
+                    auto_fixable=False
+                ))
+
+            for suggestion in strategy_result.suggestions:
+                result.add_issue(ConfigIssue(
+                    severity='suggestion',
+                    category='best_practice',
+                    message=suggestion,
+                    location=f'strategies.{strategy_name}.indicators',
+                    fix_suggestion='Consider applying this optimization',
+                    auto_fixable=False
+                ))
+
+            # Additional consistency checks specific to configuration
+            self._check_indicator_availability(strategy_name, result)
+            self._check_indicator_parameter_consistency(strategy_name, result)
+
+        except Exception as e:
+            result.add_issue(ConfigIssue(
+                severity='error',
+                category='compatibility',
+                message=f'Error validating strategy-indicator consistency: {e}',
+                location=f'strategies.{strategy_name}',
+                fix_suggestion='Check strategy configuration and indicators',
+                auto_fixable=False
+            ))
+            logger.error(f"Strategy-indicator consistency validation failed for {strategy_name}: {e}")
+
+        return result
+
+    def validate_position_sizing_config(self, position_sizing_config: Dict[str, Any]) -> ConfigValidationResult:
+        """
+        Validate position sizing configuration.
+
+        Args:
+            position_sizing_config: Position sizing configuration to validate
+
+        Returns:
+            ConfigValidationResult with position sizing validation results
+        """
+        result = ConfigValidationResult(
+            is_valid=True,
+            issues=[],
+            performance_score=0.0,
+            optimization_suggestions=[],
+            repair_suggestions=[]
+        )
+
+        try:
+            # Use StrategyValidator for detailed position sizing validation
+            strategy_result = self.strategy_validator.validate_position_sizing_config(position_sizing_config)
+
+            # Convert results
+            for error in strategy_result.errors:
+                result.add_issue(ConfigIssue(
+                    severity='error',
+                    category='structure',
+                    message=error,
+                    location='position_sizing',
+                    fix_suggestion='Fix position sizing configuration',
+                    auto_fixable=True
+                ))
+
+            for warning in strategy_result.warnings:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='best_practice',
+                    message=warning,
+                    location='position_sizing',
+                    fix_suggestion='Consider optimizing position sizing parameters',
+                    auto_fixable=False
+                ))
+
+            # Additional position sizing checks
+            self._validate_position_sizing_parameters(position_sizing_config, result)
+            self._check_position_sizing_risk_compatibility(position_sizing_config, result)
+
+        except Exception as e:
+            result.add_issue(ConfigIssue(
+                severity='error',
+                category='structure',
+                message=f'Error validating position sizing config: {e}',
+                location='position_sizing',
+                fix_suggestion='Check position sizing configuration format',
+                auto_fixable=False
+            ))
+            logger.error(f"Position sizing validation failed: {e}")
+
+        return result
+
+    def validate_market_exchange_compatibility(self, strategy_name: str) -> ConfigValidationResult:
+        """
+        Validate market and exchange compatibility for a strategy.
+
+        Args:
+            strategy_name: Name of strategy to validate
+
+        Returns:
+            ConfigValidationResult with market-exchange compatibility results
+        """
+        result = ConfigValidationResult(
+            is_valid=True,
+            issues=[],
+            performance_score=0.0,
+            optimization_suggestions=[],
+            repair_suggestions=[]
+        )
+
+        try:
+            # Use StrategyValidator for market-exchange compatibility
+            strategy_result = self.strategy_validator.validate_market_exchange_compatibility(strategy_name)
+
+            # Convert results
+            for error in strategy_result.errors:
+                result.add_issue(ConfigIssue(
+                    severity='error',
+                    category='compatibility',
+                    message=error,
+                    location=f'strategies.{strategy_name}',
+                    fix_suggestion='Fix market-exchange compatibility issues',
+                    auto_fixable=False
+                ))
+
+            for warning in strategy_result.warnings:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='compatibility',
+                    message=warning,
+                    location=f'strategies.{strategy_name}',
+                    fix_suggestion='Consider market-exchange optimization',
+                    auto_fixable=False
+                ))
+
+            # Additional market-exchange checks
+            self._check_market_symbol_format(strategy_name, result)
+            self._check_exchange_market_support(strategy_name, result)
+            self._check_liquidity_requirements(strategy_name, result)
+
+        except Exception as e:
+            result.add_issue(ConfigIssue(
+                severity='error',
+                category='compatibility',
+                message=f'Error validating market-exchange compatibility: {e}',
+                location=f'strategies.{strategy_name}',
+                fix_suggestion='Check strategy market and exchange configuration',
+                auto_fixable=False
+            ))
+            logger.error(f"Market-exchange compatibility validation failed for {strategy_name}: {e}")
+
+        return result
+
+    def validate_timeframe_consistency(self, strategy_name: str) -> ConfigValidationResult:
+        """
+        Validate timeframe consistency for a strategy.
+
+        Args:
+            strategy_name: Name of strategy to validate
+
+        Returns:
+            ConfigValidationResult with timeframe consistency results
+        """
+        result = ConfigValidationResult(
+            is_valid=True,
+            issues=[],
+            performance_score=0.0,
+            optimization_suggestions=[],
+            repair_suggestions=[]
+        )
+
+        try:
+            # Use StrategyValidator for timeframe consistency
+            strategy_result = self.strategy_validator.validate_timeframe_consistency(strategy_name)
+
+            # Convert results
+            for error in strategy_result.errors:
+                result.add_issue(ConfigIssue(
+                    severity='error',
+                    category='compatibility',
+                    message=error,
+                    location=f'strategies.{strategy_name}.timeframe',
+                    fix_suggestion='Fix timeframe consistency issues',
+                    auto_fixable=True
+                ))
+
+            for warning in strategy_result.warnings:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='performance',
+                    message=warning,
+                    location=f'strategies.{strategy_name}.timeframe',
+                    fix_suggestion='Consider timeframe optimization',
+                    auto_fixable=False
+                ))
+
+            # Additional timeframe consistency checks
+            self._check_strategy_indicator_timeframe_harmony(strategy_name, result)
+            self._check_timeframe_data_availability(strategy_name, result)
+
+        except Exception as e:
+            result.add_issue(ConfigIssue(
+                severity='error',
+                category='compatibility',
+                message=f'Error validating timeframe consistency: {e}',
+                location=f'strategies.{strategy_name}.timeframe',
+                fix_suggestion='Check strategy timeframe configuration',
+                auto_fixable=False
+            ))
+            logger.error(f"Timeframe consistency validation failed for {strategy_name}: {e}")
+
+        return result
+
+    def _check_indicator_parameter_consistency(self, strategy_name: str, result: ConfigValidationResult) -> None:
+        """Check indicator parameter consistency within strategy."""
+        try:
+            config = self.config_manager.load_config()
+            strategy_config = config.get('strategies', {}).get(strategy_name, {})
+            indicators = strategy_config.get('indicators', {})
+
+            # Check for conflicting timeframes in indicators
+            indicator_timeframes = {}
+            for indicator_name, indicator_config in indicators.items():
+                timeframe = indicator_config.get('timeframe')
+                if timeframe:
+                    indicator_timeframes[indicator_name] = timeframe
+
+            if len(set(indicator_timeframes.values())) > 1:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='performance',
+                    message=f'Strategy {strategy_name} has indicators with different timeframes: {indicator_timeframes}',
+                    location=f'strategies.{strategy_name}.indicators',
+                    fix_suggestion='Consider aligning indicator timeframes for better performance',
+                    auto_fixable=False
+                ))
+
+        except Exception as e:
+            logger.warning(f"Could not check indicator parameter consistency for {strategy_name}: {e}")
+
+    def _validate_position_sizing_parameters(self, position_sizing_config: Dict[str, Any], result: ConfigValidationResult) -> None:
+        """Validate position sizing parameters."""
+        method = position_sizing_config.get('method') or position_sizing_config.get('position_sizing_method')
+
+        if method == 'fixed_usd':
+            amount = position_sizing_config.get('fixed_usd_amount') or position_sizing_config.get('amount')
+            if not amount or amount <= 0:
+                result.add_issue(ConfigIssue(
+                    severity='error',
+                    category='structure',
+                    message='Fixed USD amount must be positive',
+                    location='position_sizing.fixed_usd_amount',
+                    fix_suggestion='Set positive amount value',
+                    auto_fixable=True
+                ))
+
+        elif method == 'percentage_equity':
+            percentage = position_sizing_config.get('percentage')
+            if not percentage or percentage <= 0 or percentage > 100:
+                result.add_issue(ConfigIssue(
+                    severity='error',
+                    category='structure',
+                    message='Percentage must be between 0 and 100',
+                    location='position_sizing.percentage',
+                    fix_suggestion='Set percentage between 0 and 100',
+                    auto_fixable=True
+                ))
+
+    def _check_position_sizing_risk_compatibility(self, position_sizing_config: Dict[str, Any], result: ConfigValidationResult) -> None:
+        """Check position sizing compatibility with risk management."""
+        try:
+            config = self.config_manager.load_config()
+            risk_mgmt = config.get('risk_management', {})
+
+            # Check if position sizing is compatible with risk limits
+            method = position_sizing_config.get('method')
+            if method == 'fixed_usd':
+                amount = position_sizing_config.get('fixed_usd_amount', 0)
+                max_position = risk_mgmt.get('max_position_usd')
+                if max_position and amount > max_position:
+                    result.add_issue(ConfigIssue(
+                        severity='warning',
+                        category='compatibility',
+                        message=f'Fixed position size ({amount}) exceeds max position limit ({max_position})',
+                        location='position_sizing',
+                        fix_suggestion='Reduce position size or increase risk limit',
+                        auto_fixable=False
+                    ))
+
+        except Exception as e:
+            logger.warning(f"Could not check position sizing risk compatibility: {e}")
+
+    def _check_market_symbol_format(self, strategy_name: str, result: ConfigValidationResult) -> None:
+        """Check market symbol format validity."""
+        try:
+            config = self.config_manager.load_config()
+            strategy_config = config.get('strategies', {}).get(strategy_name, {})
+            market = strategy_config.get('market', '')
+
+            # Basic symbol format validation
+            if market and '-' not in market:
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='compatibility',
+                    message=f'Market symbol {market} may not be in standard format (expected: BASE-QUOTE)',
+                    location=f'strategies.{strategy_name}.market',
+                    fix_suggestion='Use format like BTC-USD, ETH-USDC',
+                    auto_fixable=False
+                ))
+
+        except Exception as e:
+            logger.warning(f"Could not check market symbol format for {strategy_name}: {e}")
+
+    def _check_exchange_market_support(self, strategy_name: str, result: ConfigValidationResult) -> None:
+        """Check if exchange supports the specified market."""
+        try:
+            config = self.config_manager.load_config()
+            strategy_config = config.get('strategies', {}).get(strategy_name, {})
+            exchange = strategy_config.get('exchange')
+            market = strategy_config.get('market')
+
+            # Basic exchange-market compatibility checks
+            if exchange == 'hyperliquid' and market and not market.endswith('-USD'):
+                result.add_issue(ConfigIssue(
+                    severity='warning',
+                    category='compatibility',
+                    message=f'Hyperliquid typically supports USD pairs, but strategy uses {market}',
+                    location=f'strategies.{strategy_name}',
+                    fix_suggestion='Verify market is supported on Hyperliquid',
+                    auto_fixable=False
+                ))
+
+        except Exception as e:
+            logger.warning(f"Could not check exchange market support for {strategy_name}: {e}")
+
+    def _check_liquidity_requirements(self, strategy_name: str, result: ConfigValidationResult) -> None:
+        """Check liquidity requirements for strategy."""
+        try:
+            config = self.config_manager.load_config()
+            strategy_config = config.get('strategies', {}).get(strategy_name, {})
+            market = strategy_config.get('market', '')
+
+            # Check if market might have liquidity concerns
+            minor_pairs = ['LTC-USD', 'ADA-USD', 'DOGE-USD', 'XRP-USD']
+            if market in minor_pairs:
+                result.add_issue(ConfigIssue(
+                    severity='suggestion',
+                    category='performance',
+                    message=f'Market {market} may have lower liquidity, consider monitoring spreads',
+                    location=f'strategies.{strategy_name}.market',
+                    fix_suggestion='Monitor bid-ask spreads and consider major pairs for better liquidity',
+                    auto_fixable=False
+                ))
+
+        except Exception as e:
+            logger.warning(f"Could not check liquidity requirements for {strategy_name}: {e}")
+
+    def _check_strategy_indicator_timeframe_harmony(self, strategy_name: str, result: ConfigValidationResult) -> None:
+        """Check timeframe harmony between strategy and indicators."""
+        try:
+            config = self.config_manager.load_config()
+            strategy_config = config.get('strategies', {}).get(strategy_name, {})
+            strategy_timeframe = strategy_config.get('timeframe')
+            indicators = strategy_config.get('indicators', {})
+
+            if not strategy_timeframe:
+                return
+
+            strategy_tf_index = self.VALID_TIMEFRAMES.index(strategy_timeframe)
+
+            for indicator_name, indicator_config in indicators.items():
+                indicator_timeframe = indicator_config.get('timeframe', strategy_timeframe)
+                if indicator_timeframe in self.VALID_TIMEFRAMES:
+                    indicator_tf_index = self.VALID_TIMEFRAMES.index(indicator_timeframe)
+
+                    # Check if indicator timeframe is much larger than strategy timeframe
+                    if indicator_tf_index - strategy_tf_index > 2:
+                        result.add_issue(ConfigIssue(
+                            severity='warning',
+                            category='performance',
+                            message=f'Indicator {indicator_name} timeframe ({indicator_timeframe}) much larger than strategy timeframe ({strategy_timeframe})',
+                            location=f'strategies.{strategy_name}.indicators.{indicator_name}',
+                            fix_suggestion='Consider aligning timeframes for better signal quality',
+                            auto_fixable=False
+                        ))
+
+        except Exception as e:
+            logger.warning(f"Could not check timeframe harmony for {strategy_name}: {e}")
+
+    def _check_timeframe_data_availability(self, strategy_name: str, result: ConfigValidationResult) -> None:
+        """Check if timeframe has good data availability."""
+        try:
+            config = self.config_manager.load_config()
+            strategy_config = config.get('strategies', {}).get(strategy_name, {})
+            timeframe = strategy_config.get('timeframe')
+
+            # Check for very high frequency timeframes that might have data gaps
+            if timeframe in ['1m', '5m']:
+                result.add_issue(ConfigIssue(
+                    severity='suggestion',
+                    category='performance',
+                    message=f'Very high frequency timeframe ({timeframe}) may have data gaps or noise',
+                    location=f'strategies.{strategy_name}.timeframe',
+                    fix_suggestion='Consider using 15m or higher timeframes for more reliable signals',
+                    auto_fixable=False
+                ))
+
+        except Exception as e:
+            logger.warning(f"Could not check timeframe data availability for {strategy_name}: {e}")

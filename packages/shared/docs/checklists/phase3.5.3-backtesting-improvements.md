@@ -671,24 +671,24 @@ of concerns.
 
 ### 4.1 Configuration Validation
 
-- [ ] **Enhanced comprehensive config validation** (now in `cli/validation/config_validator.py`)
+- [x] **Enhanced comprehensive config validation** (now in `cli/validation/config_validator.py`)
 
-  - [ ] Validate all strategy configurations before backtesting
-  - [ ] Check that all strategy indicators exist in config
-  - [ ] Validate position sizing configurations
-  - [ ] Ensure market symbols and exchanges are valid
-  - [ ] Check timeframe compatibility between strategy and indicators
-  - [ ] Add detailed error messages for configuration issues
-  - [ ] **Integrate with ConfigManager for configuration access**
-  - [ ] **Use StrategyValidator for strategy-specific validation**
+  - [x] Validate all strategy configurations before backtesting
+  - [x] Check that all strategy indicators exist in config
+  - [x] Validate position sizing configurations
+  - [x] Ensure market symbols and exchanges are valid
+  - [x] Check timeframe compatibility between strategy and indicators
+  - [x] Add detailed error messages for configuration issues
+  - [x] **Integrate with ConfigManager for configuration access**
+  - [x] **Use StrategyValidator for strategy-specific validation**
 
-- [ ] **Enhanced config validation utilities** (now in `cli/validation/config_validator.py`)
-  - [ ] Add `validate_strategy_indicator_consistency()` function
-  - [ ] Add `validate_position_sizing_config()` function
-  - [ ] Add `validate_market_exchange_compatibility()` function
-  - [ ] Add `validate_timeframe_consistency()` function
-  - [ ] Add configuration repair suggestions for common issues
-  - [ ] **Add integration with all other validation modules**
+- [x] **Enhanced config validation utilities** (now in `cli/validation/config_validator.py`)
+  - [x] Add `validate_strategy_indicator_consistency()` function
+  - [x] Add `validate_position_sizing_config()` function
+  - [x] Add `validate_market_exchange_compatibility()` function
+  - [x] Add `validate_timeframe_consistency()` function
+  - [x] Add configuration repair suggestions for common issues
+  - [x] **Add integration with all other validation modules**
 
 ### 4.2 Enhanced Error Handling
 
