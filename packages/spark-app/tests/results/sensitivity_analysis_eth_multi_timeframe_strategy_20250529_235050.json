@@ -1,0 +1,242 @@
+{
+  "strategy_name": "eth_multi_timeframe_strategy",
+  "timestamp": "2025-05-29T23:50:50.802205",
+  "baseline_results": {
+    "total_return": 0.15716553689461626,
+    "total_trades": 39,
+    "win_rate": 0.5351112808774555
+  },
+  "sensitivity_tests": {
+    "position_sizing": {
+      "fixed_usd_100": {
+        "total_return": 0.12573242951569302,
+        "impact_vs_baseline": -0.19999999999999993,
+        "config": {
+          "method": "fixed_usd",
+          "amount": 100
+        }
+      },
+      "fixed_usd_200": {
+        "total_return": 0.1362101319753341,
+        "impact_vs_baseline": -0.13333333333333328,
+        "config": {
+          "method": "fixed_usd",
+          "amount": 200
+        }
+      },
+      "fixed_usd_500": {
+        "total_return": 0.14668783443497518,
+        "impact_vs_baseline": -0.06666666666666664,
+        "config": {
+          "method": "fixed_usd",
+          "amount": 500
+        }
+      },
+      "percent_balance_0.1": {
+        "total_return": 0.15716553689461626,
+        "impact_vs_baseline": 0.0,
+        "config": {
+          "method": "percent_balance",
+          "percentage": 0.1
+        }
+      },
+      "percent_balance_0.2": {
+        "total_return": 0.16764323935425735,
+        "impact_vs_baseline": 0.06666666666666664,
+        "config": {
+          "method": "percent_balance",
+          "percentage": 0.2
+        }
+      },
+      "percent_balance_0.05": {
+        "total_return": 0.17812094181389843,
+        "impact_vs_baseline": 0.13333333333333328,
+        "config": {
+          "method": "percent_balance",
+          "percentage": 0.05
+        }
+      }
+    },
+    "timeframe": {
+      "15m": {
+        "total_return": 0.11001587582623137,
+        "impact_vs_baseline": -0.30000000000000004,
+        "timeframe": "15m"
+      },
+      "30m": {
+        "total_return": 0.12887574025358534,
+        "impact_vs_baseline": -0.18,
+        "timeframe": "30m"
+      },
+      "1h": {
+        "total_return": 0.14773560468093927,
+        "impact_vs_baseline": -0.06000000000000012,
+        "timeframe": "1h"
+      },
+      "2h": {
+        "total_return": 0.16659546910829326,
+        "impact_vs_baseline": 0.06000000000000012,
+        "timeframe": "2h"
+      }
+    },
+    "indicator_parameters": {
+      "rsi_4h_period_10": {
+        "total_return": 0.13359070636042383,
+        "impact_vs_baseline": -0.14999999999999994,
+        "parameter": "period",
+        "value": 10,
+        "indicator": "rsi_4h"
+      },
+      "rsi_4h_period_14": {
+        "total_return": 0.14537812162752003,
+        "impact_vs_baseline": -0.07500000000000007,
+        "parameter": "period",
+        "value": 14,
+        "indicator": "rsi_4h"
+      },
+      "rsi_4h_period_18": {
+        "total_return": 0.15716553689461626,
+        "impact_vs_baseline": 0.0,
+        "parameter": "period",
+        "value": 18,
+        "indicator": "rsi_4h"
+      },
+      "rsi_4h_period_21": {
+        "total_return": 0.16895295216171247,
+        "impact_vs_baseline": 0.07499999999999989,
+        "parameter": "period",
+        "value": 21,
+        "indicator": "rsi_4h"
+      },
+      "macd_1h_fast_period_10": {
+        "total_return": 0.13359070636042383,
+        "impact_vs_baseline": -0.14999999999999994,
+        "parameter": "fast_period",
+        "value": 10,
+        "indicator": "macd_1h"
+      },
+      "macd_1h_fast_period_12": {
+        "total_return": 0.14537812162752003,
+        "impact_vs_baseline": -0.07500000000000007,
+        "parameter": "fast_period",
+        "value": 12,
+        "indicator": "macd_1h"
+      },
+      "macd_1h_fast_period_14": {
+        "total_return": 0.15716553689461626,
+        "impact_vs_baseline": 0.0,
+        "parameter": "fast_period",
+        "value": 14,
+        "indicator": "macd_1h"
+      },
+      "macd_1h_fast_period_16": {
+        "total_return": 0.16895295216171247,
+        "impact_vs_baseline": 0.07499999999999989,
+        "parameter": "fast_period",
+        "value": 16,
+        "indicator": "macd_1h"
+      }
+    }
+  },
+  "analysis": {
+    "most_impactful_parameters": [
+      {
+        "test_type": "timeframe",
+        "test_name": "15m",
+        "impact": 0.30000000000000004,
+        "direction": "negative",
+        "raw_impact": -0.30000000000000004
+      },
+      {
+        "test_type": "position_sizing",
+        "test_name": "fixed_usd_100",
+        "impact": 0.19999999999999993,
+        "direction": "negative",
+        "raw_impact": -0.19999999999999993
+      },
+      {
+        "test_type": "timeframe",
+        "test_name": "30m",
+        "impact": 0.18,
+        "direction": "negative",
+        "raw_impact": -0.18
+      },
+      {
+        "test_type": "indicator_parameters",
+        "test_name": "rsi_4h_period_10",
+        "impact": 0.14999999999999994,
+        "direction": "negative",
+        "raw_impact": -0.14999999999999994
+      },
+      {
+        "test_type": "indicator_parameters",
+        "test_name": "macd_1h_fast_period_10",
+        "impact": 0.14999999999999994,
+        "direction": "negative",
+        "raw_impact": -0.14999999999999994
+      },
+      {
+        "test_type": "position_sizing",
+        "test_name": "fixed_usd_200",
+        "impact": 0.13333333333333328,
+        "direction": "negative",
+        "raw_impact": -0.13333333333333328
+      },
+      {
+        "test_type": "position_sizing",
+        "test_name": "percent_balance_0.05",
+        "impact": 0.13333333333333328,
+        "direction": "positive",
+        "raw_impact": 0.13333333333333328
+      },
+      {
+        "test_type": "indicator_parameters",
+        "test_name": "rsi_4h_period_14",
+        "impact": 0.07500000000000007,
+        "direction": "negative",
+        "raw_impact": -0.07500000000000007
+      },
+      {
+        "test_type": "indicator_parameters",
+        "test_name": "macd_1h_fast_period_12",
+        "impact": 0.07500000000000007,
+        "direction": "negative",
+        "raw_impact": -0.07500000000000007
+      },
+      {
+        "test_type": "indicator_parameters",
+        "test_name": "rsi_4h_period_21",
+        "impact": 0.07499999999999989,
+        "direction": "positive",
+        "raw_impact": 0.07499999999999989
+      }
+    ],
+    "optimization_opportunities": [],
+    "sensitivity_rankings": [
+      [
+        "timeframe",
+        {
+          "max_impact": 0.30000000000000004,
+          "avg_impact": 0.15000000000000008,
+          "num_tests": 4
+        }
+      ],
+      [
+        "position_sizing",
+        {
+          "max_impact": 0.19999999999999993,
+          "avg_impact": 0.09999999999999996,
+          "num_tests": 6
+        }
+      ],
+      [
+        "indicator_parameters",
+        {
+          "max_impact": 0.14999999999999994,
+          "avg_impact": 0.07499999999999997,
+          "num_tests": 8
+        }
+      ]
+    ]
+  }
+}
