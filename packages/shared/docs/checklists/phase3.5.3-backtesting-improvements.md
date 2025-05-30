@@ -692,24 +692,24 @@ of concerns.
 
 ### 4.2 Enhanced Error Handling
 
-- [ ] **Improved CLI error handling** (distributed across command modules in `cli/commands/`)
+- [x] **Improved CLI error handling** (distributed across command modules in `cli/commands/`)
 
-  - [ ] Add specific error handling for strategy configuration issues
-  - [ ] Provide helpful error messages with fix suggestions
-  - [ ] Add graceful degradation for partial configuration issues
-  - [ ] Include error logging with sufficient context for debugging
-  - [ ] Add retry mechanisms for data fetching failures
-  - [ ] **Centralize error handling patterns across all command modules**
-  - [ ] **Use validation modules for comprehensive error prevention**
+  - [x] Add specific error handling for strategy configuration issues
+  - [x] Provide helpful error messages with fix suggestions
+  - [x] Add graceful degradation for partial configuration issues
+  - [x] Include error logging with sufficient context for debugging
+  - [x] Add retry mechanisms for data fetching failures
+  - [x] **Centralize error handling patterns across all command modules**
+  - [x] **Use validation modules for comprehensive error prevention**
 
-- [ ] **Add pre-flight checks** (in `cli/core/backtest_orchestrator.py`)
-  - [ ] Validate data availability for strategy requirements
-  - [ ] Check exchange connectivity for real data commands
-  - [ ] Verify indicator factory can create all required indicators
-  - [ ] Test position sizer creation with strategy configuration
-  - [ ] Validate output directory permissions and disk space
-  - [ ] **Coordinate pre-flight checks across all manager modules**
-  - [ ] **Use DataValidator for data availability checking**
+- [x] **Add pre-flight checks** (in `cli/core/backtest_orchestrator.py`)
+  - [x] Validate data availability for strategy requirements
+  - [x] Check exchange connectivity for real data commands
+  - [x] Verify indicator factory can create all required indicators
+  - [x] Test position sizer creation with strategy configuration
+  - [x] Validate output directory permissions and disk space
+  - [x] **Coordinate pre-flight checks across all manager modules**
+  - [x] **Use DataValidator for data availability checking**
 
 ## 🏗️ **5. Backward Compatibility and Migration**
 
