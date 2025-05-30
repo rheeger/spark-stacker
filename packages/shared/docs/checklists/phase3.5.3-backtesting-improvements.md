@@ -145,91 +145,91 @@ of concerns.
 
 #### 1.4.2 Command Handler Modules
 
-- [ ] **Create strategy command handlers**
+- [x] **Create strategy command handlers**
       (`packages/spark-app/tests/_utils/cli/commands/strategy_commands.py` - NEW FILE)
 
-  - [ ] Move `@cli.command("strategy")` implementation
-  - [ ] Move `@cli.command("compare-strategies")` implementation
-  - [ ] Add strategy-specific parameter validation
-  - [ ] Import and use appropriate manager classes
-  - [ ] Handle strategy command error cases
-  - [ ] Add comprehensive logging for strategy commands
+  - [x] Move `@cli.command("strategy")` implementation
+  - [x] Move `@cli.command("compare-strategies")` implementation
+  - [x] Add strategy-specific parameter validation
+  - [x] Import and use appropriate manager classes
+  - [x] Handle strategy command error cases
+  - [x] Add comprehensive logging for strategy commands
 
-- [ ] **Create indicator command handlers**
+- [x] **Create indicator command handlers**
       (`packages/spark-app/tests/_utils/cli/commands/indicator_commands.py` - NEW FILE)
 
-  - [ ] Move existing indicator commands (`demo`, `real-data`, `compare`, `compare-popular`)
-  - [ ] Add deprecation warnings with strategy migration suggestions
-  - [ ] Maintain full backward compatibility
-  - [ ] Add `--suggest-strategy` functionality
-  - [ ] Import and use IndicatorBacktestManager
+  - [x] Move existing indicator commands (`demo`, `real-data`, `compare`, `compare-popular`)
+  - [x] Add deprecation warnings with strategy migration suggestions
+  - [x] Maintain full backward compatibility
+  - [x] Add `--suggest-strategy` functionality
+  - [x] Import and use IndicatorBacktestManager
 
-- [ ] **Create comparison command handlers**
+- [x] **Create comparison command handlers**
       (`packages/spark-app/tests/_utils/cli/commands/comparison_commands.py` - NEW FILE)
 
-  - [ ] Consolidate all comparison logic (strategy and indicator)
-  - [ ] Add unified comparison interface
-  - [ ] Handle cross-type comparisons (strategy vs indicator)
-  - [ ] Add comparison result caching
-  - [ ] Implement parallel comparison execution
+  - [x] Consolidate all comparison logic (strategy and indicator)
+  - [x] Add unified comparison interface
+  - [x] Handle cross-type comparisons (strategy vs indicator)
+  - [x] Add comparison result caching
+  - [x] Implement parallel comparison execution
 
-- [ ] **Create list command handlers**
+- [x] **Create list command handlers**
       (`packages/spark-app/tests/_utils/cli/commands/list_commands.py` - NEW FILE)
 
-  - [ ] Move `list-strategies` and `list-indicators` commands
-  - [ ] Add advanced filtering and sorting logic
-  - [ ] Add formatted output with tables and colors
-  - [ ] Add export functionality for lists
-  - [ ] Add interactive selection for subsequent commands
+  - [x] Move `list-strategies` and `list-indicators` commands
+  - [x] Add advanced filtering and sorting logic
+  - [x] Add formatted output with tables and colors
+  - [x] Add export functionality for lists
+  - [x] Add interactive selection for subsequent commands
 
-- [ ] **Create utility command handlers**
+- [x] **Create utility command handlers**
       (`packages/spark-app/tests/_utils/cli/commands/utility_commands.py` - NEW FILE)
-  - [ ] Add `validate-config` command for configuration checking
-  - [ ] Add `migrate-config` command for config file updates
-  - [ ] Add `diagnose` command for troubleshooting
-  - [ ] Add `clean-cache` command for clearing cached data
-  - [ ] Add `export-examples` command for generating example configs
+  - [x] Add `validate-config` command for configuration checking
+  - [x] Add `migrate-config` command for config file updates
+  - [x] Add `diagnose` command for troubleshooting
+  - [x] Add `clean-cache` command for clearing cached data
+  - [x] Add `export-examples` command for generating example configs
 
 #### 1.4.3 Core Business Logic Modules
 
-- [ ] **Create configuration manager**
+- [x] **Create configuration manager**
       (`packages/spark-app/tests/_utils/cli/core/config_manager.py` - NEW FILE)
 
-  - [ ] Centralize all configuration loading logic
-  - [ ] Add configuration caching and reload functionality
-  - [ ] Handle environment variable expansion
-  - [ ] Add configuration merging (global + strategy overrides)
-  - [ ] Add configuration versioning and migration support
-  - [ ] Provide configuration validation and repair utilities
+  - [x] Centralize all configuration loading logic
+  - [x] Add configuration caching and reload functionality
+  - [x] Handle environment variable expansion
+  - [x] Add configuration merging (global + strategy overrides)
+  - [x] Add configuration versioning and migration support
+  - [x] Provide configuration validation and repair utilities
 
-- [ ] **Create data manager** (`packages/spark-app/tests/_utils/cli/core/data_manager.py` - NEW
+- [x] **Create data manager** (`packages/spark-app/tests/_utils/cli/core/data_manager.py` - NEW
       FILE)
 
-  - [ ] Centralize all data fetching logic (real and synthetic)
-  - [ ] Add intelligent caching across multiple runs
-  - [ ] Handle multi-timeframe data requirements
-  - [ ] Add data quality validation and cleanup
-  - [ ] Implement data source failover and retry logic
-  - [ ] Add data export and import functionality
+  - [x] Centralize all data fetching logic (real and synthetic)
+  - [x] Add intelligent caching across multiple runs
+  - [x] Handle multi-timeframe data requirements
+  - [x] Add data quality validation and cleanup
+  - [x] Implement data source failover and retry logic
+  - [x] Add data export and import functionality
 
-- [ ] **Create backtest orchestrator**
+- [x] **Create backtest orchestrator**
       (`packages/spark-app/tests/_utils/cli/core/backtest_orchestrator.py` - NEW FILE)
 
-  - [ ] Coordinate overall backtesting workflow
-  - [ ] Handle resource allocation and cleanup
-  - [ ] Manage parallel execution of multiple backtests
-  - [ ] Add progress tracking and user updates
-  - [ ] Handle interruption and graceful shutdown
-  - [ ] Coordinate between different manager types
+  - [x] Coordinate overall backtesting workflow
+  - [x] Handle resource allocation and cleanup
+  - [x] Manage parallel execution of multiple backtests
+  - [x] Add progress tracking and user updates
+  - [x] Handle interruption and graceful shutdown
+  - [x] Coordinate between different manager types
 
-- [ ] **Create scenario manager** (`packages/spark-app/tests/_utils/cli/core/scenario_manager.py` -
+- [x] **Create scenario manager** (`packages/spark-app/tests/_utils/cli/core/scenario_manager.py` -
       NEW FILE)
-  - [ ] Centralize multi-scenario testing logic
-  - [ ] Coordinate scenario data generation
-  - [ ] Handle scenario execution scheduling
-  - [ ] Add scenario result aggregation
-  - [ ] Manage scenario-specific configuration overrides
-  - [ ] Add scenario performance analysis and ranking
+  - [x] Centralize multi-scenario testing logic
+  - [x] Coordinate scenario data generation
+  - [x] Handle scenario execution scheduling
+  - [x] Add scenario result aggregation
+  - [x] Manage scenario-specific configuration overrides
+  - [x] Add scenario performance analysis and ranking
 
 #### 1.4.4 Specialized Manager Classes
 

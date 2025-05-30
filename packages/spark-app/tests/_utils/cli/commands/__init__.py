@@ -9,17 +9,17 @@ This package contains command handler modules for different types of CLI command
 - utility_commands: Configuration validation and utility commands
 """
 
-# TODO: Import command registration functions when modules are implemented
-# from .strategy_commands import register_strategy_commands
-# from .indicator_commands import register_indicator_commands
-# from .comparison_commands import register_comparison_commands
-# from .list_commands import register_list_commands
-# from .utility_commands import register_utility_commands
+from .comparison_commands import register_comparison_commands
+from .indicator_commands import register_indicator_commands
+from .list_commands import register_list_commands
+# Import command registration functions from implemented modules
+from .strategy_commands import register_strategy_commands
+from .utility_commands import register_utility_commands
 
 __all__ = [
-    # "register_strategy_commands",
-    # "register_indicator_commands",
-    # "register_comparison_commands",
-    # "register_list_commands",
-    # "register_utility_commands"
+    "register_strategy_commands",
+    "register_indicator_commands",
+    "register_comparison_commands",
+    "register_list_commands",
+    "register_utility_commands"
 ]

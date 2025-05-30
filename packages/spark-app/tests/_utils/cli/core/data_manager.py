@@ -1,0 +1,863 @@
+"""
+Data Manager
+
+This module provides centralized data management for the CLI with:
+- Centralized data fetching logic (real and synthetic)
+- Intelligent caching across multiple runs with TTL and invalidation
+- Multi-timeframe data requirements handling
+- Data quality validation and cleanup
+- Data source failover and retry logic with exponential backoff
+- Data export and import functionality for analysis
+"""
+
+import asyncio
+import json
+import logging
+import os
+import pickle
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
+import numpy as np
+import pandas as pd
+from app.backtesting.data_manager import DataManager as AppDataManager
+from app.connectors.hyperliquid_connector import HyperliquidConnector
+from tests._helpers.data_factory import make_price_dataframe
+
+logger = logging.getLogger(__name__)
+
+
+class DataSourceType(Enum):
+    """Types of data sources available."""
+    REAL_EXCHANGE = "real_exchange"
+    SYNTHETIC = "synthetic"
+    CACHED = "cached"
+    IMPORTED = "imported"
+
+
+class DataQuality(Enum):
+    """Data quality levels."""
+    EXCELLENT = "excellent"
+    GOOD = "good"
+    ACCEPTABLE = "acceptable"
+    POOR = "poor"
+    INVALID = "invalid"
+
+
+@dataclass
+class DataRequest:
+    """Represents a data request with all parameters."""
+    symbol: str
+    timeframe: str
+    exchange: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    days_back: Optional[int] = None
+    source_preference: List[DataSourceType] = field(default_factory=lambda: [
+        DataSourceType.CACHED, DataSourceType.REAL_EXCHANGE, DataSourceType.SYNTHETIC
+    ])
+
+
+@dataclass
+class DataQualityReport:
+    """Report on data quality assessment."""
+    quality_level: DataQuality
+    total_records: int
+    missing_records: int
+    duplicate_records: int
+    data_gaps: List[Tuple[datetime, datetime]]
+    timestamp_issues: List[str]
+    price_anomalies: List[str]
+    recommendations: List[str]
+
+
+@dataclass
+class CacheEntry:
+    """Represents a cached data entry."""
+    data: pd.DataFrame
+    timestamp: float
+    source: DataSourceType
+    quality_report: DataQualityReport
+    metadata: Dict[str, Any]
+
+
+class DataFetchError(Exception):
+    """Raised when data fetching fails."""
+    pass
+
+
+class DataQualityError(Exception):
+    """Raised when data quality is insufficient."""
+    pass
+
+
+class DataManager:
+    """
+    Centralized data manager for CLI operations.
+
+    Features:
+    - Unified data fetching from multiple sources with intelligent fallback
+    - Multi-level caching (memory + disk) with TTL and invalidation
+    - Multi-timeframe data handling and aggregation
+    - Comprehensive data quality validation and cleanup
+    - Retry logic with exponential backoff for reliability
+    - Data export/import for external analysis
+    """
+
+    # Default cache settings
+    DEFAULT_CACHE_TTL_SECONDS = 3600  # 1 hour
+    DEFAULT_RETRY_ATTEMPTS = 3
+    DEFAULT_RETRY_DELAY = 1.0  # seconds
+
+    def __init__(self,
+                 cache_dir: Optional[str] = None,
+                 memory_cache_size: int = 100,
+                 disk_cache_ttl_hours: int = 24,
+                 enable_real_data: bool = True,
+                 retry_attempts: int = 3):
+        """
+        Initialize the data manager.
+
+        Args:
+            cache_dir: Directory for disk cache. If None, uses default location.
+            memory_cache_size: Maximum number of entries in memory cache
+            disk_cache_ttl_hours: Time-to-live for disk cache entries
+            enable_real_data: Whether to enable real exchange data fetching
+            retry_attempts: Number of retry attempts for failed requests
+        """
+        self.memory_cache_size = memory_cache_size
+        self.disk_cache_ttl_hours = disk_cache_ttl_hours
+        self.enable_real_data = enable_real_data
+        self.retry_attempts = retry_attempts
+
+        # Set up cache directory
+        if cache_dir is None:
+            base_dir = Path(__file__).parent.parent.parent.parent
+            self.cache_dir = base_dir / "__test_data__" / "data_manager_cache"
+        else:
+            self.cache_dir = Path(cache_dir)
+
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Internal state
+        self._memory_cache: Dict[str, CacheEntry] = {}
+        self._cache_lock = threading.Lock()
+        self._connectors: Dict[str, Any] = {}
+
+        # Initialize data sources
+        self._initialize_data_sources()
+
+        logger.info(f"DataManager initialized with cache at {self.cache_dir}")
+        logger.info(f"Real data enabled: {enable_real_data}")
+
+    def get_data(self, request: DataRequest) -> pd.DataFrame:
+        """
+        Get data according to the request specifications.
+
+        Args:
+            request: DataRequest object specifying what data to fetch
+
+        Returns:
+            DataFrame containing the requested data
+
+        Raises:
+            DataFetchError: If data cannot be fetched from any source
+            DataQualityError: If data quality is insufficient
+        """
+        cache_key = self._generate_cache_key(request)
+
+        # Try to get from cache first
+        if DataSourceType.CACHED in request.source_preference:
+            cached_data = self._get_from_cache(cache_key)
+            if cached_data is not None:
+                logger.debug(f"Using cached data for {cache_key}")
+                return cached_data
+
+        # Try each data source in preference order
+        last_error = None
+
+        for source_type in request.source_preference:
+            if source_type == DataSourceType.CACHED:
+                continue  # Already tried above
+
+            try:
+                data = self._fetch_from_source(request, source_type)
+
+                # Validate data quality
+                quality_report = self._assess_data_quality(data, request)
+                if quality_report.quality_level == DataQuality.INVALID:
+                    logger.warning(f"Invalid data from {source_type}, trying next source")
+                    continue
+
+                # Cache the successful result
+                self._cache_data(cache_key, data, source_type, quality_report, request)
+
+                logger.info(f"Successfully fetched data from {source_type} for {request.symbol}")
+                return data
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch from {source_type}: {e}")
+                last_error = e
+                continue
+
+        # If we get here, all sources failed
+        raise DataFetchError(f"Unable to fetch data for {request.symbol} from any source. Last error: {last_error}")
+
+    def get_multi_timeframe_data(self,
+                                symbol: str,
+                                timeframes: List[str],
+                                exchange: Optional[str] = None,
+                                days_back: int = 30) -> Dict[str, pd.DataFrame]:
+        """
+        Get data for multiple timeframes efficiently.
+
+        Args:
+            symbol: Market symbol (e.g., "ETH-USD")
+            timeframes: List of timeframes (e.g., ["1h", "4h", "1d"])
+            exchange: Optional exchange name
+            days_back: Number of days of historical data
+
+        Returns:
+            Dictionary mapping timeframe to DataFrame
+        """
+        results = {}
+
+        # Create requests for all timeframes
+        requests = []
+        for timeframe in timeframes:
+            request = DataRequest(
+                symbol=symbol,
+                timeframe=timeframe,
+                exchange=exchange,
+                days_back=days_back
+            )
+            requests.append((timeframe, request))
+
+        # Fetch data for each timeframe
+        for timeframe, request in requests:
+            try:
+                data = self.get_data(request)
+                results[timeframe] = data
+                logger.debug(f"Fetched {len(data)} records for {symbol} {timeframe}")
+            except Exception as e:
+                logger.error(f"Failed to fetch {symbol} {timeframe}: {e}")
+                # Continue with other timeframes
+
+        return results
+
+    def generate_synthetic_data(self,
+                              symbol: str,
+                              timeframe: str,
+                              days: int = 30,
+                              pattern: str = "trend",
+                              noise: float = 0.02,
+                              seed: Optional[int] = None) -> pd.DataFrame:
+        """
+        Generate synthetic market data for testing.
+
+        Args:
+            symbol: Market symbol for labeling
+            timeframe: Timeframe for data generation
+            days: Number of days of data to generate
+            pattern: Market pattern ("trend", "sideways", "volatile", etc.)
+            noise: Amount of random noise to add
+            seed: Random seed for reproducible results
+
+        Returns:
+            DataFrame with synthetic OHLCV data
+        """
+        # Calculate number of candles based on timeframe
+        candles_per_day = self._get_candles_per_day(timeframe)
+        total_candles = int(days * candles_per_day)
+
+        # Generate synthetic data using the data factory
+        data = make_price_dataframe(
+            rows=total_candles,
+            pattern=pattern,
+            noise=noise,
+            seed=seed
+        )
+
+        # Adjust timestamps for the specified timeframe
+        timeframe_minutes = self._timeframe_to_minutes(timeframe)
+        start_time = datetime.now() - timedelta(days=days)
+
+        timestamps = []
+        current_time = start_time
+        for _ in range(total_candles):
+            timestamps.append(current_time)
+            current_time += timedelta(minutes=timeframe_minutes)
+
+        data.index = pd.DatetimeIndex(timestamps, name='timestamp')
+
+        # Add metadata
+        data.attrs = {
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'pattern': pattern,
+            'generated_at': datetime.now().isoformat(),
+            'source': 'synthetic'
+        }
+
+        logger.info(f"Generated {len(data)} synthetic candles for {symbol} {timeframe}")
+        return data
+
+    def assess_data_quality(self, data: pd.DataFrame, symbol: str = "unknown") -> DataQualityReport:
+        """
+        Assess the quality of market data.
+
+        Args:
+            data: DataFrame with market data
+            symbol: Symbol name for reporting
+
+        Returns:
+            DataQualityReport with detailed quality assessment
+        """
+        return self._assess_data_quality(data, symbol=symbol)
+
+    def export_data(self,
+                   data: pd.DataFrame,
+                   output_path: str,
+                   format: str = "csv",
+                   include_metadata: bool = True) -> None:
+        """
+        Export data to file for external analysis.
+
+        Args:
+            data: DataFrame to export
+            output_path: Path where to save the data
+            format: Export format ("csv", "json", "parquet", "pickle")
+            include_metadata: Whether to include metadata in export
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Prepare data for export
+        export_data = data.copy()
+
+        if include_metadata and hasattr(data, 'attrs'):
+            metadata = data.attrs.copy()
+            metadata['exported_at'] = datetime.now().isoformat()
+            metadata['export_format'] = format
+        else:
+            metadata = {}
+
+        if format.lower() == "csv":
+            export_data.to_csv(output_path)
+            if metadata:
+                metadata_path = output_path.with_suffix('.metadata.json')
+                with open(metadata_path, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+
+        elif format.lower() == "json":
+            # Export as JSON with metadata
+            export_dict = {
+                'data': export_data.to_dict(orient='records'),
+                'index': export_data.index.tolist(),
+                'metadata': metadata
+            }
+            with open(output_path, 'w') as f:
+                json.dump(export_dict, f, indent=2, default=str)
+
+        elif format.lower() == "parquet":
+            export_data.to_parquet(output_path)
+            if metadata:
+                metadata_path = output_path.with_suffix('.metadata.json')
+                with open(metadata_path, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+
+        elif format.lower() == "pickle":
+            # Pickle preserves all metadata
+            export_dict = {
+                'data': export_data,
+                'metadata': metadata
+            }
+            with open(output_path, 'wb') as f:
+                pickle.dump(export_dict, f)
+        else:
+            raise ValueError(f"Unsupported export format: {format}")
+
+        logger.info(f"Exported {len(export_data)} records to {output_path}")
+
+    def import_data(self, file_path: str, format: Optional[str] = None) -> pd.DataFrame:
+        """
+        Import data from file.
+
+        Args:
+            file_path: Path to the data file
+            format: File format. If None, inferred from extension
+
+        Returns:
+            DataFrame with imported data
+        """
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Data file not found: {file_path}")
+
+        if format is None:
+            format = file_path.suffix.lower().lstrip('.')
+
+        if format == "csv":
+            data = pd.read_csv(file_path, index_col=0, parse_dates=True)
+
+            # Try to load metadata
+            metadata_path = file_path.with_suffix('.metadata.json')
+            if metadata_path.exists():
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                data.attrs = metadata
+
+        elif format == "json":
+            with open(file_path, 'r') as f:
+                json_data = json.load(f)
+
+            data = pd.DataFrame(json_data['data'])
+            if 'index' in json_data:
+                data.index = pd.to_datetime(json_data['index'])
+            if 'metadata' in json_data:
+                data.attrs = json_data['metadata']
+
+        elif format == "parquet":
+            data = pd.read_parquet(file_path)
+
+            # Try to load metadata
+            metadata_path = file_path.with_suffix('.metadata.json')
+            if metadata_path.exists():
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                data.attrs = metadata
+
+        elif format == "pickle":
+            with open(file_path, 'rb') as f:
+                pickle_data = pickle.load(f)
+
+            data = pickle_data['data']
+            if 'metadata' in pickle_data:
+                data.attrs = pickle_data['metadata']
+        else:
+            raise ValueError(f"Unsupported import format: {format}")
+
+        logger.info(f"Imported {len(data)} records from {file_path}")
+        return data
+
+    def clear_cache(self, older_than_hours: Optional[int] = None) -> int:
+        """
+        Clear cache entries.
+
+        Args:
+            older_than_hours: If specified, only clear entries older than this
+
+        Returns:
+            Number of entries cleared
+        """
+        cleared_count = 0
+
+        with self._cache_lock:
+            # Clear memory cache
+            if older_than_hours is None:
+                cleared_count += len(self._memory_cache)
+                self._memory_cache.clear()
+            else:
+                cutoff_time = time.time() - (older_than_hours * 3600)
+                keys_to_remove = [
+                    key for key, entry in self._memory_cache.items()
+                    if entry.timestamp < cutoff_time
+                ]
+                for key in keys_to_remove:
+                    del self._memory_cache[key]
+                cleared_count += len(keys_to_remove)
+
+            # Clear disk cache
+            if self.cache_dir.exists():
+                for cache_file in self.cache_dir.glob("*.cache"):
+                    if older_than_hours is None:
+                        cache_file.unlink()
+                        cleared_count += 1
+                    else:
+                        file_age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
+                        if file_age_hours > older_than_hours:
+                            cache_file.unlink()
+                            cleared_count += 1
+
+        logger.info(f"Cleared {cleared_count} cache entries")
+        return cleared_count
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics.
+
+        Returns:
+            Dictionary with cache statistics
+        """
+        with self._cache_lock:
+            memory_entries = len(self._memory_cache)
+            memory_size_mb = sum(
+                entry.data.memory_usage(deep=True).sum() / 1024 / 1024
+                for entry in self._memory_cache.values()
+            )
+
+            disk_entries = len(list(self.cache_dir.glob("*.cache"))) if self.cache_dir.exists() else 0
+            disk_size_mb = sum(
+                f.stat().st_size / 1024 / 1024
+                for f in self.cache_dir.glob("*.cache")
+            ) if self.cache_dir.exists() else 0
+
+        return {
+            'memory_cache': {
+                'entries': memory_entries,
+                'size_mb': round(memory_size_mb, 2),
+                'max_entries': self.memory_cache_size
+            },
+            'disk_cache': {
+                'entries': disk_entries,
+                'size_mb': round(disk_size_mb, 2),
+                'directory': str(self.cache_dir),
+                'ttl_hours': self.disk_cache_ttl_hours
+            }
+        }
+
+    # Private methods for internal functionality
+
+    def _initialize_data_sources(self) -> None:
+        """Initialize available data sources."""
+        if self.enable_real_data:
+            try:
+                # Initialize Hyperliquid connector
+                self._connectors['hyperliquid'] = HyperliquidConnector()
+                logger.debug("Initialized Hyperliquid connector")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Hyperliquid connector: {e}")
+
+    def _generate_cache_key(self, request: DataRequest) -> str:
+        """Generate a cache key for the request."""
+        key_parts = [
+            request.symbol.replace('/', '_').replace('-', '_'),
+            request.timeframe,
+            request.exchange or 'default'
+        ]
+
+        if request.days_back:
+            key_parts.append(f"days_{request.days_back}")
+        elif request.start_date and request.end_date:
+            key_parts.append(f"range_{request.start_date.date()}_{request.end_date.date()}")
+
+        return "_".join(key_parts)
+
+    def _get_from_cache(self, cache_key: str) -> Optional[pd.DataFrame]:
+        """Get data from cache if available and fresh."""
+        with self._cache_lock:
+            # Check memory cache first
+            if cache_key in self._memory_cache:
+                entry = self._memory_cache[cache_key]
+                if self._is_cache_entry_fresh(entry):
+                    return entry.data.copy()
+                else:
+                    # Remove stale entry
+                    del self._memory_cache[cache_key]
+
+            # Check disk cache
+            cache_file = self.cache_dir / f"{cache_key}.cache"
+            if cache_file.exists():
+                try:
+                    with open(cache_file, 'rb') as f:
+                        entry = pickle.load(f)
+
+                    if self._is_cache_entry_fresh(entry):
+                        # Move to memory cache
+                        self._memory_cache[cache_key] = entry
+                        self._evict_memory_cache_if_needed()
+                        return entry.data.copy()
+                    else:
+                        # Remove stale file
+                        cache_file.unlink()
+                except Exception as e:
+                    logger.warning(f"Failed to load cache file {cache_file}: {e}")
+                    cache_file.unlink(missing_ok=True)
+
+        return None
+
+    def _is_cache_entry_fresh(self, entry: CacheEntry) -> bool:
+        """Check if cache entry is still fresh."""
+        age_hours = (time.time() - entry.timestamp) / 3600
+        return age_hours < self.disk_cache_ttl_hours
+
+    def _fetch_from_source(self, request: DataRequest, source_type: DataSourceType) -> pd.DataFrame:
+        """Fetch data from the specified source type."""
+        if source_type == DataSourceType.REAL_EXCHANGE:
+            return self._fetch_real_data(request)
+        elif source_type == DataSourceType.SYNTHETIC:
+            return self._fetch_synthetic_data(request)
+        else:
+            raise ValueError(f"Unsupported source type: {source_type}")
+
+    def _fetch_real_data(self, request: DataRequest) -> pd.DataFrame:
+        """Fetch real data from exchange."""
+        if not self.enable_real_data:
+            raise DataFetchError("Real data fetching is disabled")
+
+        exchange = request.exchange or 'hyperliquid'
+        connector = self._connectors.get(exchange)
+
+        if not connector:
+            raise DataFetchError(f"No connector available for exchange: {exchange}")
+
+        # Implement retry logic
+        last_error = None
+        for attempt in range(self.retry_attempts):
+            try:
+                if request.days_back:
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=request.days_back)
+                else:
+                    start_date = request.start_date
+                    end_date = request.end_date
+
+                # Use the app's data manager for actual fetching
+                app_data_manager = AppDataManager()
+                data = app_data_manager.get_historical_data(
+                    symbol=request.symbol,
+                    timeframe=request.timeframe,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+
+                return data
+
+            except Exception as e:
+                last_error = e
+                if attempt < self.retry_attempts - 1:
+                    delay = self.DEFAULT_RETRY_DELAY * (2 ** attempt)  # Exponential backoff
+                    logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"All {self.retry_attempts} attempts failed")
+
+        raise DataFetchError(f"Failed to fetch real data after {self.retry_attempts} attempts: {last_error}")
+
+    def _fetch_synthetic_data(self, request: DataRequest) -> pd.DataFrame:
+        """Fetch synthetic data."""
+        days = request.days_back or 30
+        return self.generate_synthetic_data(
+            symbol=request.symbol,
+            timeframe=request.timeframe,
+            days=days,
+            pattern="trend",  # Default pattern
+            seed=42  # Deterministic for testing
+        )
+
+    def _assess_data_quality(self, data: pd.DataFrame, request: Optional[DataRequest] = None, symbol: str = "unknown") -> DataQualityReport:
+        """Assess the quality of market data."""
+        total_records = len(data)
+
+        if total_records == 0:
+            return DataQualityReport(
+                quality_level=DataQuality.INVALID,
+                total_records=0,
+                missing_records=0,
+                duplicate_records=0,
+                data_gaps=[],
+                timestamp_issues=["No data available"],
+                price_anomalies=[],
+                recommendations=["Fetch data from alternative source"]
+            )
+
+        # Check for required columns
+        required_columns = ['open', 'high', 'low', 'close', 'volume']
+        missing_columns = [col for col in required_columns if col not in data.columns]
+
+        if missing_columns:
+            return DataQualityReport(
+                quality_level=DataQuality.INVALID,
+                total_records=total_records,
+                missing_records=0,
+                duplicate_records=0,
+                data_gaps=[],
+                timestamp_issues=[f"Missing columns: {missing_columns}"],
+                price_anomalies=[],
+                recommendations=[f"Ensure data includes columns: {required_columns}"]
+            )
+
+        # Check for missing values
+        missing_records = data[required_columns].isnull().sum().sum()
+        missing_percentage = (missing_records / (total_records * len(required_columns))) * 100
+
+        # Check for duplicates
+        duplicate_records = data.index.duplicated().sum()
+
+        # Check for data gaps
+        data_gaps = self._find_data_gaps(data)
+
+        # Check timestamp issues
+        timestamp_issues = []
+        if not isinstance(data.index, pd.DatetimeIndex):
+            timestamp_issues.append("Index is not datetime-based")
+        elif data.index.duplicated().any():
+            timestamp_issues.append("Duplicate timestamps found")
+        elif not data.index.is_monotonic_increasing:
+            timestamp_issues.append("Timestamps are not in chronological order")
+
+        # Check price anomalies
+        price_anomalies = self._detect_price_anomalies(data)
+
+        # Determine quality level
+        if missing_percentage > 50 or len(timestamp_issues) > 0:
+            quality_level = DataQuality.INVALID
+        elif missing_percentage > 20 or duplicate_records > total_records * 0.1:
+            quality_level = DataQuality.POOR
+        elif missing_percentage > 5 or len(data_gaps) > 5:
+            quality_level = DataQuality.ACCEPTABLE
+        elif missing_percentage > 1 or len(price_anomalies) > 0:
+            quality_level = DataQuality.GOOD
+        else:
+            quality_level = DataQuality.EXCELLENT
+
+        # Generate recommendations
+        recommendations = []
+        if missing_percentage > 0:
+            recommendations.append(f"Fill {missing_records} missing values")
+        if duplicate_records > 0:
+            recommendations.append(f"Remove {duplicate_records} duplicate records")
+        if len(data_gaps) > 0:
+            recommendations.append(f"Address {len(data_gaps)} data gaps")
+        if len(price_anomalies) > 0:
+            recommendations.append(f"Review {len(price_anomalies)} price anomalies")
+
+        return DataQualityReport(
+            quality_level=quality_level,
+            total_records=total_records,
+            missing_records=missing_records,
+            duplicate_records=duplicate_records,
+            data_gaps=data_gaps,
+            timestamp_issues=timestamp_issues,
+            price_anomalies=price_anomalies,
+            recommendations=recommendations
+        )
+
+    def _find_data_gaps(self, data: pd.DataFrame) -> List[Tuple[datetime, datetime]]:
+        """Find gaps in the data timeline."""
+        if len(data) < 2:
+            return []
+
+        gaps = []
+        time_diffs = data.index.to_series().diff()
+        median_diff = time_diffs.median()
+
+        # Consider a gap if the time difference is more than 2x the median
+        gap_threshold = median_diff * 2
+
+        for i, diff in enumerate(time_diffs):
+            if pd.notna(diff) and diff > gap_threshold:
+                gap_start = data.index[i-1]
+                gap_end = data.index[i]
+                gaps.append((gap_start, gap_end))
+
+        return gaps
+
+    def _detect_price_anomalies(self, data: pd.DataFrame) -> List[str]:
+        """Detect price anomalies in the data."""
+        anomalies = []
+
+        if len(data) < 10:  # Need minimum data for analysis
+            return anomalies
+
+        # Check for impossible OHLC relationships
+        invalid_ohlc = (
+            (data['high'] < data['low']) |
+            (data['high'] < data['open']) |
+            (data['high'] < data['close']) |
+            (data['low'] > data['open']) |
+            (data['low'] > data['close'])
+        )
+
+        if invalid_ohlc.any():
+            anomalies.append(f"Invalid OHLC relationships in {invalid_ohlc.sum()} records")
+
+        # Check for extreme price movements (>50% in single candle)
+        if 'close' in data.columns:
+            returns = data['close'].pct_change()
+            extreme_moves = abs(returns) > 0.5
+            if extreme_moves.any():
+                anomalies.append(f"Extreme price movements (>50%) in {extreme_moves.sum()} records")
+
+        # Check for zero or negative prices
+        price_columns = ['open', 'high', 'low', 'close']
+        for col in price_columns:
+            if col in data.columns:
+                invalid_prices = data[col] <= 0
+                if invalid_prices.any():
+                    anomalies.append(f"Zero or negative {col} prices in {invalid_prices.sum()} records")
+
+        return anomalies
+
+    def _cache_data(self,
+                   cache_key: str,
+                   data: pd.DataFrame,
+                   source: DataSourceType,
+                   quality_report: DataQualityReport,
+                   request: DataRequest) -> None:
+        """Cache data for future use."""
+        entry = CacheEntry(
+            data=data.copy(),
+            timestamp=time.time(),
+            source=source,
+            quality_report=quality_report,
+            metadata={
+                'symbol': request.symbol,
+                'timeframe': request.timeframe,
+                'exchange': request.exchange,
+                'cache_key': cache_key
+            }
+        )
+
+        with self._cache_lock:
+            # Add to memory cache
+            self._memory_cache[cache_key] = entry
+            self._evict_memory_cache_if_needed()
+
+            # Save to disk cache
+            try:
+                cache_file = self.cache_dir / f"{cache_key}.cache"
+                with open(cache_file, 'wb') as f:
+                    pickle.dump(entry, f)
+            except Exception as e:
+                logger.warning(f"Failed to save cache file: {e}")
+
+    def _evict_memory_cache_if_needed(self) -> None:
+        """Evict oldest entries if memory cache is full."""
+        while len(self._memory_cache) > self.memory_cache_size:
+            # Remove oldest entry
+            oldest_key = min(self._memory_cache.keys(),
+                           key=lambda k: self._memory_cache[k].timestamp)
+            del self._memory_cache[oldest_key]
+
+    def _get_candles_per_day(self, timeframe: str) -> float:
+        """Get number of candles per day for a timeframe."""
+        timeframe_minutes = self._timeframe_to_minutes(timeframe)
+        return 1440 / timeframe_minutes  # 1440 minutes in a day
+
+    def _timeframe_to_minutes(self, timeframe: str) -> int:
+        """Convert timeframe string to minutes."""
+        timeframe = timeframe.lower()
+
+        if timeframe.endswith('m'):
+            return int(timeframe[:-1])
+        elif timeframe.endswith('h'):
+            return int(timeframe[:-1]) * 60
+        elif timeframe.endswith('d'):
+            return int(timeframe[:-1]) * 1440
+        elif timeframe == '1min':
+            return 1
+        elif timeframe == '1hour':
+            return 60
+        elif timeframe == '1day':
+            return 1440
+        else:
+            # Default to 1 hour if can't parse
+            logger.warning(f"Unknown timeframe {timeframe}, defaulting to 60 minutes")
+            return 60

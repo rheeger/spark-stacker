@@ -407,5 +407,50 @@ def version():
     click.echo("Spark-App CLI v1.0.0 (Migrated to modular architecture)")
     click.echo("Original functionality preserved during migration.")
 
+
+# Register all command modules
+def register_all_commands():
+    """Register all command handler modules with the CLI group."""
+    try:
+        # Use absolute imports for direct script execution
+        import os
+        import sys
+
+        # Get the directory of this script
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        commands_dir = os.path.join(current_dir, 'commands')
+
+        # Add the commands directory to Python path temporarily
+        if commands_dir not in sys.path:
+            sys.path.insert(0, commands_dir)
+
+        # Import the registration functions
+        from comparison_commands import register_comparison_commands
+        from indicator_commands import register_indicator_commands
+        from list_commands import register_list_commands
+        from strategy_commands import register_strategy_commands
+        from utility_commands import register_utility_commands
+
+        # Register each command module
+        register_strategy_commands(cli)
+        register_indicator_commands(cli)
+        register_comparison_commands(cli)
+        register_list_commands(cli)
+        register_utility_commands(cli)
+
+        logger.info("All command modules registered successfully")
+
+    except ImportError as e:
+        logger.error(f"Failed to import command modules: {e}")
+        click.echo(f"⚠️  Warning: Some commands may not be available due to import error: {e}", err=True)
+    except Exception as e:
+        logger.error(f"Failed to register command modules: {e}")
+        click.echo(f"⚠️  Warning: Command registration failed: {e}", err=True)
+
+
+# Register commands when module is imported
+register_all_commands()
+
+
 if __name__ == '__main__':
     cli()

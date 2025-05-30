@@ -8,15 +8,28 @@ This package contains core business logic modules for the CLI:
 - scenario_manager: Multi-scenario testing coordination and execution
 """
 
-# TODO: Import core classes when modules are implemented
-# from .config_manager import ConfigManager
-# from .data_manager import DataManager
+# Import implemented core classes
+from .config_manager import (ConfigManager, ConfigurationError,
+                             ConfigValidationError)
+from .data_manager import (DataFetchError, DataManager, DataQuality,
+                           DataQualityError, DataQualityReport, DataRequest,
+                           DataSourceType)
+
+# TODO: Import remaining core classes when modules are implemented
 # from .backtest_orchestrator import BacktestOrchestrator
 # from .scenario_manager import ScenarioManager
 
 __all__ = [
-    # "ConfigManager",
-    # "DataManager",
+    "ConfigManager",
+    "ConfigurationError",
+    "ConfigValidationError",
+    "DataManager",
+    "DataRequest",
+    "DataQuality",
+    "DataQualityReport",
+    "DataSourceType",
+    "DataFetchError",
+    "DataQualityError",
     # "BacktestOrchestrator",
     # "ScenarioManager"
 ]
