@@ -460,37 +460,37 @@ of concerns.
 
 ### 2.4 Multi-Scenario Testing Framework
 
-- [ ] **Enhanced market scenario generator** (now in `cli/core/scenario_manager.py`)
+- [x] **Enhanced market scenario generator** (now in `cli/core/scenario_manager.py`)
 
-  - [ ] Add **bull market scenario** (consistent uptrend with 60-80% up days)
-  - [ ] Add **bear market scenario** (consistent downtrend with 60-80% down days)
-  - [ ] Add **sideways/range-bound scenario** (oscillating within 5-10% range)
-  - [ ] Add **high volatility scenario** (large daily swings, 15-25% moves)
-  - [ ] Add **low volatility scenario** (minimal daily changes, <2% moves)
-  - [ ] Add **choppy market scenario** (frequent direction changes, whipsaws)
-  - [ ] Add **gap-heavy scenario** (frequent price gaps, simulating news events)
-  - [ ] Ensure all scenarios generate data for the exact same timeframe duration
-  - [ ] **Integrate with DataManager for centralized data operations**
+  - [x] Add **bull market scenario** (consistent uptrend with 60-80% up days)
+  - [x] Add **bear market scenario** (consistent downtrend with 60-80% down days)
+  - [x] Add **sideways/range-bound scenario** (oscillating within 5-10% range)
+  - [x] Add **high volatility scenario** (large daily swings, 15-25% moves)
+  - [x] Add **low volatility scenario** (minimal daily changes, <2% moves)
+  - [x] Add **choppy market scenario** (frequent direction changes, whipsaws)
+  - [x] Add **gap-heavy scenario** (frequent price gaps, simulating news events)
+  - [x] Ensure all scenarios generate data for the exact same timeframe duration
+  - [x] **Integrate with DataManager for centralized data operations**
 
-- [ ] **Add real data parallel testing** (in `cli/core/data_manager.py`)
+- [x] **Add real data parallel testing** (in `cli/core/data_manager.py`)
 
-  - [ ] Fetch real market data for the same symbol and timeframe duration
-  - [ ] Ensure real data covers the exact same time period as synthetic scenarios
-  - [ ] Add fallback to alternative time periods if recent data insufficient
-  - [ ] Cache real data to avoid repeated API calls during testing
-  - [ ] Add data quality validation (sufficient candles, no gaps) through DataValidator
-  - [ ] **Coordinate with ScenarioManager for scenario execution**
+  - [x] Fetch real market data for the same symbol and timeframe duration
+  - [x] Ensure real data covers the exact same time period as synthetic scenarios
+  - [x] Add fallback to alternative time periods if recent data insufficient
+  - [x] Cache real data to avoid repeated API calls during testing
+  - [x] Add data quality validation (sufficient candles, no gaps) through DataValidator
+  - [x] **Coordinate with ScenarioManager for scenario execution**
 
-- [ ] **Enhanced scenario-based backtesting pipeline** (now in
+- [x] **Enhanced scenario-based backtesting pipeline** (now in
       `cli/managers/scenario_backtest_manager.py`)
-  - [ ] Run strategy against all synthetic market scenarios
-  - [ ] Run strategy against real market data for same duration
-  - [ ] Collect performance metrics for each scenario independently
-  - [ ] Ensure consistent position sizing and risk parameters across scenarios
-  - [ ] Add scenario labeling and metadata tracking
-  - [ ] Implement parallel execution for faster scenario testing
-  - [ ] **Integrate with BacktestOrchestrator for workflow coordination**
-  - [ ] **Use ScenarioReporter for comprehensive scenario reporting**
+  - [x] Run strategy against all synthetic market scenarios
+  - [x] Run strategy against real market data for same duration
+  - [x] Collect performance metrics for each scenario independently
+  - [x] Ensure consistent position sizing and risk parameters across scenarios
+  - [x] Add scenario labeling and metadata tracking
+  - [x] Implement parallel execution for faster scenario testing
+  - [x] **Integrate with BacktestOrchestrator for workflow coordination**
+  - [x] **Use ScenarioReporter for comprehensive scenario reporting**
 
 ## 🏗️ **3. Enhanced Reporting System**
 
