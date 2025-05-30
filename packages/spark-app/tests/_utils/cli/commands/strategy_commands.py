@@ -9,6 +9,7 @@ This module contains CLI commands for strategy backtesting and management:
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -405,11 +406,19 @@ def compare_strategies(ctx, strategy_names: Optional[str], all_strategies: bool,
             days=days
         )
 
-        # Generate comparison report
-        comparison_reporter = ComparisonReporter(config_manager, data_manager, output_path)
-        report_path = comparison_reporter.generate_comparison_report(
-            comparison_results=comparison_results,
-            output_format='html'
+        # Generate comparison report using correct initialization and method
+        comparison_reporter = ComparisonReporter(config_manager, comparison_manager)
+
+        # Prepare output path for report
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_filename = f"strategy_comparison_{timestamp}.html"
+        report_path = output_path / report_filename
+
+        # Generate the strategy comparison report
+        report_data = comparison_reporter.generate_strategy_comparison_report(
+            strategy_names=strategy_names_list,
+            comparison_results=comparison_results.strategy_results,
+            output_path=report_path
         )
 
         # Display summary results
@@ -417,18 +426,79 @@ def compare_strategies(ctx, strategy_names: Optional[str], all_strategies: bool,
         click.echo(f"📊 Strategies compared: {len(comparison_results.strategy_results)}")
         click.echo(f"🎲 Scenarios tested: {len(scenario_list)}")
 
-        # Show ranking summary
-        click.echo(f"\n🏆 Strategy Rankings (by average return):")
-        sorted_strategies = sorted(
-            comparison_results.strategy_results.items(),
-            key=lambda x: x[1].overall_metrics.get('average_return_pct', 0),
-            reverse=True
-        )
+        # Show ranking summary from report data
+        click.echo(f"\n🏆 Strategy Rankings:")
+        ranking_analysis = report_data.get('ranking_analysis', {})
+        final_ranking = ranking_analysis.get('final_ranking', [])
 
-        for i, (strategy_name, results) in enumerate(sorted_strategies[:5], 1):  # Top 5
-            avg_return = results.overall_metrics.get('average_return_pct', 0)
-            consistency = results.overall_metrics.get('consistency_score', 0)
-            click.echo(f"   {i}. {strategy_name}: {avg_return:.1f}% avg return, {consistency:.1f}% consistency")
+        for i, (strategy_name, score_data) in enumerate(final_ranking[:5], 1):  # Top 5
+            total_score = score_data.get('total_score', 0)
+            click.echo(f"   {i}. {strategy_name}: Score {total_score}")
+
+        # Show performance comparison summary
+        performance_comparison = report_data.get('performance_comparison', {})
+        best_performers = performance_comparison.get('best_performers', {})
+
+        if best_performers:
+            click.echo(f"\n🥇 Best Performers by Metric:")
+            for metric, performer_data in best_performers.items():
+                strategy = performer_data.get('strategy', 'Unknown')
+                value = performer_data.get('value', 0)
+                click.echo(f"   • {metric.replace('_', ' ').title()}: {strategy} ({value:.2f})")
+
+        # Show diversification insights
+        diversification_analysis = report_data.get('diversification_analysis', {})
+        diversification_insights = diversification_analysis.get('diversification_insights', [])
+
+        if diversification_insights:
+            click.echo(f"\n🔄 Diversification Insights:")
+            for insight in diversification_insights[:3]:  # Top 3 insights
+                click.echo(f"   • {insight}")
+
+        # Show portfolio allocation suggestions
+        allocation_suggestions = report_data.get('allocation_suggestions', {})
+        recommended_allocations = allocation_suggestions.get('recommended_allocations', {})
+
+        if recommended_allocations:
+            click.echo(f"\n💼 Recommended Portfolio Allocation:")
+            for strategy, allocation in recommended_allocations.items():
+                if allocation > 0:
+                    click.echo(f"   • {strategy}: {allocation}%")
+
+        # Show market condition analysis
+        market_condition_analysis = report_data.get('market_condition_analysis', {})
+        best_performers_by_condition = market_condition_analysis.get('best_performers_by_condition', {})
+
+        if best_performers_by_condition:
+            click.echo(f"\n🌊 Best Performers by Market Condition:")
+            for condition, performer_data in best_performers_by_condition.items():
+                strategy = performer_data.get('strategy', 'Unknown')
+                return_pct = performer_data.get('return', 0)
+                click.echo(f"   • {condition.title()}: {strategy} ({return_pct:.1f}%)")
+
+        # Show adaptability scores
+        adaptability_scores = market_condition_analysis.get('adaptability_scores', {})
+        if adaptability_scores:
+            click.echo(f"\n🎯 Strategy Adaptability (Consistency Across Conditions):")
+            sorted_adaptability = sorted(adaptability_scores.items(),
+                                       key=lambda x: x[1].get('score', 0), reverse=True)
+            for strategy, score_data in sorted_adaptability[:3]:  # Top 3
+                score = score_data.get('score', 0)
+                mean_return = score_data.get('mean_return', 0)
+                click.echo(f"   • {strategy}: {score:.1f}/100 (avg {mean_return:.1f}% across conditions)")
+
+        # Show sensitivity analysis highlights
+        sensitivity_analysis = report_data.get('sensitivity_analysis', {})
+        optimization_potential = sensitivity_analysis.get('optimization_potential', {})
+
+        high_priority_strategies = sensitivity_analysis.get('parameter_impact_rankings', {}).get('high_priority_strategies', [])
+        if high_priority_strategies:
+            click.echo(f"\n⚡ High Optimization Potential:")
+            for strategy in high_priority_strategies[:3]:  # Top 3
+                strategy_data = optimization_potential.get(strategy, {})
+                improvement = strategy_data.get('max_estimated_improvement', 0)
+                optimization = strategy_data.get('best_optimization', 'Unknown')
+                click.echo(f"   • {strategy}: +{improvement:.1f}% potential via {optimization}")
 
         click.echo(f"\n📋 Detailed comparison report saved to: {report_path}")
 

@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ..core.config_manager import ConfigManager
 from ..managers.comparison_manager import ComparisonManager
+from .scenario_reporter import ScenarioReporter
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,8 @@ class ComparisonReporter:
         """
         self.config_manager = config_manager
         self.comparison_manager = comparison_manager
+        # Initialize ScenarioReporter for cross-scenario analysis
+        self.scenario_reporter = ScenarioReporter(config_manager)
 
     def generate_strategy_comparison_report(
         self,
@@ -76,6 +79,8 @@ class ComparisonReporter:
                 "statistical_analysis": self._perform_statistical_analysis(comparison_results),
                 "correlation_analysis": self._analyze_strategy_correlations(comparison_results),
                 "diversification_analysis": self._analyze_diversification_benefits(comparison_results),
+                "market_condition_analysis": self._analyze_performance_by_market_condition(comparison_results),
+                "sensitivity_analysis": self._perform_sensitivity_analysis(strategy_names, comparison_results),
                 "optimization_recommendations": self._generate_comparison_optimizations(comparison_results),
                 "allocation_suggestions": self._suggest_portfolio_allocation(comparison_results)
             }
@@ -502,6 +507,357 @@ class ComparisonReporter:
             "portfolio_expected_return": self._calculate_portfolio_expected_return(allocations, strategy_metrics),
             "portfolio_expected_risk": self._calculate_portfolio_expected_risk(allocations, strategy_metrics)
         }
+
+    def _analyze_performance_by_market_condition(self, comparison_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Analyze strategy performance by different market conditions using scenario data.
+        Coordinates with ScenarioReporter for cross-scenario analysis.
+        """
+        logger.info("Analyzing performance by market condition")
+
+        market_condition_analysis = {
+            "scenario_performance": {},
+            "best_performers_by_condition": {},
+            "worst_performers_by_condition": {},
+            "condition_rankings": {},
+            "adaptability_scores": {}
+        }
+
+        # Define market conditions (scenarios)
+        market_conditions = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps"]
+
+        # Extract scenario-specific performance data
+        for condition in market_conditions:
+            market_condition_analysis["scenario_performance"][condition] = {}
+            condition_returns = {}
+
+            for strategy_name, results in comparison_results.items():
+                scenario_results = results.get("scenario_results", {})
+                condition_result = scenario_results.get(condition, {})
+
+                if condition_result:
+                    performance = condition_result.get("performance_metrics", {})
+                    total_return = performance.get("total_return", 0)
+                    condition_returns[strategy_name] = total_return
+
+                    market_condition_analysis["scenario_performance"][condition][strategy_name] = {
+                        "total_return": total_return,
+                        "win_rate": performance.get("win_rate", 0),
+                        "max_drawdown": performance.get("max_drawdown", 0),
+                        "sharpe_ratio": performance.get("sharpe_ratio", 0)
+                    }
+
+            # Identify best and worst performers for this condition
+            if condition_returns:
+                best_strategy = max(condition_returns.keys(), key=lambda x: condition_returns[x])
+                worst_strategy = min(condition_returns.keys(), key=lambda x: condition_returns[x])
+
+                market_condition_analysis["best_performers_by_condition"][condition] = {
+                    "strategy": best_strategy,
+                    "return": condition_returns[best_strategy]
+                }
+                market_condition_analysis["worst_performers_by_condition"][condition] = {
+                    "strategy": worst_strategy,
+                    "return": condition_returns[worst_strategy]
+                }
+
+                # Rank strategies for this condition
+                ranked_strategies = sorted(condition_returns.items(), key=lambda x: x[1], reverse=True)
+                market_condition_analysis["condition_rankings"][condition] = ranked_strategies
+
+        # Calculate adaptability scores (consistency across conditions)
+        for strategy_name in comparison_results.keys():
+            returns_across_conditions = []
+
+            for condition in market_conditions:
+                condition_data = market_condition_analysis["scenario_performance"].get(condition, {})
+                strategy_data = condition_data.get(strategy_name, {})
+                if strategy_data:
+                    returns_across_conditions.append(strategy_data.get("total_return", 0))
+
+            if returns_across_conditions:
+                # Calculate coefficient of variation (lower is more consistent)
+                mean_return = statistics.mean(returns_across_conditions)
+                if mean_return != 0:
+                    std_dev = statistics.stdev(returns_across_conditions) if len(returns_across_conditions) > 1 else 0
+                    cv = std_dev / abs(mean_return)
+                    adaptability_score = max(0, 100 - (cv * 50))  # Convert to 0-100 scale
+                else:
+                    adaptability_score = 0
+
+                market_condition_analysis["adaptability_scores"][strategy_name] = {
+                    "score": round(adaptability_score, 2),
+                    "mean_return": round(mean_return, 2),
+                    "std_dev": round(std_dev, 2) if len(returns_across_conditions) > 1 else 0,
+                    "coefficient_of_variation": round(cv, 3) if mean_return != 0 else 0
+                }
+
+        return market_condition_analysis
+
+    def _perform_sensitivity_analysis(self, strategy_names: List[str], comparison_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Perform sensitivity analysis for position sizing and timeframe changes.
+        """
+        logger.info("Performing sensitivity analysis for strategy parameters")
+
+        sensitivity_analysis = {
+            "position_sizing_sensitivity": {},
+            "timeframe_sensitivity": {},
+            "parameter_impact_rankings": {},
+            "optimization_potential": {}
+        }
+
+        for strategy_name in strategy_names:
+            try:
+                strategy_config = self.config_manager.get_strategy_config(strategy_name)
+                if not strategy_config:
+                    continue
+
+                current_results = comparison_results.get(strategy_name, {})
+                baseline_return = current_results.get("performance_metrics", {}).get("total_return", 0)
+
+                # Position sizing sensitivity analysis
+                current_position_sizing = strategy_config.get("position_sizing", {})
+                position_sizing_variants = self._generate_position_sizing_variants(current_position_sizing)
+
+                sensitivity_analysis["position_sizing_sensitivity"][strategy_name] = {
+                    "baseline_return": baseline_return,
+                    "current_method": current_position_sizing.get("method", "unknown"),
+                    "sensitivity_estimates": self._estimate_position_sizing_impact(
+                        strategy_name, position_sizing_variants, baseline_return
+                    )
+                }
+
+                # Timeframe sensitivity analysis
+                current_timeframe = strategy_config.get("timeframe", "1h")
+                timeframe_variants = self._generate_timeframe_variants(current_timeframe)
+
+                sensitivity_analysis["timeframe_sensitivity"][strategy_name] = {
+                    "baseline_return": baseline_return,
+                    "current_timeframe": current_timeframe,
+                    "sensitivity_estimates": self._estimate_timeframe_impact(
+                        strategy_name, timeframe_variants, baseline_return
+                    )
+                }
+
+                # Calculate optimization potential
+                max_estimated_improvement = 0
+                best_optimization_type = None
+
+                for variant_data in sensitivity_analysis["position_sizing_sensitivity"][strategy_name]["sensitivity_estimates"]:
+                    improvement = variant_data.get("estimated_improvement", 0)
+                    if improvement > max_estimated_improvement:
+                        max_estimated_improvement = improvement
+                        best_optimization_type = f"Position sizing: {variant_data['method']}"
+
+                for variant_data in sensitivity_analysis["timeframe_sensitivity"][strategy_name]["sensitivity_estimates"]:
+                    improvement = variant_data.get("estimated_improvement", 0)
+                    if improvement > max_estimated_improvement:
+                        max_estimated_improvement = improvement
+                        best_optimization_type = f"Timeframe: {variant_data['timeframe']}"
+
+                sensitivity_analysis["optimization_potential"][strategy_name] = {
+                    "max_estimated_improvement": round(max_estimated_improvement, 2),
+                    "best_optimization": best_optimization_type,
+                    "optimization_priority": "high" if max_estimated_improvement > 20 else
+                                          "medium" if max_estimated_improvement > 10 else "low"
+                }
+
+            except Exception as e:
+                logger.warning(f"Sensitivity analysis failed for strategy {strategy_name}: {e}")
+                sensitivity_analysis["optimization_potential"][strategy_name] = {
+                    "error": str(e)
+                }
+
+        # Rank strategies by optimization potential
+        optimization_rankings = sorted(
+            [(name, data.get("max_estimated_improvement", 0))
+             for name, data in sensitivity_analysis["optimization_potential"].items()
+             if "max_estimated_improvement" in data],
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        sensitivity_analysis["parameter_impact_rankings"] = {
+            "by_optimization_potential": optimization_rankings,
+            "high_priority_strategies": [
+                name for name, data in sensitivity_analysis["optimization_potential"].items()
+                if data.get("optimization_priority") == "high"
+            ]
+        }
+
+        return sensitivity_analysis
+
+    def _generate_position_sizing_variants(self, current_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate position sizing variants for sensitivity analysis."""
+        current_method = current_config.get("method", "fixed_usd")
+        current_value = current_config.get("value", 100)
+
+        variants = []
+
+        if current_method == "fixed_usd":
+            # Test different USD amounts
+            test_amounts = [50, 100, 200, 500, 1000]
+            for amount in test_amounts:
+                if amount != current_value:
+                    variants.append({"method": "fixed_usd", "value": amount})
+
+            # Test percentage-based sizing
+            variants.extend([
+                {"method": "percent_balance", "value": 1.0},
+                {"method": "percent_balance", "value": 2.0},
+                {"method": "percent_balance", "value": 5.0}
+            ])
+
+        elif current_method == "percent_balance":
+            # Test different percentages
+            test_percentages = [0.5, 1.0, 2.0, 5.0, 10.0]
+            for percentage in test_percentages:
+                if percentage != current_value:
+                    variants.append({"method": "percent_balance", "value": percentage})
+
+            # Test fixed USD sizing
+            variants.extend([
+                {"method": "fixed_usd", "value": 100},
+                {"method": "fixed_usd", "value": 500},
+                {"method": "fixed_usd", "value": 1000}
+            ])
+
+        # Add volatility-based sizing
+        variants.append({"method": "volatility_adjusted", "value": 2.0})
+
+        return variants[:5]  # Limit to 5 variants for efficiency
+
+    def _generate_timeframe_variants(self, current_timeframe: str) -> List[str]:
+        """Generate timeframe variants for sensitivity analysis."""
+        all_timeframes = ["15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d"]
+
+        try:
+            current_index = all_timeframes.index(current_timeframe)
+        except ValueError:
+            current_index = 2  # Default to 1h if current timeframe not found
+
+        # Generate variants around current timeframe
+        variants = []
+        for i in range(max(0, current_index - 2), min(len(all_timeframes), current_index + 3)):
+            if i != current_index:
+                variants.append(all_timeframes[i])
+
+        return variants
+
+    def _estimate_position_sizing_impact(
+        self, strategy_name: str, variants: List[Dict[str, Any]], baseline_return: float
+    ) -> List[Dict[str, Any]]:
+        """Estimate the impact of different position sizing methods."""
+        estimates = []
+
+        for variant in variants:
+            method = variant.get("method", "unknown")
+            value = variant.get("value", 0)
+
+            # Simplified impact estimation based on method characteristics
+            estimated_impact = 0
+            risk_factor = 1.0
+
+            if method == "fixed_usd":
+                # Fixed USD sizing impact based on amount
+                if value > 500:
+                    estimated_impact = 5  # Higher amounts may reduce relative transaction costs
+                    risk_factor = 1.2  # But increase risk
+                elif value < 100:
+                    estimated_impact = -10  # Very small positions may hurt performance
+                    risk_factor = 0.8
+
+            elif method == "percent_balance":
+                # Percentage-based sizing impact
+                if 1.0 <= value <= 3.0:
+                    estimated_impact = 10  # Optimal range for many strategies
+                    risk_factor = 1.0
+                elif value > 5.0:
+                    estimated_impact = 15  # Higher returns but much higher risk
+                    risk_factor = 2.0
+                elif value < 1.0:
+                    estimated_impact = -5  # Too conservative
+                    risk_factor = 0.5
+
+            elif method == "volatility_adjusted":
+                estimated_impact = 12  # Generally good for adapting to market conditions
+                risk_factor = 0.9
+
+            # Estimate new return (simplified)
+            estimated_return = baseline_return * (1 + estimated_impact / 100) * risk_factor
+            estimated_improvement = ((estimated_return - baseline_return) / baseline_return * 100) if baseline_return != 0 else 0
+
+            estimates.append({
+                "method": method,
+                "value": value,
+                "estimated_return": round(estimated_return, 2),
+                "estimated_improvement": round(estimated_improvement, 2),
+                "risk_factor": risk_factor,
+                "confidence": "low"  # These are rough estimates
+            })
+
+        return estimates
+
+    def _estimate_timeframe_impact(
+        self, strategy_name: str, variants: List[str], baseline_return: float
+    ) -> List[Dict[str, Any]]:
+        """Estimate the impact of different timeframes."""
+        estimates = []
+
+        # Get strategy configuration to understand indicator characteristics
+        try:
+            strategy_config = self.config_manager.get_strategy_config(strategy_name)
+            indicators = strategy_config.get("indicators", {})
+        except:
+            indicators = {}
+
+        for timeframe in variants:
+            # Simplified impact estimation based on timeframe characteristics
+            estimated_impact = 0
+
+            # Shorter timeframes
+            if timeframe in ["15m", "30m"]:
+                if any("momentum" in str(indicator).lower() for indicator in indicators.values()):
+                    estimated_impact = 8  # Momentum strategies may benefit from shorter timeframes
+                else:
+                    estimated_impact = -5  # But may add noise for other strategies
+
+            # Medium timeframes
+            elif timeframe in ["2h", "4h"]:
+                estimated_impact = 3  # Generally good balance
+
+            # Longer timeframes
+            elif timeframe in ["8h", "12h", "1d"]:
+                if any("trend" in str(indicator).lower() for indicator in indicators.values()):
+                    estimated_impact = 10  # Trend strategies may benefit from longer timeframes
+                else:
+                    estimated_impact = 0  # Neutral for others
+
+            # Estimate new return
+            estimated_return = baseline_return * (1 + estimated_impact / 100)
+            estimated_improvement = ((estimated_return - baseline_return) / baseline_return * 100) if baseline_return != 0 else 0
+
+            estimates.append({
+                "timeframe": timeframe,
+                "estimated_return": round(estimated_return, 2),
+                "estimated_improvement": round(estimated_improvement, 2),
+                "rationale": self._get_timeframe_rationale(timeframe, indicators),
+                "confidence": "low"  # These are rough estimates
+            })
+
+        return estimates
+
+    def _get_timeframe_rationale(self, timeframe: str, indicators: Dict[str, Any]) -> str:
+        """Get rationale for timeframe impact estimation."""
+        if timeframe in ["15m", "30m"]:
+            return "Shorter timeframes may capture quick momentum but add noise"
+        elif timeframe in ["2h", "4h"]:
+            return "Medium timeframes provide good balance of signal and noise"
+        elif timeframe in ["8h", "12h", "1d"]:
+            return "Longer timeframes may capture stronger trends but miss quick opportunities"
+        else:
+            return "Impact depends on strategy characteristics"
 
     # Helper methods
     def _calculate_normalized_score(self, strategy_name: str, side_by_side: Dict[str, Dict[str, Any]]) -> float:
