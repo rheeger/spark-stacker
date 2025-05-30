@@ -29,13 +29,19 @@ import pandas as pd
 
 matplotlib.use('Agg')  # Use non-interactive backend
 
-# Add the app directory to the path for proper imports
+# Add the CLI directory to the path for proper imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 # Navigate up levels: cli -> _utils -> tests -> spark-app (where app directory is)
 spark_app_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 # Path to the tests directory
 tests_dir = os.path.dirname(os.path.dirname(current_dir))
+# Add the CLI directory to the path
+cli_dir = current_dir
+commands_dir = os.path.join(current_dir, 'commands')
 sys.path.insert(0, spark_app_dir)
+sys.path.insert(0, tests_dir)
+sys.path.insert(0, cli_dir)
+sys.path.insert(0, commands_dir)
 
 # Now use absolute imports with correct file names
 from app.backtesting.backtest_engine import BacktestEngine
@@ -416,12 +422,12 @@ def version():
 def register_all_commands():
     """Register all command handler modules with the CLI group."""
     try:
-        # Import the registration functions using relative imports
-        from .commands import (register_comparison_commands,
-                               register_indicator_commands,
-                               register_list_commands,
-                               register_strategy_commands,
-                               register_utility_commands)
+        # Import the registration functions directly from each module
+        from comparison_commands import register_comparison_commands
+        from indicator_commands import register_indicator_commands
+        from list_commands import register_list_commands
+        from strategy_commands import register_strategy_commands
+        from utility_commands import register_utility_commands
 
         # Register each command module
         register_strategy_commands(cli)

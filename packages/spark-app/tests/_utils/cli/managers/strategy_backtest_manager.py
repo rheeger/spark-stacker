@@ -32,6 +32,7 @@ from app.risk_management.position_sizing import (PositionSizer,
 
 from ..core.config_manager import ConfigManager
 from ..core.data_manager import DataManager as CLIDataManager
+from ..core.data_manager import DataRequest, DataSourceType
 from ..validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
@@ -429,12 +430,14 @@ class StrategyBacktestManager:
         try:
             if use_real_data:
                 # Use CLI data manager to fetch real data
-                data = self.data_manager.get_real_data(
+                request = DataRequest(
                     symbol=symbol,
                     timeframe=timeframe,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    source_preference=[DataSourceType.REAL_EXCHANGE, DataSourceType.CACHED]
                 )
+                data = self.data_manager.get_data(request)
             else:
                 # Use CLI data manager to generate synthetic data
                 data = self.data_manager.generate_synthetic_data(

@@ -123,12 +123,12 @@ class ScenarioBacktestManager:
         self.strategy_manager.initialize_strategy_components()
 
         # Get scenario configurations
-        scenarios = self._get_scenarios_to_run(scenario_filter, include_real_data)
+        scenarios = self._get_scenarios_to_run(scenario_filter, include_real_data, days)
 
         # Create backtest function for strategy
-        def backtest_function(scenario_type: ScenarioType, scenario_config: ScenarioConfig, strategy_name: str):
+        def backtest_function(scenario_type: ScenarioType, scenario_config: ScenarioConfig, target_name: str):
             return self._run_strategy_scenario_backtest(
-                strategy_name=strategy_name,
+                strategy_name=target_name,
                 scenario_config=scenario_config,
                 days=days
             )
@@ -181,12 +181,12 @@ class ScenarioBacktestManager:
         logger.info(f"Running indicator '{indicator_name}' across scenarios")
 
         # Get scenario configurations
-        scenarios = self._get_scenarios_to_run(scenario_filter, include_real_data)
+        scenarios = self._get_scenarios_to_run(scenario_filter, include_real_data, days)
 
         # Create backtest function for indicator
-        def backtest_function(scenario_type: ScenarioType, scenario_config: ScenarioConfig, indicator_name: str):
+        def backtest_function(scenario_type: ScenarioType, scenario_config: ScenarioConfig, target_name: str):
             return self._run_indicator_scenario_backtest(
-                indicator_name=indicator_name,
+                indicator_name=target_name,
                 symbol=symbol,
                 timeframe=timeframe,
                 scenario_config=scenario_config,
@@ -260,7 +260,8 @@ class ScenarioBacktestManager:
     def _get_scenarios_to_run(
         self,
         scenario_filter: Optional[List[str]],
-        include_real_data: bool
+        include_real_data: bool,
+        days: int = 30
     ) -> List[ScenarioConfig]:
         """Get list of scenarios to run."""
         all_scenarios = list(self.scenario_manager.scenario_configs.values())
@@ -273,11 +274,12 @@ class ScenarioBacktestManager:
         # Add real data scenario if requested
         if include_real_data:
             real_data_scenario = ScenarioConfig(
-                name="real_data",
                 scenario_type=ScenarioType.REAL_DATA,
+                name="real_data",
                 description="Real market data scenario",
-                enabled=True,
-                parameters={}
+                duration_days=days,
+                parameters={},
+                enabled=True
             )
             scenarios.append(real_data_scenario)
 

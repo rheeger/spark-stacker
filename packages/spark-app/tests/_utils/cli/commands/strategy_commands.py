@@ -6,6 +6,7 @@ This module contains CLI commands for strategy backtesting and management:
 - compare-strategies: Compare multiple strategies with multi-scenario testing
 """
 
+import json
 import logging
 import os
 import sys
@@ -15,36 +16,28 @@ from typing import Any, Dict, List, Optional
 
 import click
 
-# Add proper path for imports
+# Add the CLI directory to the path for proper imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 cli_dir = os.path.dirname(current_dir)
-utils_dir = os.path.dirname(cli_dir)
-tests_dir = os.path.dirname(utils_dir)
-spark_app_dir = os.path.dirname(tests_dir)
+spark_app_dir = os.path.dirname(os.path.dirname(os.path.dirname(cli_dir)))
 sys.path.insert(0, spark_app_dir)
-
-# Import app components
-from app.backtesting.backtest_engine import BacktestEngine
-
-# Add CLI directory to path for CLI module imports
 sys.path.insert(0, cli_dir)
 
-# Import required managers and core modules (now using relative paths)
-from ..core.config_manager import ConfigManager
-from ..core.data_manager import DataManager
-from ..core.scenario_manager import ScenarioManager
-from ..managers.comparison_manager import ComparisonManager
-from ..managers.scenario_backtest_manager import ScenarioBacktestManager
-from ..managers.strategy_backtest_manager import StrategyBacktestManager
-from ..reporting.comparison_reporter import ComparisonReporter
-from ..reporting.scenario_reporter import ScenarioReporter
-from ..reporting.strategy_reporter import StrategyReporter
-# Import error handling utilities
-from ..utils import (ConfigurationError, DataFetchingError, StrategyError,
-                     ValidationError, config_error_handler, data_fetch_retry,
-                     graceful_degradation, strategy_error_handler,
-                     validate_required_params)
-from ..validation.strategy_validator import StrategyValidator
+# Now use absolute imports from the CLI modules
+from core.config_manager import ConfigManager
+from core.data_manager import DataManager
+from core.scenario_manager import ScenarioManager
+from managers.comparison_manager import ComparisonManager
+from managers.scenario_backtest_manager import ScenarioBacktestManager
+from managers.strategy_backtest_manager import StrategyBacktestManager
+from reporting.comparison_reporter import ComparisonReporter
+from reporting.scenario_reporter import ScenarioReporter
+from reporting.strategy_reporter import StrategyReporter
+# Import CLI utility functions and error classes
+from utils import (ConfigurationError, DataFetchingError, StrategyError,
+                   cli_error_handler, strategy_error_handler,
+                   validate_required_params)
+from validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
 
@@ -541,7 +534,6 @@ def _execute_configuration_sensitivity_analysis(strategy_manager, strategy_name,
         sensitivity_report_path = output_path / f"sensitivity_analysis_{strategy_name}_{timestamp}.json"
 
         with open(sensitivity_report_path, 'w') as f:
-            import json
             json.dump(analysis_results, f, indent=2, default=str)
 
         # Display summary of findings
@@ -649,11 +641,11 @@ def _execute_multi_scenario_backtest(strategy_manager, strategy_name, days, scen
     )
 
     # Generate scenario report
-    scenario_reporter = ScenarioReporter(config_manager, data_manager, output_path)
-    report_path = scenario_reporter.generate_scenario_report(
+    scenario_reporter = ScenarioReporter(config_manager, scenario_manager)
+    report_path = scenario_reporter.generate_multi_scenario_report(
         strategy_name=strategy_name,
         scenario_results=scenario_results,
-        output_format='html'
+        output_path=output_path
     )
 
     # Display summary
