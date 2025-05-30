@@ -421,24 +421,24 @@ of concerns.
 
 ### 2.2 Position Sizing Integration
 
-- [ ] **Add strategy position sizing support** (in `cli/core/config_manager.py` and
+- [x] **Add strategy position sizing support** (in `cli/core/config_manager.py` and
       `cli/managers/strategy_backtest_manager.py`)
 
-  - [ ] Load position sizing config from strategy configuration through ConfigManager
-  - [ ] Support strategy-specific position sizing overrides
-  - [ ] Handle position sizing inheritance from global config
-  - [ ] Add validation for position sizing parameters through StrategyValidator
-  - [ ] Include position sizing details in backtest reports via StrategyReporter
-  - [ ] Add CLI options to override position sizing for testing in strategy commands
+  - [x] Load position sizing config from strategy configuration through ConfigManager
+  - [x] Support strategy-specific position sizing overrides
+  - [x] Handle position sizing inheritance from global config
+  - [x] Add validation for position sizing parameters through StrategyValidator
+  - [x] Include position sizing details in backtest reports via StrategyReporter
+  - [x] Add CLI options to override position sizing for testing in strategy commands
 
-- [ ] **Enhanced position sizing validation utilities** (now in
+- [x] **Enhanced position sizing validation utilities** (now in
       `cli/validation/strategy_validator.py`)
-  - [ ] Add `validate_position_sizing_config()` function
-  - [ ] Add `merge_position_sizing_config()` for strategy inheritance
-  - [ ] Add `calculate_effective_position_size()` for report generation
-  - [ ] Add position sizing comparison utilities for strategy comparison
-  - [ ] Add position sizing impact analysis for different configurations
-  - [ ] **Integrate with ConfigManager for configuration access**
+  - [x] Add `validate_position_sizing_config()` function
+  - [x] Add `merge_position_sizing_config()` for strategy inheritance
+  - [x] Add `calculate_effective_position_size()` for report generation
+  - [x] Add position sizing comparison utilities for strategy comparison
+  - [x] Add position sizing impact analysis for different configurations
+  - [x] **Integrate with ConfigManager for configuration access**
 
 ### 2.3 Data Management Updates
 

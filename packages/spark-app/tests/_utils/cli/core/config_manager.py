@@ -505,6 +505,9 @@ class ConfigManager:
         merged = strategy_defaults.copy()
         merged.update(strategy)
 
+        # Handle position sizing inheritance specifically
+        merged = self._merge_position_sizing_config(merged, config)
+
         # Add computed fields
         merged['_computed'] = {
             'has_all_indicators': self._strategy_has_all_indicators(strategy, config),
@@ -513,6 +516,137 @@ class ConfigManager:
         }
 
         return merged
+
+    def _merge_position_sizing_config(self, strategy: Dict[str, Any],
+                                    global_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Merge position sizing configuration with inheritance from global config.
+
+        Strategy-specific position sizing takes precedence over global defaults.
+        Individual strategy fields (max_position_size, risk_per_trade_pct) can override
+        specific aspects of position sizing configuration.
+
+        Args:
+            strategy: Strategy configuration dictionary
+            global_config: Global configuration dictionary
+
+        Returns:
+            Strategy configuration with merged position sizing
+        """
+        # Get global position sizing configuration
+        global_position_sizing = global_config.get('position_sizing', {})
+
+        # Get strategy-specific position sizing (if any)
+        strategy_position_sizing = strategy.get('position_sizing', {})
+
+        # Start with global position sizing as base
+        merged_position_sizing = global_position_sizing.copy()
+
+        # Override with strategy-specific position sizing
+        merged_position_sizing.update(strategy_position_sizing)
+
+        # Handle individual strategy fields that map to position sizing
+        # These provide backward compatibility and convenience
+        strategy_overrides = {}
+
+        if 'max_position_size' in strategy:
+            # Don't multiply by 1000 - assume it's already in the correct format
+            # The max_position_size in strategy could be in units or USD depending on context
+            max_pos = strategy['max_position_size']
+            if max_pos < 100:  # Likely in units, convert to reasonable USD value
+                strategy_overrides['max_position_size_usd'] = max_pos * 1000  # Convert to USD
+            else:  # Already in USD
+                strategy_overrides['max_position_size_usd'] = max_pos
+
+        if 'risk_per_trade_pct' in strategy:
+            strategy_overrides['risk_per_trade_pct'] = strategy['risk_per_trade_pct'] / 100.0
+
+        if 'stop_loss_pct' in strategy:
+            strategy_overrides['default_stop_loss_pct'] = strategy['stop_loss_pct'] / 100.0
+
+        # Apply strategy field overrides to position sizing
+        merged_position_sizing.update(strategy_overrides)
+
+        # Store the merged position sizing back in strategy
+        strategy['position_sizing'] = merged_position_sizing
+
+        return strategy
+
+    def get_effective_position_sizing_config(self, strategy_name: str,
+                                           config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Get the effective position sizing configuration for a strategy.
+
+        This method resolves all inheritance and returns the final position sizing
+        configuration that will be used for the strategy.
+
+        Args:
+            strategy_name: Name of the strategy
+            config: Optional configuration dict. If None, loads current config.
+
+        Returns:
+            Dictionary containing the effective position sizing configuration
+
+        Raises:
+            ValueError: If strategy not found
+        """
+        strategy_config = self.get_strategy_config(strategy_name, config)
+        if not strategy_config:
+            raise ValueError(f"Strategy '{strategy_name}' not found in configuration")
+
+        return strategy_config.get('position_sizing', {})
+
+    def validate_position_sizing_inheritance(self, strategy_name: str,
+                                           config: Optional[Dict[str, Any]] = None) -> List[str]:
+        """
+        Validate position sizing configuration inheritance for a strategy.
+
+        Args:
+            strategy_name: Name of the strategy to validate
+            config: Optional configuration dict. If None, loads current config.
+
+        Returns:
+            List of validation issues (empty if valid)
+        """
+        issues = []
+
+        try:
+            if config is None:
+                config = self.load_config()
+
+            # Check if strategy exists
+            strategy_config = self.get_strategy_config(strategy_name, config)
+            if not strategy_config:
+                issues.append(f"Strategy '{strategy_name}' not found")
+                return issues
+
+            # Check global position sizing exists
+            global_position_sizing = config.get('position_sizing')
+            if not global_position_sizing:
+                issues.append("No global position sizing configuration found")
+
+            # Get effective position sizing
+            effective_config = strategy_config.get('position_sizing', {})
+
+            # Check required fields are present
+            required_fields = ['method']
+            for field in required_fields:
+                if field not in effective_config:
+                    issues.append(f"Missing required position sizing field: {field}")
+
+            # Validate method-specific requirements
+            method = effective_config.get('method')
+            if method == 'fixed_usd' and not effective_config.get('fixed_usd_amount'):
+                issues.append("Fixed USD method requires 'fixed_usd_amount' parameter")
+            elif method == 'percentage_equity' and not effective_config.get('equity_percentage'):
+                issues.append("Percentage equity method requires 'equity_percentage' parameter")
+            elif method == 'risk_based' and not effective_config.get('risk_per_trade_pct'):
+                issues.append("Risk-based method requires 'risk_per_trade_pct' parameter")
+
+        except Exception as e:
+            issues.append(f"Error validating position sizing inheritance: {e}")
+
+        return issues
 
     def _strategy_has_all_indicators(self, strategy: Dict[str, Any],
                                    config: Dict[str, Any]) -> bool:

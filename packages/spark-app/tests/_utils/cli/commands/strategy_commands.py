@@ -14,20 +14,31 @@ from typing import Any, Dict, Optional
 
 import click
 
+# Add proper path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+cli_dir = os.path.dirname(current_dir)
+utils_dir = os.path.dirname(cli_dir)
+tests_dir = os.path.dirname(utils_dir)
+spark_app_dir = os.path.dirname(tests_dir)
+sys.path.insert(0, spark_app_dir)
+
 # Import app components
-from ....app.backtesting.backtest_engine import BacktestEngine
-from ..core.backtest_orchestrator import BacktestOrchestrator
-# Import required managers and core modules
-from ..core.config_manager import ConfigManager
-from ..core.data_manager import DataManager
-from ..core.scenario_manager import ScenarioManager
-from ..managers.comparison_manager import ComparisonManager
-from ..managers.scenario_backtest_manager import ScenarioBacktestManager
-from ..managers.strategy_backtest_manager import StrategyBacktestManager
-from ..reporting.comparison_reporter import ComparisonReporter
-from ..reporting.scenario_reporter import ScenarioReporter
-from ..reporting.strategy_reporter import StrategyReporter
-from ..validation.strategy_validator import StrategyValidator
+from app.backtesting.backtest_engine import BacktestEngine
+
+# Add CLI directory to path for CLI module imports
+sys.path.insert(0, cli_dir)
+
+# Import required managers and core modules (now using absolute paths)
+from core.config_manager import ConfigManager
+from core.data_manager import DataManager
+from core.scenario_manager import ScenarioManager
+from managers.comparison_manager import ComparisonManager
+from managers.scenario_backtest_manager import ScenarioBacktestManager
+from managers.strategy_backtest_manager import StrategyBacktestManager
+from reporting.comparison_reporter import ComparisonReporter
+from reporting.scenario_reporter import ScenarioReporter
+from reporting.strategy_reporter import StrategyReporter
+from validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +110,8 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
 
         # Build configuration overrides
         overrides = {}
+        position_sizing_overrides = {}
+
         if override_timeframe:
             overrides['timeframe'] = override_timeframe
             click.echo(f"⚠️  Overriding timeframe: {strategy_config.timeframe} → {override_timeframe}")
@@ -108,12 +121,43 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
             click.echo(f"⚠️  Overriding market: {strategy_config.market} → {override_market}")
 
         if override_position_size:
-            overrides['max_position_size'] = override_position_size
-            click.echo(f"⚠️  Overriding position size: {strategy_config.position_sizing.get('max_position_size', 'default')} → {override_position_size}")
+            # Handle position sizing override more intelligently
+            current_position_info = strategy_manager.get_current_position_sizing_info()
+            if 'error' in current_position_info:
+                click.echo(f"⚠️  Warning: Could not get current position sizing info: {current_position_info['error']}")
+
+            # Determine how to apply the override based on current method
+            method = current_position_info.get('method', 'fixed_usd')
+
+            if method == 'fixed_usd':
+                position_sizing_overrides['fixed_usd_amount'] = override_position_size
+                click.echo(f"⚠️  Overriding fixed USD amount: ${current_position_info.get('fixed_usd_amount', 'unknown')} → ${override_position_size}")
+            elif method == 'percentage_equity':
+                position_sizing_overrides['equity_percentage'] = override_position_size / 100.0
+                click.echo(f"⚠️  Overriding equity percentage: {current_position_info.get('equity_percentage', 'unknown')*100:.1f}% → {override_position_size}%")
+            else:
+                # For other methods, override max position size
+                position_sizing_overrides['max_position_size_usd'] = override_position_size
+                click.echo(f"⚠️  Overriding max position size: ${current_position_info.get('max_position_size_usd', 'unknown')} → ${override_position_size}")
 
         # Initialize strategy components with overrides
         click.echo("🔧 Initializing strategy components...")
         strategy_manager.initialize_strategy_components(overrides)
+
+        # Apply position sizing overrides after initialization
+        if position_sizing_overrides:
+            click.echo("💰 Applying position sizing overrides...")
+            strategy_manager.apply_position_sizing_overrides(position_sizing_overrides)
+
+            # Display final position sizing configuration
+            final_position_info = strategy_manager.get_current_position_sizing_info()
+            if 'error' not in final_position_info:
+                click.echo(f"💰 Position sizing method: {final_position_info['method']}")
+                if final_position_info['method'] == 'fixed_usd':
+                    click.echo(f"💰 Fixed USD amount: ${final_position_info['fixed_usd_amount']}")
+                elif final_position_info['method'] == 'percentage_equity':
+                    click.echo(f"💰 Equity percentage: {final_position_info['equity_percentage']*100:.1f}%")
+                click.echo(f"💰 Max position size: ${final_position_info['max_position_size_usd']}")
 
         click.echo(f"🎯 Running backtest for strategy: {strategy_name}")
         click.echo(f"📊 Market: {strategy_config.market}")

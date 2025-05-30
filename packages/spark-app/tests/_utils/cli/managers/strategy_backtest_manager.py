@@ -193,12 +193,28 @@ class StrategyBacktestManager:
     def _initialize_position_sizer(self, config: Dict[str, Any]) -> None:
         """Initialize position sizer based on strategy configuration."""
         try:
-            position_sizing_config = config.get('position_sizing', {})
+            # Use ConfigManager to get properly merged position sizing configuration
+            if self.current_strategy:
+                # Get effective position sizing configuration with full inheritance
+                position_sizing_config = self.config_manager.get_effective_position_sizing_config(
+                    self.current_strategy.name
+                )
 
-            # Use strategy-specific position sizing or fall back to global config
-            if not position_sizing_config:
-                global_config = self.config_manager.load_config()
-                position_sizing_config = global_config.get('position_sizing', {})
+                # Validate position sizing inheritance
+                validation_issues = self.config_manager.validate_position_sizing_inheritance(
+                    self.current_strategy.name
+                )
+
+                if validation_issues:
+                    logger.warning(f"Position sizing validation issues for {self.current_strategy.name}: "
+                                 f"{', '.join(validation_issues)}")
+            else:
+                # Fallback to direct config if no current strategy
+                position_sizing_config = config.get('position_sizing', {})
+
+                if not position_sizing_config:
+                    global_config = self.config_manager.load_config()
+                    position_sizing_config = global_config.get('position_sizing', {})
 
             # Create position sizing configuration
             sizing_config = PositionSizingConfig.from_config_dict(position_sizing_config)
@@ -207,10 +223,85 @@ class StrategyBacktestManager:
             self.position_sizer = PositionSizer(sizing_config)
 
             logger.info(f"Initialized position sizer: {sizing_config.method.value}")
+            logger.debug(f"Position sizing config: {position_sizing_config}")
 
         except Exception as e:
             logger.error(f"Failed to initialize position sizer: {e}")
             raise
+
+    def apply_position_sizing_overrides(self, overrides: Dict[str, Any]) -> None:
+        """
+        Apply temporary position sizing overrides for testing purposes.
+
+        Args:
+            overrides: Dictionary of position sizing parameters to override
+        """
+        if not self.position_sizer:
+            logger.warning("Cannot apply position sizing overrides: position sizer not initialized")
+            return
+
+        try:
+            # Get current configuration
+            current_config = self.position_sizer.config
+
+            # Create new configuration with overrides
+            config_dict = {
+                'method': current_config.method.value,
+                'fixed_usd_amount': current_config.fixed_usd_amount,
+                'equity_percentage': current_config.equity_percentage,
+                'risk_per_trade_pct': current_config.risk_per_trade_pct,
+                'default_stop_loss_pct': current_config.default_stop_loss_pct,
+                'fixed_units': current_config.fixed_units,
+                'kelly_win_rate': current_config.kelly_win_rate,
+                'kelly_avg_win': current_config.kelly_avg_win,
+                'kelly_avg_loss': current_config.kelly_avg_loss,
+                'kelly_max_position_pct': current_config.kelly_max_position_pct,
+                'max_position_size_usd': current_config.max_position_size_usd,
+                'min_position_size_usd': current_config.min_position_size_usd,
+                'max_leverage': current_config.max_leverage,
+            }
+
+            # Apply overrides
+            config_dict.update(overrides)
+
+            # Create new position sizer with overrides
+            new_sizing_config = PositionSizingConfig.from_config_dict(config_dict)
+            self.position_sizer = PositionSizer(new_sizing_config)
+
+            logger.info(f"Applied position sizing overrides: {overrides}")
+            logger.debug(f"New position sizing config: {config_dict}")
+
+        except Exception as e:
+            logger.error(f"Failed to apply position sizing overrides: {e}")
+            raise
+
+    def get_current_position_sizing_info(self) -> Dict[str, Any]:
+        """
+        Get information about the current position sizing configuration.
+
+        Returns:
+            Dictionary containing current position sizing details
+        """
+        if not self.position_sizer:
+            return {"error": "Position sizer not initialized"}
+
+        config = self.position_sizer.config
+
+        return {
+            "method": config.method.value,
+            "fixed_usd_amount": config.fixed_usd_amount,
+            "equity_percentage": config.equity_percentage,
+            "risk_per_trade_pct": config.risk_per_trade_pct,
+            "default_stop_loss_pct": config.default_stop_loss_pct,
+            "fixed_units": config.fixed_units,
+            "kelly_win_rate": config.kelly_win_rate,
+            "kelly_avg_win": config.kelly_avg_win,
+            "kelly_avg_loss": config.kelly_avg_loss,
+            "kelly_max_position_pct": config.kelly_max_position_pct,
+            "max_position_size_usd": config.max_position_size_usd,
+            "min_position_size_usd": config.min_position_size_usd,
+            "max_leverage": config.max_leverage,
+        }
 
     def backtest_strategy(
         self,

@@ -489,3 +489,313 @@ class StrategyValidator:
             result.add_error(f"Failed to validate market-exchange compatibility: {e}")
 
         return result
+
+    def validate_position_sizing_config(self, position_sizing_config: Dict[str, Any]) -> ValidationResult:
+        """
+        Validate a position sizing configuration dictionary.
+
+        Args:
+            position_sizing_config: Position sizing configuration to validate
+
+        Returns:
+            ValidationResult with validation status and details
+        """
+        result = ValidationResult(is_valid=True, errors=[], warnings=[], suggestions=[])
+
+        # Check required method field
+        method = position_sizing_config.get('method')
+        if not method:
+            result.add_error("Position sizing method is required")
+            return result
+
+        # Validate method value
+        if method not in self.VALID_POSITION_SIZING_METHODS:
+            result.add_error(f"Invalid position sizing method: {method}. "
+                           f"Valid methods: {', '.join(self.VALID_POSITION_SIZING_METHODS)}")
+
+        # Method-specific validation
+        if method == 'fixed_usd':
+            amount = position_sizing_config.get('fixed_usd_amount')
+            if not amount or amount <= 0:
+                result.add_error("Fixed USD method requires positive 'fixed_usd_amount'")
+            elif amount < 10:
+                result.add_warning(f"Fixed USD amount ${amount} is very small, consider increasing")
+
+        elif method == 'percentage_equity':
+            percentage = position_sizing_config.get('equity_percentage')
+            if not percentage or percentage <= 0 or percentage > 1:
+                result.add_error("Percentage equity method requires 'equity_percentage' between 0 and 1")
+            elif percentage > 0.1:
+                result.add_warning(f"Equity percentage {percentage*100:.1f}% is high, consider risk management")
+
+        elif method == 'risk_based':
+            risk_pct = position_sizing_config.get('risk_per_trade_pct')
+            if not risk_pct or risk_pct <= 0 or risk_pct > 0.1:
+                result.add_error("Risk-based method requires 'risk_per_trade_pct' between 0 and 0.1 (10%)")
+            stop_loss_pct = position_sizing_config.get('default_stop_loss_pct')
+            if not stop_loss_pct or stop_loss_pct <= 0:
+                result.add_error("Risk-based method requires positive 'default_stop_loss_pct'")
+
+        elif method == 'kelly_criterion':
+            win_rate = position_sizing_config.get('kelly_win_rate')
+            if not win_rate or win_rate <= 0 or win_rate >= 1:
+                result.add_error("Kelly criterion requires 'kelly_win_rate' between 0 and 1")
+            avg_win = position_sizing_config.get('kelly_avg_win')
+            avg_loss = position_sizing_config.get('kelly_avg_loss')
+            if not avg_win or avg_win <= 0:
+                result.add_error("Kelly criterion requires positive 'kelly_avg_win'")
+            if not avg_loss or avg_loss <= 0:
+                result.add_error("Kelly criterion requires positive 'kelly_avg_loss'")
+
+        # Validate limit fields
+        max_position = position_sizing_config.get('max_position_size_usd')
+        if max_position and max_position <= 0:
+            result.add_error("max_position_size_usd must be positive if specified")
+
+        min_position = position_sizing_config.get('min_position_size_usd')
+        if min_position and min_position <= 0:
+            result.add_error("min_position_size_usd must be positive if specified")
+
+        if max_position and min_position and min_position > max_position:
+            result.add_error("min_position_size_usd cannot be greater than max_position_size_usd")
+
+        max_leverage = position_sizing_config.get('max_leverage')
+        if max_leverage and max_leverage <= 0:
+            result.add_error("max_leverage must be positive if specified")
+        elif max_leverage and max_leverage > 10:
+            result.add_warning(f"Max leverage {max_leverage}x is very high, consider risk management")
+
+        return result
+
+    def merge_position_sizing_config(self, strategy_config: Dict[str, Any],
+                                   global_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Merge position sizing configuration from strategy and global config.
+
+        Args:
+            strategy_config: Strategy-specific configuration
+            global_config: Global configuration
+
+        Returns:
+            Merged position sizing configuration
+        """
+        # Get global position sizing as base
+        global_position_sizing = global_config.get('position_sizing', {})
+        merged = global_position_sizing.copy()
+
+        # Override with strategy-specific position sizing
+        strategy_position_sizing = strategy_config.get('position_sizing', {})
+        merged.update(strategy_position_sizing)
+
+        # Handle individual strategy fields that map to position sizing
+        if 'max_position_size' in strategy_config:
+            merged['max_position_size_usd'] = strategy_config['max_position_size']
+
+        if 'risk_per_trade_pct' in strategy_config:
+            merged['risk_per_trade_pct'] = strategy_config['risk_per_trade_pct'] / 100.0
+
+        if 'stop_loss_pct' in strategy_config:
+            merged['default_stop_loss_pct'] = strategy_config['stop_loss_pct'] / 100.0
+
+        return merged
+
+    def calculate_effective_position_size(self, position_sizing_config: Dict[str, Any],
+                                        current_price: float,
+                                        current_equity: float = 10000.0,
+                                        signal_strength: float = 1.0) -> Dict[str, Any]:
+        """
+        Calculate effective position size for given parameters.
+
+        Args:
+            position_sizing_config: Position sizing configuration
+            current_price: Current asset price
+            current_equity: Current account equity
+            signal_strength: Signal strength (0-1)
+
+        Returns:
+            Dictionary with position size calculations and analysis
+        """
+        try:
+            from app.risk_management.position_sizing import (
+                PositionSizer, PositionSizingConfig)
+
+            # Create position sizer from config
+            sizing_config = PositionSizingConfig.from_config_dict(position_sizing_config)
+            sizer = PositionSizer(sizing_config)
+
+            # Calculate position size
+            position_size = sizer.calculate_position_size(
+                current_price=current_price,
+                current_equity=current_equity,
+                signal_strength=signal_strength
+            )
+
+            # Calculate additional metrics
+            position_value = position_size * current_price
+            equity_percentage = (position_value / current_equity) * 100
+
+            return {
+                'position_size_units': position_size,
+                'position_value_usd': position_value,
+                'equity_percentage': equity_percentage,
+                'current_price': current_price,
+                'current_equity': current_equity,
+                'signal_strength': signal_strength,
+                'method': sizing_config.method.value,
+                'is_valid': position_size > 0,
+                'analysis': {
+                    'within_limits': position_value <= sizing_config.max_position_size_usd,
+                    'above_minimum': position_value >= sizing_config.min_position_size_usd,
+                    'leverage_used': position_value / current_equity,
+                    'max_leverage_limit': sizing_config.max_leverage
+                }
+            }
+
+        except Exception as e:
+            return {
+                'error': f"Failed to calculate position size: {e}",
+                'position_size_units': 0,
+                'position_value_usd': 0,
+                'equity_percentage': 0,
+                'is_valid': False
+            }
+
+    def compare_position_sizing_configs(self, config1: Dict[str, Any],
+                                      config2: Dict[str, Any],
+                                      test_scenarios: List[Dict[str, float]] = None) -> Dict[str, Any]:
+        """
+        Compare two position sizing configurations across multiple scenarios.
+
+        Args:
+            config1: First position sizing configuration
+            config2: Second position sizing configuration
+            test_scenarios: Optional list of test scenarios with price and equity
+
+        Returns:
+            Dictionary with detailed comparison analysis
+        """
+        if test_scenarios is None:
+            test_scenarios = [
+                {'price': 100, 'equity': 10000, 'signal': 1.0},
+                {'price': 200, 'equity': 10000, 'signal': 0.8},
+                {'price': 50, 'equity': 10000, 'signal': 0.6},
+                {'price': 100, 'equity': 5000, 'signal': 1.0},
+                {'price': 100, 'equity': 20000, 'signal': 1.0},
+            ]
+
+        comparison = {
+            'config1_method': config1.get('method', 'unknown'),
+            'config2_method': config2.get('method', 'unknown'),
+            'scenarios': [],
+            'summary': {}
+        }
+
+        config1_values = []
+        config2_values = []
+
+        for i, scenario in enumerate(test_scenarios):
+            result1 = self.calculate_effective_position_size(
+                config1, scenario['price'], scenario['equity'], scenario['signal']
+            )
+            result2 = self.calculate_effective_position_size(
+                config2, scenario['price'], scenario['equity'], scenario['signal']
+            )
+
+            config1_values.append(result1['position_value_usd'])
+            config2_values.append(result2['position_value_usd'])
+
+            comparison['scenarios'].append({
+                'scenario': i + 1,
+                'price': scenario['price'],
+                'equity': scenario['equity'],
+                'signal': scenario['signal'],
+                'config1': result1,
+                'config2': result2,
+                'difference_usd': result2['position_value_usd'] - result1['position_value_usd'],
+                'difference_pct': ((result2['position_value_usd'] / result1['position_value_usd']) - 1) * 100
+                                 if result1['position_value_usd'] > 0 else 0
+            })
+
+        # Calculate summary statistics
+        if config1_values and config2_values:
+            comparison['summary'] = {
+                'avg_config1_usd': sum(config1_values) / len(config1_values),
+                'avg_config2_usd': sum(config2_values) / len(config2_values),
+                'max_difference_usd': max(abs(v2 - v1) for v1, v2 in zip(config1_values, config2_values)),
+                'avg_difference_usd': sum(v2 - v1 for v1, v2 in zip(config1_values, config2_values)) / len(config1_values),
+                'config2_larger_scenarios': sum(1 for v1, v2 in zip(config1_values, config2_values) if v2 > v1),
+                'config1_larger_scenarios': sum(1 for v1, v2 in zip(config1_values, config2_values) if v1 > v2),
+            }
+
+        return comparison
+
+    def analyze_position_sizing_impact(self, position_sizing_config: Dict[str, Any],
+                                     parameter_variations: Dict[str, List[float]]) -> Dict[str, Any]:
+        """
+        Analyze the impact of changing position sizing parameters.
+
+        Args:
+            position_sizing_config: Base position sizing configuration
+            parameter_variations: Dictionary of parameter names to lists of test values
+
+        Returns:
+            Dictionary with impact analysis results
+        """
+        base_result = self.calculate_effective_position_size(
+            position_sizing_config, current_price=100, current_equity=10000
+        )
+
+        analysis = {
+            'base_configuration': position_sizing_config.copy(),
+            'base_result': base_result,
+            'parameter_impacts': {},
+            'sensitivity_ranking': []
+        }
+
+        sensitivities = []
+
+        for param_name, test_values in parameter_variations.items():
+            if param_name not in position_sizing_config:
+                continue
+
+            original_value = position_sizing_config[param_name]
+            impacts = []
+
+            for test_value in test_values:
+                # Create modified config
+                modified_config = position_sizing_config.copy()
+                modified_config[param_name] = test_value
+
+                # Calculate result with modified parameter
+                result = self.calculate_effective_position_size(
+                    modified_config, current_price=100, current_equity=10000
+                )
+
+                # Calculate impact
+                if base_result['position_value_usd'] > 0:
+                    impact_pct = ((result['position_value_usd'] / base_result['position_value_usd']) - 1) * 100
+                else:
+                    impact_pct = 0
+
+                impacts.append({
+                    'test_value': test_value,
+                    'result': result,
+                    'impact_pct': impact_pct,
+                    'difference_usd': result['position_value_usd'] - base_result['position_value_usd']
+                })
+
+            # Calculate sensitivity (max absolute impact)
+            max_impact = max(abs(impact['impact_pct']) for impact in impacts) if impacts else 0
+            sensitivities.append((param_name, max_impact))
+
+            analysis['parameter_impacts'][param_name] = {
+                'original_value': original_value,
+                'impacts': impacts,
+                'max_impact_pct': max_impact,
+                'avg_impact_pct': sum(abs(impact['impact_pct']) for impact in impacts) / len(impacts) if impacts else 0
+            }
+
+        # Rank parameters by sensitivity
+        analysis['sensitivity_ranking'] = sorted(sensitivities, key=lambda x: x[1], reverse=True)
+
+        return analysis
