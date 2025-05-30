@@ -850,26 +850,27 @@ class BacktestOrchestrator:
         """Execute jobs sequentially."""
         results = {}
 
-        # Sort jobs by priority and dependencies
-        sorted_jobs = self._sort_jobs_for_execution()
-
-        with tqdm(total=len(sorted_jobs), desc="Executing jobs sequentially") as pbar:
-            for job in sorted_jobs:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            for job in self.job_queue:
                 if self._shutdown_requested:
                     break
 
-                # Check dependencies
-                if not self._dependencies_satisfied(job):
-                    logger.warning(f"Skipping job {job.job_id} - dependencies not satisfied")
-                    continue
+                self.state.running_jobs += 1
+                self.state.queued_jobs -= 1
 
-                # Execute job
-                result = self._execute_single_job(job)
-                results[job.job_id] = result
+                try:
+                    result = self._execute_with_timeout(job, executor)
+                    results[job.job_id] = result
 
-                # Update progress
-                self._update_job_completion(job, result)
-                pbar.update(1)
+                    if result.success:
+                        self.completed_jobs[job.job_id] = result
+                        self.state.completed_jobs += 1
+                    else:
+                        self.failed_jobs[job.job_id] = result
+                        self.state.failed_jobs += 1
+
+                finally:
+                    self.state.running_jobs -= 1
 
         return results
 
@@ -878,43 +879,45 @@ class BacktestOrchestrator:
         results = {}
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all jobs that can run immediately
+            # Submit all jobs
             future_to_job = {}
-            ready_jobs = [job for job in self.job_queue if self._dependencies_satisfied(job)]
-
-            for job in ready_jobs:
+            for job in self.job_queue:
                 if self._shutdown_requested:
                     break
-                future = executor.submit(self._execute_single_job, job)
+
+                future = executor.submit(self._execute_with_timeout, job, executor)
                 future_to_job[future] = job
-                self.running_jobs[job.job_id] = job
+                self.state.running_jobs += 1
+                self.state.queued_jobs -= 1
 
-            # Process completed jobs and submit new ones
-            with tqdm(total=len(self.job_queue), desc="Executing jobs in parallel") as pbar:
-                for future in as_completed(future_to_job):
-                    if self._shutdown_requested:
-                        break
+            # Collect results as they complete
+            for future in as_completed(future_to_job):
+                job = future_to_job[future]
 
-                    job = future_to_job[future]
+                try:
                     result = future.result()
                     results[job.job_id] = result
 
-                    # Update state
-                    self._update_job_completion(job, result)
-                    pbar.update(1)
+                    if result.success:
+                        self.completed_jobs[job.job_id] = result
+                        self.state.completed_jobs += 1
+                    else:
+                        self.failed_jobs[job.job_id] = result
+                        self.state.failed_jobs += 1
 
-                    # Check for newly ready jobs
-                    newly_ready = [j for j in self.job_queue
-                                 if j.job_id not in results
-                                 and j.job_id not in self.running_jobs
-                                 and self._dependencies_satisfied(j)]
+                except Exception as e:
+                    error_result = JobResult(
+                        job_id=job.job_id,
+                        success=False,
+                        error=e,
+                        execution_time_seconds=0.0
+                    )
+                    results[job.job_id] = error_result
+                    self.failed_jobs[job.job_id] = error_result
+                    self.state.failed_jobs += 1
 
-                    # Submit newly ready jobs
-                    for ready_job in newly_ready:
-                        if len(self.running_jobs) < self.max_workers:
-                            future = executor.submit(self._execute_single_job, ready_job)
-                            future_to_job[future] = ready_job
-                            self.running_jobs[ready_job.job_id] = ready_job
+                finally:
+                    self.state.running_jobs -= 1
 
         return results
 
@@ -940,180 +943,73 @@ class BacktestOrchestrator:
 
     def _execute_single_job(self, job: BacktestJob) -> JobResult:
         """Execute a single backtest job."""
-        start_time = time.time()
+        logger.info(f"Executing job {job.job_id} of type {job.job_type.value}")
+
+        # This is a placeholder - actual job execution would depend on job type
+        # and would involve calling appropriate manager classes
 
         try:
-            logger.info(f"Starting execution of job {job.job_id} ({job.job_type})")
-
-            # Get appropriate manager for job type
-            manager = self._get_manager_for_job(job)
-
-            # Execute based on job type
             if job.job_type == BacktestType.SINGLE_STRATEGY:
-                result_data = self._execute_strategy_job(job, manager)
+                return self._execute_strategy_job(job)
             elif job.job_type == BacktestType.SCENARIO_TESTING:
-                result_data = self._execute_scenario_job(job, manager)
+                return self._execute_scenario_job(job)
             elif job.job_type == BacktestType.COMPARISON:
-                result_data = self._execute_comparison_job(job, manager)
+                return self._execute_comparison_job(job)
             else:
                 raise ValueError(f"Unsupported job type: {job.job_type}")
 
-            execution_time = time.time() - start_time
-
-            result = JobResult(
-                job_id=job.job_id,
-                success=True,
-                result_data=result_data,
-                execution_time_seconds=execution_time
-            )
-
-            logger.info(f"Job {job.job_id} completed successfully in {execution_time:.1f}s")
-            return result
-
         except Exception as e:
-            execution_time = time.time() - start_time
+            logger.error(f"Job {job.job_id} execution failed: {e}")
+            raise
 
-            result = JobResult(
-                job_id=job.job_id,
-                success=False,
-                error=e,
-                execution_time_seconds=execution_time
-            )
-
-            logger.error(f"Job {job.job_id} failed after {execution_time:.1f}s: {e}")
-            return result
-
-    def _get_manager_for_job(self, job: BacktestJob) -> Any:
-        """Get the appropriate manager instance for the job type."""
-        # For now, return a placeholder since managers aren't fully implemented
-        # This will be updated when the actual manager classes are created
-
-        manager_key = f"{job.job_type.value}_manager"
-
-        if manager_key not in self._manager_cache:
-            # Create manager instances as needed
-            # TODO: Import and instantiate actual manager classes
-            logger.debug(f"Creating placeholder manager for {job.job_type}")
-            self._manager_cache[manager_key] = {
-                'type': job.job_type,
-                'config_manager': self.config_manager,
-                'data_manager': self.data_manager
-            }
-
-        return self._manager_cache[manager_key]
-
-    def _execute_strategy_job(self, job: BacktestJob, manager: Any) -> Dict[str, Any]:
+    def _execute_strategy_job(self, job: BacktestJob) -> Dict[str, Any]:
         """Execute a strategy backtest job."""
         # Placeholder implementation
-        # TODO: Use actual StrategyBacktestManager when implemented
-
         strategy_name = job.parameters['strategy_name']
         days = job.parameters.get('days', 30)
-        scenarios = job.parameters.get('scenarios', ['real'])
 
-        # Simulate strategy execution
-        logger.info(f"Executing strategy '{strategy_name}' for {days} days across {len(scenarios)} scenarios")
+        # Simulate work
+        import time
+        time.sleep(2)
 
-        # This would use the actual strategy manager to run the backtest
         return {
             'strategy_name': strategy_name,
             'days': days,
-            'scenarios': scenarios,
-            'status': 'completed',
-            'placeholder': True
+            'total_return': 0.15,  # Placeholder result
+            'sharpe_ratio': 1.2,
+            'max_drawdown': -0.08
         }
 
-    def _execute_scenario_job(self, job: BacktestJob, manager: Any) -> Dict[str, Any]:
+    def _execute_scenario_job(self, job: BacktestJob) -> Dict[str, Any]:
         """Execute a scenario testing job."""
         # Placeholder implementation
-        # TODO: Use actual ScenarioBacktestManager when implemented
+        scenarios = job.parameters.get('scenarios', [])
 
-        strategy_name = job.parameters['strategy_name']
-        scenarios = job.parameters['scenarios']
-        days = job.parameters.get('days', 30)
-
-        logger.info(f"Executing scenario testing for '{strategy_name}' across {len(scenarios)} scenarios")
+        # Simulate work
+        import time
+        time.sleep(len(scenarios) * 0.5)
 
         return {
-            'strategy_name': strategy_name,
-            'scenarios': scenarios,
-            'days': days,
-            'status': 'completed',
-            'placeholder': True
+            'scenarios_tested': len(scenarios),
+            'scenario_results': {scenario: {'return': 0.1} for scenario in scenarios}
         }
 
-    def _execute_comparison_job(self, job: BacktestJob, manager: Any) -> Dict[str, Any]:
-        """Execute a comparison job."""
+    def _execute_comparison_job(self, job: BacktestJob) -> Dict[str, Any]:
+        """Execute a strategy comparison job."""
         # Placeholder implementation
-        # TODO: Use actual ComparisonManager when implemented
+        strategies = job.parameters.get('strategy_names', [])
 
-        strategy_names = job.parameters['strategy_names']
-        days = job.parameters.get('days', 30)
-
-        logger.info(f"Executing comparison of {len(strategy_names)} strategies")
+        # Simulate work
+        import time
+        time.sleep(len(strategies) * 0.3)
 
         return {
-            'strategy_names': strategy_names,
-            'days': days,
-            'status': 'completed',
-            'placeholder': True
+            'strategies_compared': len(strategies),
+            'comparison_results': {strategy: {'rank': i+1} for i, strategy in enumerate(strategies)}
         }
-
-    def _sort_jobs_for_execution(self) -> List[BacktestJob]:
-        """Sort jobs by priority and dependencies."""
-        # Simple topological sort by dependencies and priority
-        sorted_jobs = []
-        remaining_jobs = self.job_queue.copy()
-
-        while remaining_jobs:
-            # Find jobs with no unsatisfied dependencies
-            ready_jobs = [job for job in remaining_jobs if self._dependencies_satisfied(job)]
-
-            if not ready_jobs:
-                # No jobs ready - either circular dependency or missing dependency
-                logger.warning("No jobs ready for execution - possible dependency issue")
-                break
-
-            # Sort ready jobs by priority (highest first)
-            ready_jobs.sort(key=lambda x: x.priority, reverse=True)
-
-            # Take the highest priority job
-            next_job = ready_jobs[0]
-            sorted_jobs.append(next_job)
-            remaining_jobs.remove(next_job)
-
-        return sorted_jobs
-
-    def _dependencies_satisfied(self, job: BacktestJob) -> bool:
-        """Check if all dependencies for a job are satisfied."""
-        for dep_id in job.dependencies:
-            if dep_id not in self.completed_jobs:
-                return False
-        return True
-
-    def _update_job_completion(self, job: BacktestJob, result: JobResult) -> None:
-        """Update state when a job completes."""
-        # Remove from running jobs
-        if job.job_id in self.running_jobs:
-            del self.running_jobs[job.job_id]
-
-        # Add to appropriate completion list
-        if result.success:
-            self.completed_jobs[job.job_id] = result
-            self.state.completed_jobs += 1
-        else:
-            self.failed_jobs[job.job_id] = result
-            self.state.failed_jobs += 1
-
-        # Update counters
-        self.state.running_jobs = len(self.running_jobs)
-        self.state.queued_jobs = len(self.job_queue) - self.state.completed_jobs - self.state.failed_jobs - self.state.running_jobs
-
-        # Update progress
-        self._update_progress()
 
     def _update_progress(self) -> None:
-        """Update progress and call progress callback if set."""
+        """Update progress and call progress callback if provided."""
         if self.progress_callback:
             try:
                 self.progress_callback(self.state)
@@ -1129,10 +1025,68 @@ class BacktestOrchestrator:
 
             if self._performance_tracker:
                 self._performance_tracker.add_metric(
-                    PerformanceMetricType.TOTAL_EXECUTION_TIME,
+                    PerformanceMetricType.EXECUTION_TIME,
                     total_duration.total_seconds(),
                     "seconds"
                 )
 
         # Log final state
-        self.get_resource_usage_report()
+        logger.info(f"Execution summary: {self.state.completed_jobs} completed, {self.state.failed_jobs} failed, {self.state.running_jobs} still running")
+
+
+@dataclass
+class BacktestJob:
+    """Represents a single backtest job."""
+    job_id: str
+    job_type: BacktestType
+    parameters: Dict[str, Any]
+    priority: int = 50  # 0=lowest, 100=highest
+    estimated_duration_seconds: Optional[float] = None
+    dependencies: List[str] = field(default_factory=list)  # Job IDs this depends on
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    timeout_seconds: Optional[float] = None
+    temp_files: List[Path] = field(default_factory=list)
+    cleanup_functions: List[Callable[[], None]] = field(default_factory=list)
+
+
+@dataclass
+class JobResult:
+    """Result of a backtest job execution."""
+    job_id: str
+    success: bool
+    result_data: Optional[Any] = None
+    error: Optional[Exception] = None
+    execution_time_seconds: float = 0.0
+    resource_usage: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    was_timeout: bool = False
+    cleanup_successful: bool = True
+
+
+@dataclass
+class OrchestrationState:
+    """Current state of the orchestration process."""
+    total_jobs: int = 0
+    completed_jobs: int = 0
+    failed_jobs: int = 0
+    running_jobs: int = 0
+    queued_jobs: int = 0
+    start_time: Optional[datetime] = None
+    estimated_completion_time: Optional[datetime] = None
+    current_resource_usage: ResourceUsage = field(default_factory=ResourceUsage)
+    resource_warnings: List[str] = field(default_factory=list)
+
+
+class BacktestOrchestratorError(Exception):
+    """Base exception for orchestrator errors."""
+    pass
+
+
+class ResourceLimitExceededError(BacktestOrchestratorError):
+    """Raised when resource limits are exceeded."""
+    pass
+
+
+class JobExecutionError(BacktestOrchestratorError):
+    """Raised when job execution fails."""
+    pass

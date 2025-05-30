@@ -9,15 +9,19 @@ This module provides centralized data management for the CLI with:
 - Data source failover and retry logic with exponential backoff
 - Data export and import functionality for analysis
 - Strategy-specific data management for enhanced backtesting
+- Enhanced performance optimizations for strategy caching and parallel execution
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import pickle
 import threading
 import time
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -30,6 +34,10 @@ from app.backtesting.data_manager import DataManager as AppDataManager
 from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.core.strategy_config import StrategyConfig
 from tests._helpers.data_factory import make_price_dataframe
+
+# Import performance tracking
+from ..utils.progress_trackers import (PerformanceMetricType,
+                                       get_performance_tracker)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +69,18 @@ class MarketScenarioType(Enum):
     CHOPPY_WHIPSAW = "choppy_whipsaw"
     GAP_HEAVY = "gap_heavy"
     REAL_DATA = "real_data"
+
+
+@dataclass
+class IndicatorCacheEntry:
+    """Cache entry for indicator calculations."""
+    indicator_name: str
+    data_hash: str
+    parameters: Dict[str, Any]
+    result: pd.DataFrame
+    timestamp: float
+    computation_time: float
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -142,6 +162,20 @@ class CacheEntry:
     metadata: Dict[str, Any]
 
 
+@dataclass
+class CacheStats:
+    """Cache performance statistics."""
+    total_entries: int = 0
+    memory_entries: int = 0
+    disk_entries: int = 0
+    hits: int = 0
+    misses: int = 0
+    evictions: int = 0
+    total_size_mb: float = 0.0
+    hit_rate: float = 0.0
+    memory_usage_mb: float = 0.0
+
+
 class DataFetchError(Exception):
     """Raised when data fetching fails."""
     pass
@@ -163,6 +197,9 @@ class DataManager:
     - Comprehensive data quality validation and cleanup
     - Retry logic with exponential backoff for reliability
     - Data export/import for external analysis
+    - Enhanced performance optimizations for strategy caching and parallel execution
+    - Indicator calculation caching for reuse across strategies
+    - Coordinated cache management across all manager modules
     """
 
     # Default cache settings
@@ -170,12 +207,20 @@ class DataManager:
     DEFAULT_RETRY_ATTEMPTS = 3
     DEFAULT_RETRY_DELAY = 1.0  # seconds
 
+    # Performance optimization settings
+    MAX_PARALLEL_FETCHES = 4
+    INDICATOR_CACHE_SIZE = 200
+    STRATEGY_CACHE_SIZE = 50
+
     def __init__(self,
                  cache_dir: Optional[str] = None,
                  memory_cache_size: int = 100,
                  disk_cache_ttl_hours: int = 24,
                  enable_real_data: bool = True,
-                 retry_attempts: int = 3):
+                 retry_attempts: int = 3,
+                 enable_parallel_fetching: bool = True,
+                 enable_indicator_caching: bool = True,
+                 enable_performance_tracking: bool = True):
         """
         Initialize the data manager.
 
@@ -185,11 +230,17 @@ class DataManager:
             disk_cache_ttl_hours: Time-to-live for disk cache entries
             enable_real_data: Whether to enable real exchange data fetching
             retry_attempts: Number of retry attempts for failed requests
+            enable_parallel_fetching: Enable parallel data fetching for performance
+            enable_indicator_caching: Enable caching of indicator calculations
+            enable_performance_tracking: Enable performance monitoring
         """
         self.memory_cache_size = memory_cache_size
         self.disk_cache_ttl_hours = disk_cache_ttl_hours
         self.enable_real_data = enable_real_data
         self.retry_attempts = retry_attempts
+        self.enable_parallel_fetching = enable_parallel_fetching
+        self.enable_indicator_caching = enable_indicator_caching
+        self.enable_performance_tracking = enable_performance_tracking
 
         # Set up cache directory
         if cache_dir is None:
@@ -205,11 +256,27 @@ class DataManager:
         self._cache_lock = threading.Lock()
         self._connectors: Dict[str, Any] = {}
 
+        # Enhanced caching for performance
+        self._indicator_cache: Dict[str, IndicatorCacheEntry] = {}
+        self._strategy_data_cache: Dict[str, MultiTimeframeDataSet] = {}
+        self._cross_strategy_cache: Dict[str, pd.DataFrame] = {}  # Shared data across strategies
+        self._cache_stats = CacheStats()
+
+        # Performance tracking
+        self._performance_tracker = get_performance_tracker() if enable_performance_tracking else None
+
+        # Parallel execution
+        self._fetch_executor: Optional[ThreadPoolExecutor] = None
+        if enable_parallel_fetching:
+            self._fetch_executor = ThreadPoolExecutor(max_workers=self.MAX_PARALLEL_FETCHES)
+
         # Initialize data sources
         self._initialize_data_sources()
 
         logger.info(f"DataManager initialized with cache at {self.cache_dir}")
         logger.info(f"Real data enabled: {enable_real_data}")
+        logger.info(f"Parallel fetching enabled: {enable_parallel_fetching}")
+        logger.info(f"Indicator caching enabled: {enable_indicator_caching}")
 
     def get_data(self, request: DataRequest) -> pd.DataFrame:
         """
@@ -225,6 +292,39 @@ class DataManager:
             DataFetchError: If data cannot be fetched from any source
             DataQualityError: If data quality is insufficient
         """
+        operation_name = f"fetch_data_{request.symbol}_{request.timeframe}"
+
+        if self._performance_tracker:
+            with self._performance_tracker.track_operation(operation_name):
+                return self._get_data_with_tracking(request)
+        else:
+            return self._get_data_internal(request)
+
+    def _get_data_with_tracking(self, request: DataRequest) -> pd.DataFrame:
+        """Internal method with performance tracking."""
+        start_time = time.time()
+
+        try:
+            result = self._get_data_internal(request)
+
+            if self._performance_tracker:
+                fetch_time = time.time() - start_time
+                self._performance_tracker.add_metric(
+                    PerformanceMetricType.DATA_FETCH_TIME,
+                    fetch_time,
+                    "seconds",
+                    context={"symbol": request.symbol, "timeframe": request.timeframe}
+                )
+
+            return result
+
+        except Exception as e:
+            if self._performance_tracker:
+                self._performance_tracker.record_cache_miss("data")
+            raise
+
+    def _get_data_internal(self, request: DataRequest) -> pd.DataFrame:
+        """Internal data fetching logic."""
         cache_key = self._generate_cache_key(request)
 
         # Try to get from cache first
@@ -232,6 +332,8 @@ class DataManager:
             cached_data = self._get_from_cache(cache_key)
             if cached_data is not None:
                 logger.debug(f"Using cached data for {cache_key}")
+                if self._performance_tracker:
+                    self._performance_tracker.record_cache_hit("data")
                 return cached_data
 
         # Try each data source in preference order
@@ -262,7 +364,76 @@ class DataManager:
                 continue
 
         # If we get here, all sources failed
+        if self._performance_tracker:
+            self._performance_tracker.record_cache_miss("data")
         raise DataFetchError(f"Unable to fetch data for {request.symbol} from any source. Last error: {last_error}")
+
+    def get_multi_timeframe_data_parallel(self,
+                                         symbol: str,
+                                         timeframes: List[str],
+                                         exchange: Optional[str] = None,
+                                         days_back: int = 30) -> Dict[str, pd.DataFrame]:
+        """
+        Get data for multiple timeframes efficiently using parallel fetching.
+
+        Args:
+            symbol: Market symbol (e.g., "ETH-USD")
+            timeframes: List of timeframes (e.g., ["1h", "4h", "1d"])
+            exchange: Optional exchange name
+            days_back: Number of days of historical data
+
+        Returns:
+            Dictionary mapping timeframe to DataFrame
+        """
+        if not self.enable_parallel_fetching or not self._fetch_executor:
+            # Fall back to sequential fetching
+            return self.get_multi_timeframe_data(symbol, timeframes, exchange, days_back)
+
+        operation_name = f"parallel_fetch_{symbol}_{len(timeframes)}_timeframes"
+
+        if self._performance_tracker:
+            with self._performance_tracker.track_operation(operation_name):
+                return self._get_multi_timeframe_parallel_internal(symbol, timeframes, exchange, days_back)
+        else:
+            return self._get_multi_timeframe_parallel_internal(symbol, timeframes, exchange, days_back)
+
+    def _get_multi_timeframe_parallel_internal(self,
+                                              symbol: str,
+                                              timeframes: List[str],
+                                              exchange: Optional[str],
+                                              days_back: int) -> Dict[str, pd.DataFrame]:
+        """Internal parallel multi-timeframe fetching."""
+        results = {}
+
+        # Create requests for all timeframes
+        fetch_jobs = []
+        for timeframe in timeframes:
+            request = DataRequest(
+                symbol=symbol,
+                timeframe=timeframe,
+                exchange=exchange,
+                days_back=days_back
+            )
+            fetch_jobs.append((timeframe, request))
+
+        # Submit parallel fetch jobs
+        future_to_timeframe = {}
+        for timeframe, request in fetch_jobs:
+            future = self._fetch_executor.submit(self._get_data_internal, request)
+            future_to_timeframe[future] = timeframe
+
+        # Collect results as they complete
+        for future in as_completed(future_to_timeframe):
+            timeframe = future_to_timeframe[future]
+            try:
+                data = future.result()
+                results[timeframe] = data
+                logger.debug(f"Completed parallel fetch for {symbol} {timeframe}")
+            except Exception as e:
+                logger.error(f"Failed to fetch {symbol} {timeframe}: {e}")
+                # Continue with other timeframes
+
+        return results
 
     def get_multi_timeframe_data(self,
                                 symbol: str,
@@ -299,284 +470,331 @@ class DataManager:
             try:
                 data = self.get_data(request)
                 results[timeframe] = data
-                logger.debug(f"Fetched {len(data)} records for {symbol} {timeframe}")
             except Exception as e:
-                logger.error(f"Failed to fetch {symbol} {timeframe}: {e}")
+                logger.error(f"Failed to fetch data for {symbol} {timeframe}: {e}")
                 # Continue with other timeframes
 
         return results
 
-    def generate_synthetic_data(self,
-                              symbol: str,
-                              timeframe: str,
-                              days: int = 30,
-                              pattern: str = "trend",
-                              noise: float = 0.02,
-                              seed: Optional[int] = None) -> pd.DataFrame:
+    def cache_indicator_calculation(self,
+                                   indicator_name: str,
+                                   data: pd.DataFrame,
+                                   parameters: Dict[str, Any],
+                                   result: pd.DataFrame,
+                                   computation_time: float) -> None:
         """
-        Generate synthetic market data for testing.
+        Cache indicator calculation results for reuse across strategies.
 
         Args:
-            symbol: Market symbol for labeling
-            timeframe: Timeframe for data generation
-            days: Number of days of data to generate
-            pattern: Market pattern ("trend", "sideways", "volatile", etc.)
-            noise: Amount of random noise to add
-            seed: Random seed for reproducible results
-
-        Returns:
-            DataFrame with synthetic OHLCV data
+            indicator_name: Name of the indicator
+            data: Input data used for calculation
+            parameters: Indicator parameters
+            result: Calculated indicator result
+            computation_time: Time taken for calculation
         """
-        # Calculate number of candles based on timeframe
-        candles_per_day = self._get_candles_per_day(timeframe)
-        total_candles = int(days * candles_per_day)
+        if not self.enable_indicator_caching:
+            return
 
-        # Generate synthetic data using the data factory
-        data = make_price_dataframe(
-            rows=total_candles,
-            pattern=pattern,
-            noise=noise,
-            seed=seed
+        # Generate cache key based on data hash and parameters
+        data_hash = self._generate_data_hash(data)
+        param_hash = self._generate_parameter_hash(parameters)
+        cache_key = f"indicator_{indicator_name}_{data_hash}_{param_hash}"
+
+        # Create cache entry
+        entry = IndicatorCacheEntry(
+            indicator_name=indicator_name,
+            data_hash=data_hash,
+            parameters=parameters,
+            result=result.copy(),
+            timestamp=time.time(),
+            computation_time=computation_time
         )
 
-        # Adjust timestamps for the specified timeframe
-        timeframe_minutes = self._timeframe_to_minutes(timeframe)
-        start_time = datetime.now() - timedelta(days=days)
+        with self._cache_lock:
+            self._indicator_cache[cache_key] = entry
 
-        timestamps = []
-        current_time = start_time
-        for _ in range(total_candles):
-            timestamps.append(current_time)
-            current_time += timedelta(minutes=timeframe_minutes)
+            # Evict oldest entries if cache is full
+            if len(self._indicator_cache) > self.INDICATOR_CACHE_SIZE:
+                oldest_key = min(self._indicator_cache.keys(),
+                               key=lambda k: self._indicator_cache[k].timestamp)
+                del self._indicator_cache[oldest_key]
+                self._cache_stats.evictions += 1
 
-        data.index = pd.DatetimeIndex(timestamps, name='timestamp')
+        logger.debug(f"Cached indicator calculation: {indicator_name}")
 
-        # Add metadata
-        data.attrs = {
-            'symbol': symbol,
-            'timeframe': timeframe,
-            'pattern': pattern,
-            'generated_at': datetime.now().isoformat(),
-            'source': 'synthetic'
-        }
-
-        logger.info(f"Generated {len(data)} synthetic candles for {symbol} {timeframe}")
-        return data
-
-    def assess_data_quality(self, data: pd.DataFrame, symbol: str = "unknown") -> DataQualityReport:
+    def get_cached_indicator_calculation(self,
+                                       indicator_name: str,
+                                       data: pd.DataFrame,
+                                       parameters: Dict[str, Any]) -> Optional[pd.DataFrame]:
         """
-        Assess the quality of market data.
+        Retrieve cached indicator calculation if available.
 
         Args:
-            data: DataFrame with market data
-            symbol: Symbol name for reporting
+            indicator_name: Name of the indicator
+            data: Input data for calculation
+            parameters: Indicator parameters
 
         Returns:
-            DataQualityReport with detailed quality assessment
+            Cached result DataFrame or None if not found
         """
-        return self._assess_data_quality(data, symbol=symbol)
+        if not self.enable_indicator_caching:
+            return None
 
-    def export_data(self,
-                   data: pd.DataFrame,
-                   output_path: str,
-                   format: str = "csv",
-                   include_metadata: bool = True) -> None:
-        """
-        Export data to file for external analysis.
-
-        Args:
-            data: DataFrame to export
-            output_path: Path where to save the data
-            format: Export format ("csv", "json", "parquet", "pickle")
-            include_metadata: Whether to include metadata in export
-        """
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Prepare data for export
-        export_data = data.copy()
-
-        if include_metadata and hasattr(data, 'attrs'):
-            metadata = data.attrs.copy()
-            metadata['exported_at'] = datetime.now().isoformat()
-            metadata['export_format'] = format
-        else:
-            metadata = {}
-
-        if format.lower() == "csv":
-            export_data.to_csv(output_path)
-            if metadata:
-                metadata_path = output_path.with_suffix('.metadata.json')
-                with open(metadata_path, 'w') as f:
-                    json.dump(metadata, f, indent=2)
-
-        elif format.lower() == "json":
-            # Export as JSON with metadata
-            export_dict = {
-                'data': export_data.to_dict(orient='records'),
-                'index': export_data.index.tolist(),
-                'metadata': metadata
-            }
-            with open(output_path, 'w') as f:
-                json.dump(export_dict, f, indent=2, default=str)
-
-        elif format.lower() == "parquet":
-            export_data.to_parquet(output_path)
-            if metadata:
-                metadata_path = output_path.with_suffix('.metadata.json')
-                with open(metadata_path, 'w') as f:
-                    json.dump(metadata, f, indent=2)
-
-        elif format.lower() == "pickle":
-            # Pickle preserves all metadata
-            export_dict = {
-                'data': export_data,
-                'metadata': metadata
-            }
-            with open(output_path, 'wb') as f:
-                pickle.dump(export_dict, f)
-        else:
-            raise ValueError(f"Unsupported export format: {format}")
-
-        logger.info(f"Exported {len(export_data)} records to {output_path}")
-
-    def import_data(self, file_path: str, format: Optional[str] = None) -> pd.DataFrame:
-        """
-        Import data from file.
-
-        Args:
-            file_path: Path to the data file
-            format: File format. If None, inferred from extension
-
-        Returns:
-            DataFrame with imported data
-        """
-        file_path = Path(file_path)
-
-        if not file_path.exists():
-            raise FileNotFoundError(f"Data file not found: {file_path}")
-
-        if format is None:
-            format = file_path.suffix.lower().lstrip('.')
-
-        if format == "csv":
-            data = pd.read_csv(file_path, index_col=0, parse_dates=True)
-
-            # Try to load metadata
-            metadata_path = file_path.with_suffix('.metadata.json')
-            if metadata_path.exists():
-                with open(metadata_path, 'r') as f:
-                    metadata = json.load(f)
-                data.attrs = metadata
-
-        elif format == "json":
-            with open(file_path, 'r') as f:
-                json_data = json.load(f)
-
-            data = pd.DataFrame(json_data['data'])
-            if 'index' in json_data:
-                data.index = pd.to_datetime(json_data['index'])
-            if 'metadata' in json_data:
-                data.attrs = json_data['metadata']
-
-        elif format == "parquet":
-            data = pd.read_parquet(file_path)
-
-            # Try to load metadata
-            metadata_path = file_path.with_suffix('.metadata.json')
-            if metadata_path.exists():
-                with open(metadata_path, 'r') as f:
-                    metadata = json.load(f)
-                data.attrs = metadata
-
-        elif format == "pickle":
-            with open(file_path, 'rb') as f:
-                pickle_data = pickle.load(f)
-
-            data = pickle_data['data']
-            if 'metadata' in pickle_data:
-                data.attrs = pickle_data['metadata']
-        else:
-            raise ValueError(f"Unsupported import format: {format}")
-
-        logger.info(f"Imported {len(data)} records from {file_path}")
-        return data
-
-    def clear_cache(self, older_than_hours: Optional[int] = None) -> int:
-        """
-        Clear cache entries.
-
-        Args:
-            older_than_hours: If specified, only clear entries older than this
-
-        Returns:
-            Number of entries cleared
-        """
-        cleared_count = 0
+        # Generate cache key
+        data_hash = self._generate_data_hash(data)
+        param_hash = self._generate_parameter_hash(parameters)
+        cache_key = f"indicator_{indicator_name}_{data_hash}_{param_hash}"
 
         with self._cache_lock:
-            # Clear memory cache
-            if older_than_hours is None:
-                cleared_count += len(self._memory_cache)
-                self._memory_cache.clear()
-            else:
-                cutoff_time = time.time() - (older_than_hours * 3600)
-                keys_to_remove = [
-                    key for key, entry in self._memory_cache.items()
-                    if entry.timestamp < cutoff_time
-                ]
-                for key in keys_to_remove:
-                    del self._memory_cache[key]
-                cleared_count += len(keys_to_remove)
+            entry = self._indicator_cache.get(cache_key)
+            if entry is not None:
+                # Check if entry is still fresh (1 hour TTL for indicator calculations)
+                age_hours = (time.time() - entry.timestamp) / 3600
+                if age_hours < 1.0:
+                    if self._performance_tracker:
+                        self._performance_tracker.record_cache_hit("indicator")
+                    logger.debug(f"Using cached indicator calculation: {indicator_name}")
+                    return entry.result.copy()
+                else:
+                    # Remove stale entry
+                    del self._indicator_cache[cache_key]
 
-            # Clear disk cache
-            if self.cache_dir.exists():
-                for cache_file in self.cache_dir.glob("*.cache"):
-                    if older_than_hours is None:
-                        cache_file.unlink()
-                        cleared_count += 1
-                    else:
-                        file_age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
-                        if file_age_hours > older_than_hours:
-                            cache_file.unlink()
-                            cleared_count += 1
+        if self._performance_tracker:
+            self._performance_tracker.record_cache_miss("indicator")
+        return None
 
-        logger.info(f"Cleared {cleared_count} cache entries")
-        return cleared_count
-
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def cache_strategy_data(self,
+                           strategy_data: MultiTimeframeDataSet,
+                           strategy_name: str) -> None:
         """
-        Get cache statistics.
+        Cache strategy data efficiently for reuse across multiple strategies.
 
-        Returns:
-            Dictionary with cache statistics
+        Args:
+            strategy_data: MultiTimeframeDataSet to cache
+            strategy_name: Name of the strategy for cache key generation
         """
-        with self._cache_lock:
-            memory_entries = len(self._memory_cache)
-            memory_size_mb = sum(
-                entry.data.memory_usage(deep=True).sum() / 1024 / 1024
-                for entry in self._memory_cache.values()
+        operation_name = f"cache_strategy_data_{strategy_name}"
+
+        if self._performance_tracker:
+            with self._performance_tracker.track_operation(operation_name):
+                self._cache_strategy_data_internal(strategy_data, strategy_name)
+        else:
+            self._cache_strategy_data_internal(strategy_data, strategy_name)
+
+    def _cache_strategy_data_internal(self,
+                                     strategy_data: MultiTimeframeDataSet,
+                                     strategy_name: str) -> None:
+        """Internal strategy data caching logic."""
+        # Cache individual timeframe data in cross-strategy cache
+        for timeframe, data in strategy_data.data.items():
+            symbol = strategy_data.metadata.get('market', 'unknown')
+            cross_cache_key = f"cross_strategy_{symbol}_{timeframe}"
+
+            with self._cache_lock:
+                self._cross_strategy_cache[cross_cache_key] = data.copy()
+
+            # Also cache in regular data cache
+            cache_key = f"strategy_{strategy_name}_{timeframe}_{symbol}"
+
+            # Create a dummy request for caching
+            dummy_request = DataRequest(
+                symbol=symbol,
+                timeframe=timeframe,
+                exchange=strategy_data.metadata.get('exchange')
             )
 
-            disk_entries = len(list(self.cache_dir.glob("*.cache"))) if self.cache_dir.exists() else 0
-            disk_size_mb = sum(
-                f.stat().st_size / 1024 / 1024
-                for f in self.cache_dir.glob("*.cache")
-            ) if self.cache_dir.exists() else 0
+            quality_report = strategy_data.quality_reports.get(timeframe)
+            if quality_report is None:
+                quality_report = self._assess_data_quality(data, dummy_request)
+
+            self._cache_data(
+                cache_key=cache_key,
+                data=data,
+                source=DataSourceType.CACHED,
+                quality_report=quality_report,
+                request=dummy_request
+            )
+
+        # Cache the full strategy dataset
+        with self._cache_lock:
+            self._strategy_data_cache[strategy_name] = strategy_data
+
+            # Evict oldest strategy data if cache is full
+            if len(self._strategy_data_cache) > self.STRATEGY_CACHE_SIZE:
+                oldest_strategy = min(self._strategy_data_cache.keys(),
+                                    key=lambda k: getattr(self._strategy_data_cache[k], 'cached_at', 0))
+                del self._strategy_data_cache[oldest_strategy]
+                self._cache_stats.evictions += 1
+
+        logger.info(f"Cached strategy data for '{strategy_name}' with {len(strategy_data.data)} timeframes")
+
+    def get_cross_strategy_data(self,
+                               symbol: str,
+                               timeframe: str) -> Optional[pd.DataFrame]:
+        """
+        Get data that can be shared across multiple strategies for the same symbol/timeframe.
+
+        Args:
+            symbol: Market symbol
+            timeframe: Data timeframe
+
+        Returns:
+            Cached DataFrame or None if not available
+        """
+        cross_cache_key = f"cross_strategy_{symbol}_{timeframe}"
+
+        with self._cache_lock:
+            data = self._cross_strategy_cache.get(cross_cache_key)
+            if data is not None:
+                if self._performance_tracker:
+                    self._performance_tracker.record_cache_hit("cross_strategy")
+                logger.debug(f"Using cross-strategy cached data for {symbol} {timeframe}")
+                return data.copy()
+
+        if self._performance_tracker:
+            self._performance_tracker.record_cache_miss("cross_strategy")
+        return None
+
+    def optimize_cache_for_strategies(self, strategy_configs: List[StrategyConfig]) -> None:
+        """
+        Pre-warm caches based on strategy requirements for optimal performance.
+
+        Args:
+            strategy_configs: List of strategy configurations to optimize for
+        """
+        operation_name = f"optimize_cache_{len(strategy_configs)}_strategies"
+
+        if self._performance_tracker:
+            with self._performance_tracker.track_operation(operation_name):
+                self._optimize_cache_internal(strategy_configs)
+        else:
+            self._optimize_cache_internal(strategy_configs)
+
+    def _optimize_cache_internal(self, strategy_configs: List[StrategyConfig]) -> None:
+        """Internal cache optimization logic."""
+        # Identify common data requirements across strategies
+        data_requirements = defaultdict(set)
+
+        for config in strategy_configs:
+            symbol = config.market
+            timeframe = config.timeframe
+            data_requirements[(symbol, timeframe)].add(config.name)
+
+            # Also consider indicator timeframes
+            for indicator_config in config.indicators:
+                if hasattr(indicator_config, 'timeframe') and indicator_config.timeframe:
+                    indicator_timeframe = indicator_config.timeframe
+                    data_requirements[(symbol, indicator_timeframe)].add(f"{config.name}_indicator")
+
+        # Pre-fetch data for requirements used by multiple strategies
+        high_priority_data = [
+            (symbol, timeframe) for (symbol, timeframe), strategies in data_requirements.items()
+            if len(strategies) > 1
+        ]
+
+        logger.info(f"Pre-warming cache for {len(high_priority_data)} high-priority data sets")
+
+        # Use parallel fetching for pre-warming if available
+        if self.enable_parallel_fetching and self._fetch_executor:
+            futures = []
+            for symbol, timeframe in high_priority_data:
+                request = DataRequest(symbol=symbol, timeframe=timeframe, days_back=30)
+                future = self._fetch_executor.submit(self._get_data_internal, request)
+                futures.append(future)
+
+            # Wait for completion
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.warning(f"Failed to pre-warm cache: {e}")
+        else:
+            # Sequential pre-warming
+            for symbol, timeframe in high_priority_data:
+                try:
+                    request = DataRequest(symbol=symbol, timeframe=timeframe, days_back=30)
+                    self._get_data_internal(request)
+                except Exception as e:
+                    logger.warning(f"Failed to pre-warm cache for {symbol} {timeframe}: {e}")
+
+    def get_enhanced_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive cache statistics including performance metrics.
+
+        Returns:
+            Dictionary with detailed cache statistics
+        """
+        with self._cache_lock:
+            # Base cache stats
+            memory_entries = len(self._memory_cache)
+            indicator_entries = len(self._indicator_cache)
+            strategy_entries = len(self._strategy_data_cache)
+            cross_strategy_entries = len(self._cross_strategy_cache)
+
+            # Calculate memory usage estimates
+            memory_usage_mb = 0.0
+            for entry in self._memory_cache.values():
+                # Rough estimate: DataFrame size in MB
+                memory_usage_mb += entry.data.memory_usage(deep=True).sum() / 1024 / 1024
+
+            # Disk cache stats
+            disk_entries = 0
+            disk_size_mb = 0.0
+            if self.cache_dir.exists():
+                for cache_file in self.cache_dir.glob("*.cache"):
+                    disk_entries += 1
+                    disk_size_mb += cache_file.stat().st_size / 1024 / 1024
+
+            # Update cache stats
+            self._cache_stats.total_entries = memory_entries + disk_entries
+            self._cache_stats.memory_entries = memory_entries
+            self._cache_stats.disk_entries = disk_entries
+            self._cache_stats.total_size_mb = memory_usage_mb + disk_size_mb
+            self._cache_stats.memory_usage_mb = memory_usage_mb
+
+            # Calculate hit rate
+            total_requests = self._cache_stats.hits + self._cache_stats.misses
+            self._cache_stats.hit_rate = (self._cache_stats.hits / total_requests
+                                        if total_requests > 0 else 0.0)
 
         return {
-            'memory_cache': {
-                'entries': memory_entries,
-                'size_mb': round(memory_size_mb, 2),
-                'max_entries': self.memory_cache_size
-            },
-            'disk_cache': {
-                'entries': disk_entries,
-                'size_mb': round(disk_size_mb, 2),
-                'directory': str(self.cache_dir),
-                'ttl_hours': self.disk_cache_ttl_hours
+            'total_entries': self._cache_stats.total_entries,
+            'memory_entries': memory_entries,
+            'disk_entries': disk_entries,
+            'indicator_cache_entries': indicator_entries,
+            'strategy_cache_entries': strategy_entries,
+            'cross_strategy_cache_entries': cross_strategy_entries,
+            'cache_hits': self._cache_stats.hits,
+            'cache_misses': self._cache_stats.misses,
+            'hit_rate': self._cache_stats.hit_rate,
+            'evictions': self._cache_stats.evictions,
+            'total_size_mb': self._cache_stats.total_size_mb,
+            'memory_usage_mb': memory_usage_mb,
+            'disk_size_mb': disk_size_mb,
+            'cache_efficiency': {
+                'memory_hit_rate': memory_entries / (memory_entries + disk_entries) if (memory_entries + disk_entries) > 0 else 0,
+                'indicator_reuse_rate': indicator_entries / max(1, indicator_entries + strategy_entries),
+                'cross_strategy_sharing': cross_strategy_entries / max(1, strategy_entries)
             }
         }
+
+    def _generate_data_hash(self, data: pd.DataFrame) -> str:
+        """Generate hash for DataFrame to detect identical data."""
+        # Use a subset of data for hash to avoid performance issues with large datasets
+        if len(data) > 100:
+            sample_data = data.iloc[::len(data)//100]  # Sample every nth row
+        else:
+            sample_data = data
+
+        # Create hash from values and index
+        hash_input = f"{sample_data.values.tobytes()}{str(sample_data.index.tolist())}"
+        return hashlib.md5(hash_input.encode()).hexdigest()[:16]
+
+    def _generate_parameter_hash(self, parameters: Dict[str, Any]) -> str:
+        """Generate hash for parameters dictionary."""
+        # Sort parameters for consistent hashing
+        sorted_params = json.dumps(parameters, sort_keys=True, default=str)
+        return hashlib.md5(sorted_params.encode()).hexdigest()[:8]
 
     # Private methods for internal functionality
 
@@ -1086,56 +1304,6 @@ class DataManager:
             characteristics=characteristics,
             generated_at=datetime.now()
         )
-
-    def cache_strategy_data(self,
-                           strategy_data: MultiTimeframeDataSet,
-                           strategy_name: str) -> None:
-        """
-        Cache strategy data efficiently for reuse across multiple strategies.
-
-        Args:
-            strategy_data: MultiTimeframeDataSet to cache
-            strategy_name: Name of the strategy for cache key generation
-        """
-        for timeframe, data in strategy_data.data.items():
-            cache_key = f"strategy_{strategy_name}_{timeframe}_{strategy_data.metadata.get('market', 'unknown')}"
-
-            # Create a dummy request for caching
-            dummy_request = DataRequest(
-                symbol=strategy_data.metadata.get('market', 'unknown'),
-                timeframe=timeframe,
-                exchange=strategy_data.metadata.get('exchange')
-            )
-
-            quality_report = strategy_data.quality_reports.get(timeframe)
-            if quality_report is None:
-                quality_report = self._assess_data_quality(data, dummy_request)
-
-            self._cache_data(
-                cache_key=cache_key,
-                data=data,
-                source=DataSourceType.CACHED,
-                quality_report=quality_report,
-                request=dummy_request
-            )
-
-        logger.info(f"Cached strategy data for '{strategy_name}' with {len(strategy_data.data)} timeframes")
-
-    def validate_strategy_data_requirements(self, strategy_config: StrategyConfig) -> 'ValidationResult':
-        """
-        Validate that strategy data requirements can be met.
-
-        Args:
-            strategy_config: Strategy configuration to validate
-
-        Returns:
-            ValidationResult indicating whether requirements can be met
-        """
-        from tests._utils.cli.validation.data_validator import (
-            DataValidator, ValidationResult)
-
-        validator = DataValidator()
-        return validator.validate_strategy_data_requirements(strategy_config)
 
     def _get_strategy_timeframes(self, strategy_config: StrategyConfig) -> Set[str]:
         """
