@@ -29,11 +29,10 @@ from app.indicators.base_indicator import (BaseIndicator, Signal,
 from app.indicators.indicator_factory import IndicatorFactory
 from app.risk_management.position_sizing import (PositionSizer,
                                                  PositionSizingConfig)
-
-from ..core.config_manager import ConfigManager
-from ..core.data_manager import DataManager as CLIDataManager
-from ..core.data_manager import DataRequest, DataSourceType
-from ..validation.strategy_validator import StrategyValidator
+from core.config_manager import ConfigManager
+from core.data_manager import DataManager as CLIDataManager
+from core.data_manager import DataRequest, DataSourceType
+from validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
 

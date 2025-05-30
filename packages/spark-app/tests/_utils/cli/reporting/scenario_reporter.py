@@ -17,8 +17,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..core.config_manager import ConfigManager
-from ..core.scenario_manager import ScenarioManager
+from core.config_manager import ConfigManager
+from core.scenario_manager import ScenarioManager
 
 logger = logging.getLogger(__name__)
 

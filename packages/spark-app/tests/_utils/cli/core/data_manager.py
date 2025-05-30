@@ -34,10 +34,9 @@ from app.backtesting.data_manager import DataManager as AppDataManager
 from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.core.strategy_config import StrategyConfig
 from tests._helpers.data_factory import make_price_dataframe
-
 # Import performance tracking
-from ..utils.progress_trackers import (PerformanceMetricType,
-                                       get_performance_tracker)
+from utils.progress_trackers import (PerformanceMetricType,
+                                     get_performance_tracker)
 
 logger = logging.getLogger(__name__)
 

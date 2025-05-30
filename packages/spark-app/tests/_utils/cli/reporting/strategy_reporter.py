@@ -15,8 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..core.config_manager import ConfigManager
-from ..validation.strategy_validator import StrategyValidator
+from core.config_manager import ConfigManager
+from validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
 

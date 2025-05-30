@@ -23,20 +23,26 @@ spark_app_dir = os.path.dirname(os.path.dirname(os.path.dirname(cli_dir)))
 sys.path.insert(0, spark_app_dir)
 sys.path.insert(0, cli_dir)
 
-# Now use absolute imports from the CLI modules
+# Import app-level components directly
+from app.backtesting.backtest_engine import BacktestEngine
+from app.backtesting.indicator_backtest_manager import IndicatorBacktestManager
+# Now use absolute imports from the CLI modules that are available
 from core.config_manager import ConfigManager
 from core.data_manager import DataManager
 from core.scenario_manager import ScenarioManager
+# Import managers directly since they're not in __init__.py yet
 from managers.comparison_manager import ComparisonManager
 from managers.scenario_backtest_manager import ScenarioBacktestManager
 from managers.strategy_backtest_manager import StrategyBacktestManager
+# Import reporting modules (these are properly exported)
 from reporting.comparison_reporter import ComparisonReporter
 from reporting.scenario_reporter import ScenarioReporter
 from reporting.strategy_reporter import StrategyReporter
-# Import CLI utility functions and error classes
+# Import CLI utility functions and error classes that exist
 from utils import (ConfigurationError, DataFetchingError, StrategyError,
-                   cli_error_handler, strategy_error_handler,
-                   validate_required_params)
+                   ValidationError, data_fetch_retry, graceful_degradation,
+                   strategy_error_handler, validate_required_params)
+# Import validation modules (these are properly exported)
 from validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)

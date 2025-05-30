@@ -20,13 +20,12 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from app.backtesting.backtest_engine import BacktestResult
+from core.config_manager import ConfigManager
+from core.data_manager import DataManager as CLIDataManager
+from managers.indicator_backtest_manager import IndicatorBacktestManager
+from managers.scenario_backtest_manager import ScenarioBacktestManager
+from managers.strategy_backtest_manager import StrategyBacktestManager
 from scipy import stats
-
-from ..core.config_manager import ConfigManager
-from ..core.data_manager import DataManager as CLIDataManager
-from .indicator_backtest_manager import IndicatorBacktestManager
-from .scenario_backtest_manager import ScenarioBacktestManager
-from .strategy_backtest_manager import StrategyBacktestManager
 
 logger = logging.getLogger(__name__)
 

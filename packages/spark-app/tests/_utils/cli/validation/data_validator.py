@@ -17,8 +17,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-
-from ..core.data_manager import DataManager
+from core.data_manager import DataManager
 
 logger = logging.getLogger(__name__)
 

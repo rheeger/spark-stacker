@@ -19,13 +19,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 from app.backtesting.backtest_engine import BacktestResult
-
-from ..core.config_manager import ConfigManager
-from ..core.data_manager import DataManager as CLIDataManager
-from ..core.scenario_manager import (ScenarioConfig, ScenarioManager,
-                                     ScenarioResult, ScenarioType)
-from .indicator_backtest_manager import IndicatorBacktestManager
-from .strategy_backtest_manager import StrategyBacktestManager
+from core.config_manager import ConfigManager
+from core.data_manager import DataManager as CLIDataManager
+from core.scenario_manager import (ScenarioConfig, ScenarioManager,
+                                   ScenarioResult, ScenarioType)
+from managers.indicator_backtest_manager import IndicatorBacktestManager
+from managers.strategy_backtest_manager import StrategyBacktestManager
 
 logger = logging.getLogger(__name__)
 

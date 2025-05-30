@@ -16,8 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from app.core.strategy_config import StrategyConfig
 from app.indicators.indicator_factory import IndicatorFactory
-
-from ..core.config_manager import ConfigManager
+from core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 

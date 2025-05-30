@@ -20,9 +20,9 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from ..core.config_manager import ConfigManager
-from ..managers.comparison_manager import ComparisonManager
-from .scenario_reporter import ScenarioReporter
+from core.config_manager import ConfigManager
+from managers.comparison_manager import ComparisonManager
+from reporting.scenario_reporter import ScenarioReporter
 
 logger = logging.getLogger(__name__)
 
