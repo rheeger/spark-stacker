@@ -233,44 +233,44 @@ of concerns.
 
 #### 1.4.4 Specialized Manager Classes
 
-- [ ] **Refactor strategy backtest manager**
+- [x] **Refactor strategy backtest manager**
       (`packages/spark-app/tests/_utils/cli/managers/strategy_backtest_manager.py` - MOVE FROM
       SECTION 2.1)
 
-  - [ ] Move from `tests/_utils/strategy_backtest_manager.py`
-  - [ ] Add integration with new core modules
-  - [ ] Add enhanced error handling and recovery
-  - [ ] Add strategy-specific optimization features
-  - [ ] Add strategy performance caching
-  - [ ] Add strategy result comparison utilities
+  - [x] Move from `tests/_utils/strategy_backtest_manager.py`
+  - [x] Add integration with new core modules
+  - [x] Add enhanced error handling and recovery
+  - [x] Add strategy-specific optimization features
+  - [x] Add strategy performance caching
+  - [x] Add strategy result comparison utilities
 
-- [ ] **Refactor indicator backtest manager**
+- [x] **Refactor indicator backtest manager**
       (`packages/spark-app/tests/_utils/cli/managers/indicator_backtest_manager.py` - MOVE EXISTING)
 
-  - [ ] Move existing IndicatorBacktestManager logic
-  - [ ] Add integration with new architecture
-  - [ ] Maintain compatibility with existing functionality
-  - [ ] Add enhanced reporting features
-  - [ ] Add indicator performance caching
+  - [x] Move existing IndicatorBacktestManager logic
+  - [x] Add integration with new architecture
+  - [x] Maintain compatibility with existing functionality
+  - [x] Add enhanced reporting features
+  - [x] Add indicator performance caching
 
-- [ ] **Create scenario backtest manager**
+- [x] **Create scenario backtest manager**
       (`packages/spark-app/tests/_utils/cli/managers/scenario_backtest_manager.py` - MOVE FROM
       SECTION 2.4)
 
-  - [ ] Move from `tests/_utils/scenario_backtest_manager.py`
-  - [ ] Add integration with core scenario manager
-  - [ ] Add parallel scenario execution
-  - [ ] Add scenario result aggregation
-  - [ ] Add scenario-specific performance metrics
+  - [x] Move from `tests/_utils/scenario_backtest_manager.py`
+  - [x] Add integration with core scenario manager
+  - [x] Add parallel scenario execution
+  - [x] Add scenario result aggregation
+  - [x] Add scenario-specific performance metrics
 
-- [ ] **Create comparison manager**
+- [x] **Create comparison manager**
       (`packages/spark-app/tests/_utils/cli/managers/comparison_manager.py` - NEW FILE)
-  - [ ] Centralize all comparison logic
-  - [ ] Handle strategy-to-strategy comparisons
-  - [ ] Handle indicator-to-indicator comparisons
-  - [ ] Handle cross-type comparisons
-  - [ ] Add statistical comparison features
-  - [ ] Add comparison result export functionality
+  - [x] Centralize all comparison logic
+  - [x] Handle strategy-to-strategy comparisons
+  - [x] Handle indicator-to-indicator comparisons
+  - [x] Handle cross-type comparisons
+  - [x] Add statistical comparison features
+  - [x] Add comparison result export functionality
 
 #### 1.4.5 Reporting Module Architecture
 
