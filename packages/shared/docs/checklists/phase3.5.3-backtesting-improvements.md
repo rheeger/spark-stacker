@@ -715,33 +715,33 @@ of concerns.
 
 ### 5.1 Legacy Command Support
 
-- [ ] **Maintain existing indicator commands** (now in `cli/commands/indicator_commands.py`)
+- [x] **Maintain existing indicator commands** (now in `cli/commands/indicator_commands.py`)
 
-  - [ ] Keep `demo`, `real-data`, `compare`, `compare-popular` commands working
-  - [ ] Add deprecation warnings for indicator-only commands
-  - [ ] Provide migration suggestions to strategy-based commands
-  - [ ] Ensure existing scripts and workflows continue working
-  - [ ] Add flag to disable deprecation warnings if needed
-  - [ ] **Use backward compatibility shim in main cli.py file**
-  - [ ] **Integrate with new IndicatorBacktestManager location**
+  - [x] Keep `demo`, `real-data`, `compare`, `compare-popular` commands working
+  - [x] Add deprecation warnings for indicator-only commands
+  - [x] Provide migration suggestions to strategy-based commands
+  - [x] Ensure existing scripts and workflows continue working
+  - [x] Add flag to disable deprecation warnings if needed
+  - [x] **Use backward compatibility shim in main cli.py file**
+  - [x] **Integrate with new IndicatorBacktestManager location**
 
-- [ ] **Add migration utilities** (in `cli/commands/utility_commands.py`)
-  - [ ] Add `--suggest-strategy` flag to indicator commands
-  - [ ] Show which strategies use the specified indicator
-  - [ ] Provide example strategy commands for equivalent functionality
-  - [ ] Add automatic strategy creation suggestions for common patterns
-  - [ ] **Use ConfigManager for strategy discovery and suggestions**
+- [x] **Add migration utilities** (in `cli/commands/utility_commands.py`)
+  - [x] Add `--suggest-strategy` flag to indicator commands
+  - [x] Show which strategies use the specified indicator
+  - [x] Provide example strategy commands for equivalent functionality
+  - [x] Add automatic strategy creation suggestions for common patterns
+  - [x] **Use ConfigManager for strategy discovery and suggestions**
 
 ### 5.2 Configuration Migration Support
 
-- [ ] **Add config file migration** (in `cli/commands/utility_commands.py`)
-  - [ ] Add `--migrate-config` command to update old config files
-  - [ ] Validate config file version and suggest updates
-  - [ ] Add config file format conversion utilities
-  - [ ] Provide config validation and repair suggestions
-  - [ ] Generate example strategy configurations for common use cases
-  - [ ] **Use ConfigValidator for migration validation**
-  - [ ] **Integrate with ConfigManager for config file operations**
+- [x] **Add config file migration** (in `cli/commands/utility_commands.py`)
+  - [x] Add `--migrate-config` command to update old config files
+  - [x] Validate config file version and suggest updates
+  - [x] Add config file format conversion utilities
+  - [x] Provide config validation and repair suggestions
+  - [x] Generate example strategy configurations for common use cases
+  - [x] **Use ConfigValidator for migration validation**
+  - [x] **Integrate with ConfigManager for config file operations**
 
 ## 🏗️ **6. Performance and Optimization**
 
