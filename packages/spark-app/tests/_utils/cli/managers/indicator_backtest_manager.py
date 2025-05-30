@@ -16,15 +16,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
-
-from ....app.backtesting.backtest_engine import BacktestEngine, BacktestResult
-from ....app.backtesting.indicator_backtest_manager import \
+from app.backtesting.backtest_engine import BacktestEngine, BacktestResult
+from app.backtesting.indicator_backtest_manager import \
     IndicatorBacktestManager as BaseIndicatorBacktestManager
-from ....app.indicators.base_indicator import (BaseIndicator, Signal,
-                                               SignalDirection)
-from ....app.indicators.indicator_factory import IndicatorFactory
-from ....app.risk_management.position_sizing import (PositionSizer,
-                                                     PositionSizingConfig)
+from app.indicators.base_indicator import (BaseIndicator, Signal,
+                                           SignalDirection)
+from app.indicators.indicator_factory import IndicatorFactory
+from app.risk_management.position_sizing import (PositionSizer,
+                                                 PositionSizingConfig)
+
 from ..core.config_manager import ConfigManager
 from ..core.data_manager import DataManager as CLIDataManager
 

@@ -19,17 +19,17 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+from app.backtesting.backtest_engine import BacktestEngine, BacktestResult
+from app.backtesting.data_manager import DataManager
+from app.backtesting.simulation_engine import SimulationEngine
+from app.connectors.base_connector import OrderSide, OrderType
+from app.core.strategy_config import StrategyConfig
+from app.indicators.base_indicator import (BaseIndicator, Signal,
+                                           SignalDirection)
+from app.indicators.indicator_factory import IndicatorFactory
+from app.risk_management.position_sizing import (PositionSizer,
+                                                 PositionSizingConfig)
 
-from ....app.backtesting.backtest_engine import BacktestEngine, BacktestResult
-from ....app.backtesting.data_manager import DataManager
-from ....app.backtesting.simulation_engine import SimulationEngine
-from ....app.connectors.base_connector import OrderSide, OrderType
-from ....app.core.strategy_config import StrategyConfig
-from ....app.indicators.base_indicator import (BaseIndicator, Signal,
-                                               SignalDirection)
-from ....app.indicators.indicator_factory import IndicatorFactory
-from ....app.risk_management.position_sizing import (PositionSizer,
-                                                     PositionSizingConfig)
 from ..core.config_manager import ConfigManager
 from ..core.data_manager import DataManager as CLIDataManager
 from ..validation.strategy_validator import StrategyValidator
@@ -106,7 +106,7 @@ class StrategyBacktestManager:
                 raise ValueError(f"Strategy '{strategy_name}' not found in configuration")
 
             # Convert to StrategyConfig object
-            strategy_config = StrategyConfig.from_config_dict(strategy_config_dict)
+            strategy_config = StrategyConfig.from_dict(strategy_config_dict)
 
             # Validate the strategy configuration
             validation_result = self.strategy_validator.validate_strategy_config(strategy_config)
@@ -151,7 +151,7 @@ class StrategyBacktestManager:
                         effective_config[key] = value
 
                 # Update the current strategy with overrides
-                self.current_strategy = StrategyConfig.from_config_dict(effective_config)
+                self.current_strategy = StrategyConfig.from_dict(effective_config)
                 logger.info(f"Applied configuration overrides: {overrides}")
 
             # Initialize indicators

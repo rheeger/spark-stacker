@@ -13,7 +13,7 @@ import logging
 import time
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import click
 
@@ -104,7 +104,7 @@ def handle_cli_errors(error_category: Optional[ErrorCategory] = None):
                     'category': e.category.value,
                     'context': e.context,
                     'function': func.__name__,
-                    'args': str(args),
+                    'function_args': str(args),
                     'kwargs': str(kwargs)
                 })
 
@@ -175,7 +175,7 @@ def handle_cli_errors(error_category: Optional[ErrorCategory] = None):
                 # Log unexpected errors with full context
                 logger.error(f"Unexpected error in {func.__name__}: {e}", extra={
                     'function': func.__name__,
-                    'args': str(args),
+                    'function_args': str(args),
                     'kwargs': str(kwargs),
                     'error_type': type(e).__name__
                 }, exc_info=True)

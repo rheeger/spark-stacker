@@ -19,9 +19,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from app.backtesting.backtest_engine import BacktestResult
 from scipy import stats
 
-from ....app.backtesting.backtest_engine import BacktestResult
 from ..core.config_manager import ConfigManager
 from ..core.data_manager import DataManager as CLIDataManager
 from .indicator_backtest_manager import IndicatorBacktestManager

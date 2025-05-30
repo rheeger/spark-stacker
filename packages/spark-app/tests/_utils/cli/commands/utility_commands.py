@@ -14,6 +14,7 @@ import logging
 import os
 import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -255,38 +256,32 @@ def migrate_config(ctx, config: Optional[str], output: Optional[str], backup: bo
     except Exception as e:
         raise click.ClickException(f"Failed to load configuration: {e}")
 
-    # TODO: Implement actual migration logic
-    # For now, show what would be migrated
+    # Analyze what needs to be migrated
     migration_changes = []
 
+    # Check for missing version
+    if 'version' not in current_config:
+        migration_changes.append("Add version field")
+
     # Check for missing required sections
-    required_sections = ['strategies', 'indicators', 'exchanges']
+    required_sections = ['strategies', 'indicators', 'exchanges', 'global_settings']
     for section in required_sections:
         if section not in current_config:
             migration_changes.append(f"Add missing '{section}' section")
 
-    # Check for deprecated fields
-    deprecated_fields = {
-        'old_field_name': 'new_field_name',
-        'legacy_setting': 'modern_setting'
-    }
+    # Check for deprecated field names
+    deprecated_fields = ['old_field_name', 'legacy_setting', 'position_size']
+    for field in deprecated_fields:
+        if field in current_config:
+            migration_changes.append(f"Migrate deprecated field '{field}'")
 
-    # Check for missing default values
-    default_values = {
-        'version': '1.0.0',
-        'global_settings': {
-            'default_timeframe': '1h',
-            'default_position_size': 0.1
-        }
-    }
-
-    for key, value in default_values.items():
-        if key not in current_config:
-            migration_changes.append(f"Add default value for '{key}': {value}")
+    # Check for missing schema version
+    if 'schema_version' not in current_config:
+        migration_changes.append("Add schema version tracking")
 
     # Display migration plan
     if migration_changes:
-        click.echo("📋 Migration changes:")
+        click.echo("\n📋 Migration plan:")
         for i, change in enumerate(migration_changes, 1):
             click.echo(f"   {i}. {change}")
     else:
@@ -295,7 +290,7 @@ def migrate_config(ctx, config: Optional[str], output: Optional[str], backup: bo
 
     if dry_run:
         click.echo(f"\n🔍 Dry run complete - no changes made")
-        click.echo(f"   Run without --dry-run to apply changes")
+        click.echo(f"   Run without --dry-run to apply {len(migration_changes)} changes")
         return
 
     # Create backup if requested
@@ -307,16 +302,78 @@ def migrate_config(ctx, config: Optional[str], output: Optional[str], backup: bo
         except Exception as e:
             click.echo(f"⚠️  Failed to create backup: {e}")
 
-    # Apply migration (placeholder)
+    # Apply migration changes
     click.echo("\n🔄 Applying migration...")
-    click.echo("   Migration implementation pending...")
-    click.echo("   This will include:")
-    click.echo("   • Schema version updates")
-    click.echo("   • Field name migrations")
-    click.echo("   • Default value additions")
-    click.echo("   • Structure modernization")
+    migrated_config = current_config.copy()
 
-    click.echo(f"\n✅ Migration would be saved to: {output}")
+    # Add version if missing
+    if 'version' not in migrated_config:
+        migrated_config['version'] = '1.0.0'
+        click.echo("   ✅ Added version field")
+
+    # Add missing required sections
+    required_sections = {
+        'strategies': [],
+        'indicators': {},
+        'exchanges': {},
+        'global_settings': {
+            'default_timeframe': '1h',
+            'default_position_size': 0.1,
+            'risk_management': {
+                'max_portfolio_risk': 0.02,
+                'max_position_risk': 0.01
+            }
+        }
+    }
+
+    for section, default_value in required_sections.items():
+        if section not in migrated_config:
+            migrated_config[section] = default_value
+            click.echo(f"   ✅ Added '{section}' section")
+
+    # Migrate deprecated field names
+    deprecated_migrations = {
+        'old_field_name': 'new_field_name',
+        'legacy_setting': 'modern_setting',
+        'position_size': 'position_sizing'  # Example migration
+    }
+
+    for old_field, new_field in deprecated_migrations.items():
+        if old_field in migrated_config and new_field not in migrated_config:
+            migrated_config[new_field] = migrated_config.pop(old_field)
+            click.echo(f"   ✅ Migrated '{old_field}' to '{new_field}'")
+
+    # Update schema version to indicate migration
+    migrated_config['schema_version'] = '2.0.0'
+    migrated_config['migrated_at'] = datetime.now().isoformat()
+
+    # Save migrated configuration
+    try:
+        with open(output, 'w') as f:
+            json.dump(migrated_config, f, indent=2)
+        click.echo(f"✅ Migration completed successfully")
+        click.echo(f"📄 Migrated config saved to: {output}")
+
+        # Validate the migrated config
+        try:
+            from ..validation.config_validator import ConfigValidator
+            validator = ConfigValidator()
+            validation_result = validator.validate_config(migrated_config)
+
+            if validation_result.is_valid:
+                click.echo("✅ Migrated configuration is valid")
+            else:
+                click.echo("⚠️  Migrated configuration has validation issues:")
+                for error in validation_result.errors[:3]:  # Show first 3 errors
+                    click.echo(f"   • {error}")
+                if len(validation_result.errors) > 3:
+                    click.echo(f"   ... and {len(validation_result.errors) - 3} more")
+
+        except ImportError:
+            click.echo("⚠️  Configuration validation skipped (validator not available)")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to save migrated configuration: {e}")
 
 
 @click.command("diagnose")

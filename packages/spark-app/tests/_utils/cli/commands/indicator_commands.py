@@ -13,6 +13,7 @@ New functionality should use strategy-based commands instead.
 
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -30,6 +31,11 @@ def register_indicator_commands(cli_group):
 
 def show_deprecation_warning(command_name: str, suggested_strategy: Optional[str] = None):
     """Show deprecation warning for legacy indicator commands."""
+    # Check if deprecation warnings are disabled
+    ctx = click.get_current_context()
+    if ctx.obj and ctx.obj.get('no_deprecation_warnings', False):
+        return
+
     click.echo("⚠️  " + "="*70, err=True)
     click.echo("⚠️  DEPRECATION WARNING", err=True)
     click.echo("⚠️  " + "="*70, err=True)
@@ -149,11 +155,90 @@ def demo(ctx, indicator: str, symbol: str, timeframe: str, days: int,
     click.echo(f"📅 Synthetic data days: {days}")
     click.echo(f"📁 Output: {output_dir}")
 
-    # TODO: Implement actual demo logic using IndicatorBacktestManager
-    click.echo("\n📝 Demo implementation pending...")
-    click.echo("   This will be integrated with IndicatorBacktestManager")
-    click.echo("   For now, use strategy-based backtesting instead")
-    click.echo("   Example: python cli/main.py list-strategies")
+    # Implement actual demo logic using IndicatorBacktestManager
+    try:
+        from app.backtesting.backtest_engine import BacktestEngine
+        from app.indicators.indicator_factory import IndicatorFactory
+        from app.risk_management.position_sizing import (PositionSizer,
+                                                         PositionSizingConfig)
+
+        from ..core.config_manager import ConfigManager
+        from ..core.data_manager import DataManager as CLIDataManager
+        from ..managers.indicator_backtest_manager import \
+            IndicatorBacktestManager
+
+        click.echo("\n🔄 Running indicator demo...")
+
+        # Initialize components
+        config_manager = ConfigManager(ctx.obj.get('config_path'))
+        data_manager = CLIDataManager()
+        backtest_engine = BacktestEngine()
+
+        # Create indicator backtest manager
+        manager = IndicatorBacktestManager(
+            backtest_engine=backtest_engine,
+            config_manager=config_manager,
+            data_manager=data_manager,
+            output_dir=Path(output_dir)
+        )
+
+        # Generate synthetic data for the demo
+        click.echo(f"📈 Generating {days} days of synthetic data...")
+        market_data = data_manager.generate_synthetic_data(
+            symbol=symbol,
+            timeframe=timeframe,
+            days=days,
+            scenario="mixed"  # Use mixed scenario for demo
+        )
+
+        # Create indicator
+        factory = IndicatorFactory()
+        indicator_instance = factory.create_indicator(
+            indicator_type=indicator,
+            timeframe=timeframe
+        )
+
+        # Set up basic position sizing
+        position_config = PositionSizingConfig(
+            method="fixed_usd",
+            size=1000.0  # $1000 per position for demo
+        )
+        position_sizer = PositionSizer(position_config)
+
+        # Run the backtest
+        click.echo("🔄 Running backtest...")
+        result = manager.run_indicator_backtest(
+            indicator=indicator_instance,
+            market_data=market_data,
+            symbol=symbol,
+            position_sizer=position_sizer
+        )
+
+        # Generate report
+        click.echo("📊 Generating report...")
+        report_path = manager.generate_report(
+            result=result,
+            indicator_name=indicator,
+            symbol=symbol,
+            timeframe=timeframe
+        )
+
+        click.echo(f"✅ Demo completed successfully!")
+        click.echo(f"📄 Report generated: {report_path}")
+
+        if report_path and os.path.exists(report_path):
+            click.echo("\n💡 To view the report:")
+            click.echo(f"   open {report_path}")
+
+    except Exception as e:
+        logger.error(f"Demo failed: {e}")
+        click.echo(f"❌ Demo failed: {e}")
+        click.echo("\n🔧 This may indicate:")
+        click.echo("   • Missing indicator implementation")
+        click.echo("   • Data generation issues")
+        click.echo("   • Configuration problems")
+        click.echo("\n📝 Try using strategy-based backtesting instead:")
+        click.echo("   python cli/main.py list-strategies")
 
 
 @click.command("real-data")
@@ -194,11 +279,98 @@ def real_data(ctx, indicator: str, symbol: str, timeframe: str, days: int, outpu
     click.echo(f"📅 Historical data days: {days}")
     click.echo(f"📁 Output: {output_dir}")
 
-    # TODO: Implement actual real data logic
-    click.echo("\n📝 Real data implementation pending...")
-    click.echo("   This will fetch real market data and run indicator tests")
-    click.echo("   For now, use strategy-based backtesting instead")
-    click.echo("   Example: python cli/main.py strategy --strategy-name <name> --scenarios real")
+    # Implement actual real data logic
+    try:
+        from app.backtesting.backtest_engine import BacktestEngine
+        from app.indicators.indicator_factory import IndicatorFactory
+        from app.risk_management.position_sizing import (PositionSizer,
+                                                         PositionSizingConfig)
+
+        from ..core.config_manager import ConfigManager
+        from ..core.data_manager import DataManager as CLIDataManager
+        from ..managers.indicator_backtest_manager import \
+            IndicatorBacktestManager
+
+        click.echo("\n🔄 Running real data indicator backtest...")
+
+        # Initialize components
+        config_path = ctx.obj.get('config_path')
+        config_manager = ConfigManager(config_path)
+        data_manager = CLIDataManager()
+        backtest_engine = BacktestEngine()
+
+        # Create indicator backtest manager
+        manager = IndicatorBacktestManager(
+            backtest_engine=backtest_engine,
+            config_manager=config_manager,
+            data_manager=data_manager,
+            output_dir=Path(output_dir)
+        )
+
+        # Fetch real market data
+        click.echo(f"📈 Fetching {days} days of real market data for {symbol}...")
+        market_data = data_manager.fetch_real_market_data(
+            symbol=symbol,
+            timeframe=timeframe,
+            days=days
+        )
+
+        if market_data is None or market_data.empty:
+            click.echo(f"❌ Failed to fetch real market data for {symbol}")
+            click.echo("   Try using synthetic data with the 'demo' command instead")
+            return
+
+        click.echo(f"✅ Fetched {len(market_data)} data points")
+
+        # Create indicator
+        factory = IndicatorFactory()
+        indicator_instance = factory.create_indicator(
+            indicator_type=indicator,
+            timeframe=timeframe
+        )
+
+        # Set up basic position sizing
+        position_config = PositionSizingConfig(
+            method="fixed_usd",
+            size=1000.0  # $1000 per position
+        )
+        position_sizer = PositionSizer(position_config)
+
+        # Run the backtest
+        click.echo("🔄 Running backtest with real data...")
+        result = manager.run_indicator_backtest(
+            indicator=indicator_instance,
+            market_data=market_data,
+            symbol=symbol,
+            position_sizer=position_sizer
+        )
+
+        # Generate report
+        click.echo("📊 Generating report...")
+        report_path = manager.generate_report(
+            result=result,
+            indicator_name=indicator,
+            symbol=symbol,
+            timeframe=timeframe
+        )
+
+        click.echo(f"✅ Real data backtest completed successfully!")
+        click.echo(f"📄 Report generated: {report_path}")
+
+        if report_path and os.path.exists(report_path):
+            click.echo("\n💡 To view the report:")
+            click.echo(f"   open {report_path}")
+
+    except Exception as e:
+        logger.error(f"Real data backtest failed: {e}")
+        click.echo(f"❌ Real data backtest failed: {e}")
+        click.echo("\n🔧 This may indicate:")
+        click.echo("   • Network connectivity issues")
+        click.echo("   • Invalid symbol or exchange")
+        click.echo("   • API rate limiting")
+        click.echo("   • Missing indicator implementation")
+        click.echo("\n📝 Try using strategy-based backtesting instead:")
+        click.echo("   python cli/main.py strategy --strategy-name <name> --scenarios real")
 
 
 @click.command("compare")

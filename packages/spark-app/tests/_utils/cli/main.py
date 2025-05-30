@@ -372,8 +372,9 @@ def get_default_output_dir():
 @click.option("--config", help="Path to configuration file")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.option("--debug", is_flag=True, help="Enable debug logging")
+@click.option("--no-deprecation-warnings", is_flag=True, help="Disable deprecation warnings for legacy commands")
 @click.pass_context
-def cli(ctx, config: Optional[str], verbose: bool, debug: bool):
+def cli(ctx, config: Optional[str], verbose: bool, debug: bool, no_deprecation_warnings: bool):
     """
     Spark-App CLI - Unified command line interface for backtest operations
 
@@ -385,13 +386,16 @@ def cli(ctx, config: Optional[str], verbose: bool, debug: bool):
     log_level = logging.DEBUG if debug else logging.INFO if verbose else logging.WARNING
     setup_logging(log_level=log_level)
 
-    # Store config path in context for commands to use
+    # Store config path and warning settings in context for commands to use
     ctx.ensure_object(dict)
     ctx.obj['config_path'] = config
+    ctx.obj['no_deprecation_warnings'] = no_deprecation_warnings
 
     logger.info(f"Starting Spark-App CLI with log level: {logging.getLevelName(log_level)}")
     if config:
         logger.info(f"Using config file: {config}")
+    if no_deprecation_warnings:
+        logger.info("Deprecation warnings disabled")
 
 
 # Note: Due to the length constraints and the fact that this is a migration task,
@@ -412,24 +416,12 @@ def version():
 def register_all_commands():
     """Register all command handler modules with the CLI group."""
     try:
-        # Use absolute imports for direct script execution
-        import os
-        import sys
-
-        # Get the directory of this script
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        commands_dir = os.path.join(current_dir, 'commands')
-
-        # Add the commands directory to Python path temporarily
-        if commands_dir not in sys.path:
-            sys.path.insert(0, commands_dir)
-
-        # Import the registration functions
-        from comparison_commands import register_comparison_commands
-        from indicator_commands import register_indicator_commands
-        from list_commands import register_list_commands
-        from strategy_commands import register_strategy_commands
-        from utility_commands import register_utility_commands
+        # Import the registration functions using relative imports
+        from .commands import (register_comparison_commands,
+                               register_indicator_commands,
+                               register_list_commands,
+                               register_strategy_commands,
+                               register_utility_commands)
 
         # Register each command module
         register_strategy_commands(cli)

@@ -29,22 +29,22 @@ from app.backtesting.backtest_engine import BacktestEngine
 # Add CLI directory to path for CLI module imports
 sys.path.insert(0, cli_dir)
 
-# Import required managers and core modules (now using absolute paths)
-from core.config_manager import ConfigManager
-from core.data_manager import DataManager
-from core.scenario_manager import ScenarioManager
-from managers.comparison_manager import ComparisonManager
-from managers.scenario_backtest_manager import ScenarioBacktestManager
-from managers.strategy_backtest_manager import StrategyBacktestManager
-from reporting.comparison_reporter import ComparisonReporter
-from reporting.scenario_reporter import ScenarioReporter
-from reporting.strategy_reporter import StrategyReporter
+# Import required managers and core modules (now using relative paths)
+from ..core.config_manager import ConfigManager
+from ..core.data_manager import DataManager
+from ..core.scenario_manager import ScenarioManager
+from ..managers.comparison_manager import ComparisonManager
+from ..managers.scenario_backtest_manager import ScenarioBacktestManager
+from ..managers.strategy_backtest_manager import StrategyBacktestManager
+from ..reporting.comparison_reporter import ComparisonReporter
+from ..reporting.scenario_reporter import ScenarioReporter
+from ..reporting.strategy_reporter import StrategyReporter
 # Import error handling utilities
-from utils import (ConfigurationError, DataFetchingError, StrategyError,
-                   ValidationError, config_error_handler, data_fetch_retry,
-                   graceful_degradation, strategy_error_handler,
-                   validate_required_params)
-from validation.strategy_validator import StrategyValidator
+from ..utils import (ConfigurationError, DataFetchingError, StrategyError,
+                     ValidationError, config_error_handler, data_fetch_retry,
+                     graceful_degradation, strategy_error_handler,
+                     validate_required_params)
+from ..validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
         config_manager = _initialize_config_manager(ctx)
         data_manager = DataManager()
         strategy_validator = StrategyValidator(config_manager)
-        backtest_engine = BacktestEngine()
+        backtest_engine = BacktestEngine(data_manager)
     except Exception as e:
         raise ConfigurationError(
             f"Failed to initialize backtesting components: {str(e)}",
