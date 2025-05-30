@@ -315,34 +315,34 @@ of concerns.
 
 #### 1.4.6 Validation Module Architecture
 
-- [ ] **Create config validator**
+- [x] **Create config validator**
       (`packages/spark-app/tests/_utils/cli/validation/config_validator.py` - MOVE FROM SECTION 4.1)
 
-  - [ ] Move from `tests/_utils/config_validation.py`
-  - [ ] Add comprehensive configuration validation
-  - [ ] Add configuration repair suggestions
-  - [ ] Add configuration compatibility checking
-  - [ ] Add configuration performance analysis
-  - [ ] Add configuration optimization recommendations
+  - [x] Move from `tests/_utils/config_validation.py`
+  - [x] Add comprehensive configuration validation
+  - [x] Add configuration repair suggestions
+  - [x] Add configuration compatibility checking
+  - [x] Add configuration performance analysis
+  - [x] Add configuration optimization recommendations
 
-- [ ] **Create strategy validator**
+- [x] **Create strategy validator**
       (`packages/spark-app/tests/_utils/cli/validation/strategy_validator.py` - NEW FILE)
 
-  - [ ] Add strategy-specific validation logic
-  - [ ] Validate strategy-indicator compatibility
-  - [ ] Validate strategy timeframe consistency
-  - [ ] Validate strategy position sizing
-  - [ ] Add strategy feasibility analysis
-  - [ ] Add strategy risk assessment
+  - [x] Add strategy-specific validation logic
+  - [x] Validate strategy-indicator compatibility
+  - [x] Validate strategy timeframe consistency
+  - [x] Validate strategy position sizing
+  - [x] Add strategy feasibility analysis
+  - [x] Add strategy risk assessment
 
-- [ ] **Create data validator**
+- [x] **Create data validator**
       (`packages/spark-app/tests/_utils/cli/validation/data_validator.py` - NEW FILE)
-  - [ ] Add data quality validation
-  - [ ] Add data completeness checking
-  - [ ] Add data consistency validation
-  - [ ] Add data format validation
-  - [ ] Add data source reliability assessment
-  - [ ] Add data preprocessing validation
+  - [x] Add data quality validation
+  - [x] Add data completeness checking
+  - [x] Add data consistency validation
+  - [x] Add data format validation
+  - [x] Add data source reliability assessment
+  - [x] Add data preprocessing validation
 
 #### 1.4.7 Migration and Integration
 

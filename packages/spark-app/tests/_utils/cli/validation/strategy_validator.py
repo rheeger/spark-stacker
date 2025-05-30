@@ -14,7 +14,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from ....app.core.strategy_config import StrategyConfig
+from app.core.strategy_config import StrategyConfig
+
 from ..core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
