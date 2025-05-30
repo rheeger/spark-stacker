@@ -1,0 +1,180 @@
+---
+description:
+globs: *.py
+alwaysApply: false
+---
+# Python Environment Usage - ALWAYS USE VIRTUAL ENVIRONMENT
+
+## 🚨 CRITICAL: Virtual Environment Required
+
+**NEVER use system Python.** This project requires the virtual environment at [packages/spark-app/.venv](mdc:packages/spark-app/.venv)
+
+## ⚡ Quick Reference - ALWAYS Use These Commands
+
+### For Running Python Scripts
+```bash
+# ✅ CORRECT - Use virtual environment Python
+cd packages/spark-app
+.venv/bin/python script_name.py
+.venv/bin/python path/to/script.py
+
+# ❌ WRONG - Never use system python
+python script_name.py
+python3 script_name.py
+```
+
+### For Running Tests
+```bash
+# ✅ CORRECT - Use virtual environment pytest
+cd packages/spark-app
+.venv/bin/python -m pytest tests/
+.venv/bin/python -m pytest tests/unit/ -v
+.venv/bin/python -m pytest tests/specific_test.py -v
+
+# ❌ WRONG - Never use system pytest
+pytest tests/
+python -m pytest tests/
+```
+
+### For CLI Commands
+```bash
+# ✅ CORRECT - Use virtual environment for CLI
+cd packages/spark-app
+.venv/bin/python tests/_utils/cli.py --help
+.venv/bin/python tests/_utils/cli.py strategy strategy_name
+
+# ❌ WRONG - Will cause ModuleNotFoundError
+python tests/_utils/cli.py --help
+python3 tests/_utils/cli.py strategy strategy_name
+```
+
+## 🔧 Terminal Setup
+
+### Fresh Terminal Session
+When starting a new terminal session, ALWAYS:
+
+```bash
+# 1. Navigate to the correct directory
+cd packages/spark-app
+
+# 2. Use .venv/bin/python for ALL Python commands
+.venv/bin/python --version  # Verify it works
+
+# 3. NEVER activate the environment - just use the full path
+# source .venv/bin/activate  # ← Don't do this, use full path instead
+```
+
+### Why Use Full Path Instead of Activation?
+- **Explicit**: Clear which Python interpreter is being used
+- **Consistent**: Works in any shell or CI environment
+- **Debuggable**: Easy to see when wrong Python is used
+- **Reliable**: No confusion about activation state
+
+## 🐛 Common Error Patterns
+
+### ModuleNotFoundError Symptoms
+```bash
+# If you see this error:
+ModuleNotFoundError: No module named 'click'
+ModuleNotFoundError: No module named 'pandas'
+ModuleNotFoundError: No module named 'app'
+
+# The problem is: Using system Python instead of .venv
+# The solution is: Use .venv/bin/python instead
+```
+
+### Before Running ANY Python Command
+```bash
+# Always check your working directory first
+pwd  # Should end with /spark-stacker/packages/spark-app
+
+# Always use the virtual environment Python
+.venv/bin/python -c "import sys; print(sys.executable)"
+# Should print: /full/path/to/spark-stacker/packages/spark-app/.venv/bin/python
+```
+
+## 📋 Command Templates
+
+### Development Commands
+```bash
+cd packages/spark-app
+
+# Run main application
+.venv/bin/python app/main.py
+
+# Run configuration validation
+.venv/bin/python -c "from app.core.config_manager import ConfigManager; print('✅ Config OK')"
+
+# Run single test
+.venv/bin/python -m pytest tests/unit/test_strategy_manager.py -v
+
+# Run CLI backtesting
+.venv/bin/python tests/_utils/cli.py demo ETH-USD rsi
+
+# Run strategy backtesting
+.venv/bin/python tests/_utils/cli.py strategy strategy_name --days 7
+```
+
+### Debugging Commands
+```bash
+cd packages/spark-app
+
+# Check virtual environment
+.venv/bin/python --version
+.venv/bin/python -c "import sys; print(sys.executable)"
+
+# Check dependencies
+.venv/bin/python -c "import pandas, numpy, click; print('✅ Dependencies OK')"
+
+# Check app imports
+.venv/bin/python -c "import app.main; print('✅ App imports OK')"
+```
+
+## 🎯 Agent Instructions
+
+When working with Python in this project:
+
+1. **ALWAYS** start commands with `cd packages/spark-app`
+2. **ALWAYS** use `.venv/bin/python` instead of `python` or `python3`
+3. **NEVER** assume system Python will work
+4. **ALWAYS** use full path to virtual environment Python
+5. **CHECK** working directory before running commands
+
+### Command Conversion Examples
+```bash
+# Convert these old patterns to new patterns:
+
+# OLD: python script.py
+# NEW: .venv/bin/python script.py
+
+# OLD: python3 -m pytest tests/
+# NEW: .venv/bin/python -m pytest tests/
+
+# OLD: python tests/_utils/cli.py demo
+# NEW: .venv/bin/python tests/_utils/cli.py demo
+
+# OLD: pytest tests/unit/
+# NEW: .venv/bin/python -m pytest tests/unit/
+```
+
+## 📁 Project Structure Context
+
+The virtual environment is located at:
+```
+spark-stacker/
+└── packages/
+    └── spark-app/          ← Your working directory
+        ├── .venv/          ← Virtual environment
+        │   └── bin/
+        │       └── python  ← ALWAYS use this Python
+        ├── app/            ← Application code
+        ├── tests/          ← Test suites
+        └── requirements.txt ← Dependencies
+```
+
+## 🔗 Related Rules
+
+- [Python Best Practices](mdc:.cursor/rules/development/python-best-practices.mdc)
+- [Project Structure](mdc:.cursor/rules/architecture/project-structure.mdc)
+- [Testing Guide](mdc:.cursor/rules/testing/spark-stacker-testing-guide.mdc)
+- [Common Errors](mdc:.cursor/rules/troubleshooting/common-errors.mdc)
