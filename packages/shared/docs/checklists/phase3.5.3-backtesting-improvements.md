@@ -274,44 +274,44 @@ of concerns.
 
 #### 1.4.5 Reporting Module Architecture
 
-- [ ] **Create strategy reporter**
+- [x] **Create strategy reporter**
       (`packages/spark-app/tests/_utils/cli/reporting/strategy_reporter.py` - NEW FILE)
 
-  - [ ] Centralize strategy-specific reporting logic
-  - [ ] Add comprehensive strategy report generation
-  - [ ] Handle strategy configuration display
-  - [ ] Add strategy performance breakdown
-  - [ ] Add strategy optimization suggestions
-  - [ ] Add export functionality for strategy results
+  - [x] Centralize strategy-specific reporting logic
+  - [x] Add comprehensive strategy report generation
+  - [x] Handle strategy configuration display
+  - [x] Add strategy performance breakdown
+  - [x] Add strategy optimization suggestions
+  - [x] Add export functionality for strategy results
 
-- [ ] **Create comparison reporter**
+- [x] **Create comparison reporter**
       (`packages/spark-app/tests/_utils/cli/reporting/comparison_reporter.py` - NEW FILE)
 
-  - [ ] Handle all types of comparison reporting
-  - [ ] Add side-by-side comparison displays
-  - [ ] Add ranking and scoring displays
-  - [ ] Add statistical significance testing
-  - [ ] Add comparison visualization generation
-  - [ ] Add comparison result export
+  - [x] Handle all types of comparison reporting
+  - [x] Add side-by-side comparison displays
+  - [x] Add ranking and scoring displays
+  - [x] Add statistical significance testing
+  - [x] Add comparison visualization generation
+  - [x] Add comparison result export
 
-- [ ] **Create scenario reporter**
+- [x] **Create scenario reporter**
       (`packages/spark-app/tests/_utils/cli/reporting/scenario_reporter.py` - NEW FILE)
 
-  - [ ] Handle multi-scenario reporting
-  - [ ] Add scenario performance comparison tables
-  - [ ] Add scenario robustness analysis
-  - [ ] Add scenario-specific visualizations
-  - [ ] Add scenario correlation analysis
-  - [ ] Add scenario optimization recommendations
+  - [x] Handle multi-scenario reporting
+  - [x] Add scenario performance comparison tables
+  - [x] Add scenario robustness analysis
+  - [x] Add scenario-specific visualizations
+  - [x] Add scenario correlation analysis
+  - [x] Add scenario optimization recommendations
 
-- [ ] **Create interactive reporter**
+- [x] **Create interactive reporter**
       (`packages/spark-app/tests/_utils/cli/reporting/interactive_reporter.py` - NEW FILE)
-  - [ ] Centralize interactive report generation
-  - [ ] Add trade selection and highlighting features
-  - [ ] Add JavaScript component generation
-  - [ ] Add responsive design features
-  - [ ] Add accessibility features
-  - [ ] Add interactive chart configuration
+  - [x] Centralize interactive report generation
+  - [x] Add trade selection and highlighting features
+  - [x] Add JavaScript component generation
+  - [x] Add responsive design features
+  - [x] Add accessibility features
+  - [x] Add interactive chart configuration
 
 #### 1.4.6 Validation Module Architecture
 
