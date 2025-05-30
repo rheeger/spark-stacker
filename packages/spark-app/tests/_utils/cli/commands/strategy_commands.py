@@ -11,7 +11,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import click
 
@@ -39,6 +39,11 @@ from managers.strategy_backtest_manager import StrategyBacktestManager
 from reporting.comparison_reporter import ComparisonReporter
 from reporting.scenario_reporter import ScenarioReporter
 from reporting.strategy_reporter import StrategyReporter
+# Import error handling utilities
+from utils import (ConfigurationError, DataFetchingError, StrategyError,
+                   ValidationError, config_error_handler, data_fetch_retry,
+                   graceful_degradation, strategy_error_handler,
+                   validate_required_params)
 from validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
@@ -48,6 +53,29 @@ def register_strategy_commands(cli_group):
     """Register strategy-related commands with the CLI group."""
     cli_group.add_command(strategy)
     cli_group.add_command(compare_strategies)
+
+
+def _validate_strategy_name(strategy_name: str) -> bool:
+    """Validate that strategy name is not empty."""
+    return strategy_name and strategy_name.strip()
+
+
+def _validate_days(days: int) -> bool:
+    """Validate that days is a positive integer."""
+    return isinstance(days, int) and days > 0
+
+
+def _validate_scenarios(scenarios: str) -> bool:
+    """Validate that scenarios string is valid."""
+    if not scenarios:
+        return False
+
+    valid_scenarios = {"all", "bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"}
+    if scenarios.lower() == "all":
+        return True
+
+    scenario_list = [s.strip().lower() for s in scenarios.split(",")]
+    return all(s in valid_scenarios for s in scenario_list)
 
 
 @click.command("strategy")
@@ -60,17 +88,28 @@ def register_strategy_commands(cli_group):
 @click.option("--override-position-size", type=float, help="Override position sizing for testing")
 @click.option("--use-real-data", is_flag=True, help="Use real data instead of synthetic (legacy compatibility)")
 @click.option("--export-data", is_flag=True, help="Export scenario data for external analysis")
+@click.option("--sensitivity-analysis", is_flag=True, help="Run configuration sensitivity analysis")
 @click.option("--output-dir", help="Output directory for reports (default: tests/results)")
 @click.pass_context
+@strategy_error_handler
+@validate_required_params(
+    strategy_name=_validate_strategy_name,
+    days=_validate_days,
+    scenarios=_validate_scenarios
+)
 def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: bool,
              override_timeframe: Optional[str], override_market: Optional[str],
              override_position_size: Optional[float], use_real_data: bool,
-             export_data: bool, output_dir: Optional[str]):
+             export_data: bool, sensitivity_analysis: bool, output_dir: Optional[str]):
     """
     Run backtest for a specific strategy from config.json.
 
     By default, runs multi-scenario testing (all 7 synthetic scenarios + real data)
     to evaluate strategy robustness across different market conditions.
+
+    Use --sensitivity-analysis to run comprehensive configuration sensitivity analysis
+    that tests different position sizing methods, timeframes, indicator parameters,
+    and risk management settings to identify optimization opportunities.
 
     Examples:
         # Run full multi-scenario test for a strategy
@@ -81,72 +120,258 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
 
         # Run single scenario with overrides
         python cli/main.py strategy --strategy-name "MACD_ETH_Long" --scenario-only --scenarios "bull" --override-timeframe "4h"
+
+        # Run with configuration sensitivity analysis
+        python cli/main.py strategy --strategy-name "MACD_ETH_Long" --sensitivity-analysis
     """
+    # Initialize managers and components with error handling
     try:
-        # Initialize managers and components
-        config_manager = ConfigManager(ctx.obj.get('config_path'))
+        config_manager = _initialize_config_manager(ctx)
         data_manager = DataManager()
         strategy_validator = StrategyValidator(config_manager)
         backtest_engine = BacktestEngine()
+    except Exception as e:
+        raise ConfigurationError(
+            f"Failed to initialize backtesting components: {str(e)}",
+            fix_suggestions=[
+                "Check that config.json exists and is valid",
+                "Ensure all required dependencies are installed",
+                "Verify database connections if required",
+                "Check file permissions for config files"
+            ],
+            context={
+                "config_path": ctx.obj.get('config_path', 'Not specified'),
+                "working_dir": os.getcwd()
+            }
+        )
 
-        # Determine output directory
-        if not output_dir:
-            output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+    # Determine and validate output directory
+    output_path = _setup_output_directory(output_dir)
 
-        output_path = Path(output_dir)
+    # Initialize strategy backtest manager with enhanced error handling
+    strategy_manager = _initialize_strategy_manager(
+        backtest_engine, config_manager, data_manager,
+        strategy_validator, output_path
+    )
+
+    # Load and validate strategy configuration
+    strategy_config = _load_strategy_config(strategy_manager, strategy_name)
+
+    # Build and apply configuration overrides
+    overrides, position_sizing_overrides = _build_overrides(
+        strategy_manager, override_timeframe, override_market,
+        override_position_size, strategy_config
+    )
+
+    # Initialize strategy components with comprehensive error handling
+    _initialize_strategy_components(strategy_manager, overrides, position_sizing_overrides)
+
+    # Display strategy information
+    _display_strategy_info(strategy_name, strategy_config, days)
+
+    # Parse and validate scenarios
+    scenario_list = _parse_and_validate_scenarios(scenarios, use_real_data, scenario_only)
+
+    # Execute backtesting with appropriate error handling
+    _execute_strategy_backtest(
+        strategy_manager, strategy_name, days, scenario_list,
+        config_manager, data_manager, output_path, export_data, sensitivity_analysis
+    )
+
+
+@graceful_degradation(fallback_value=None, log_level=logging.ERROR)
+def _initialize_config_manager(ctx) -> ConfigManager:
+    """Initialize configuration manager with error handling."""
+    config_path = ctx.obj.get('config_path')
+
+    if not config_path:
+        raise ConfigurationError(
+            "No configuration path provided",
+            fix_suggestions=[
+                "Provide --config option with path to config.json",
+                "Ensure config.json exists in expected location"
+            ]
+        )
+
+    return ConfigManager(config_path)
+
+
+def _setup_output_directory(output_dir: Optional[str]) -> Path:
+    """Setup and validate output directory."""
+    if not output_dir:
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+
+    output_path = Path(output_dir)
+
+    try:
         output_path.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        raise ConfigurationError(
+            f"Cannot create output directory: {output_path}",
+            fix_suggestions=[
+                "Check directory permissions",
+                "Choose a different output directory with write access",
+                "Run with appropriate user privileges"
+            ],
+            context={"requested_dir": str(output_path)}
+        )
 
-        # Initialize strategy backtest manager
-        strategy_manager = StrategyBacktestManager(
+    return output_path
+
+
+def _initialize_strategy_manager(backtest_engine, config_manager, data_manager,
+                               strategy_validator, output_path) -> StrategyBacktestManager:
+    """Initialize strategy backtest manager with error handling."""
+    try:
+        return StrategyBacktestManager(
             backtest_engine=backtest_engine,
             config_manager=config_manager,
             data_manager=data_manager,
             strategy_validator=strategy_validator,
             output_dir=output_path
         )
+    except Exception as e:
+        raise StrategyError(
+            f"Failed to initialize strategy backtest manager: {str(e)}",
+            fix_suggestions=[
+                "Check strategy configuration format",
+                "Verify all required strategy components are available",
+                "Ensure database connections are working"
+            ]
+        )
 
-        # Load strategy configuration
-        click.echo(f"🔍 Loading strategy: {strategy_name}")
+
+def _load_strategy_config(strategy_manager: StrategyBacktestManager, strategy_name: str):
+    """Load and validate strategy configuration."""
+    click.echo(f"🔍 Loading strategy: {strategy_name}")
+
+    try:
         strategy_config = strategy_manager.load_strategy_from_config(strategy_name)
+        if not strategy_config:
+            raise StrategyError(
+                f"Strategy '{strategy_name}' not found in configuration",
+                fix_suggestions=[
+                    "Check spelling of strategy name",
+                    "List available strategies with: list-strategies",
+                    "Verify strategy is defined in config.json",
+                    "Ensure strategy is enabled in configuration"
+                ],
+                context={"requested_strategy": strategy_name}
+            )
+        return strategy_config
+    except Exception as e:
+        if isinstance(e, StrategyError):
+            raise
+        raise StrategyError(
+            f"Failed to load strategy configuration: {str(e)}",
+            fix_suggestions=[
+                "Check config.json format and validity",
+                "Verify strategy section exists in config",
+                "Ensure all required strategy fields are present"
+            ],
+            context={"strategy_name": strategy_name}
+        )
 
-        # Build configuration overrides
-        overrides = {}
-        position_sizing_overrides = {}
 
-        if override_timeframe:
-            overrides['timeframe'] = override_timeframe
-            click.echo(f"⚠️  Overriding timeframe: {strategy_config.timeframe} → {override_timeframe}")
+def _build_overrides(strategy_manager, override_timeframe, override_market,
+                    override_position_size, strategy_config):
+    """Build configuration overrides with validation."""
+    overrides = {}
+    position_sizing_overrides = {}
 
-        if override_market:
-            overrides['market'] = override_market
-            click.echo(f"⚠️  Overriding market: {strategy_config.market} → {override_market}")
+    if override_timeframe:
+        # Validate timeframe format
+        valid_timeframes = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+        if override_timeframe not in valid_timeframes:
+            raise ValidationError(
+                f"Invalid timeframe: {override_timeframe}",
+                fix_suggestions=[
+                    f"Use one of the valid timeframes: {', '.join(valid_timeframes)}",
+                    "Check timeframe format (e.g., '1h', '4h', '1d')"
+                ],
+                context={"provided_timeframe": override_timeframe}
+            )
 
-        if override_position_size:
-            # Handle position sizing override more intelligently
-            current_position_info = strategy_manager.get_current_position_sizing_info()
-            if 'error' in current_position_info:
-                click.echo(f"⚠️  Warning: Could not get current position sizing info: {current_position_info['error']}")
+        overrides['timeframe'] = override_timeframe
+        click.echo(f"⚠️  Overriding timeframe: {strategy_config.timeframe} → {override_timeframe}")
 
-            # Determine how to apply the override based on current method
-            method = current_position_info.get('method', 'fixed_usd')
+    if override_market:
+        # Basic market format validation
+        if "-" not in override_market:
+            raise ValidationError(
+                f"Invalid market format: {override_market}",
+                fix_suggestions=[
+                    "Use format like 'ETH-USD' or 'BTC-USD'",
+                    "Ensure market pair is separated by hyphen"
+                ],
+                context={"provided_market": override_market}
+            )
 
-            if method == 'fixed_usd':
-                position_sizing_overrides['fixed_usd_amount'] = override_position_size
-                click.echo(f"⚠️  Overriding fixed USD amount: ${current_position_info.get('fixed_usd_amount', 'unknown')} → ${override_position_size}")
-            elif method == 'percentage_equity':
-                position_sizing_overrides['equity_percentage'] = override_position_size / 100.0
-                click.echo(f"⚠️  Overriding equity percentage: {current_position_info.get('equity_percentage', 'unknown')*100:.1f}% → {override_position_size}%")
-            else:
-                # For other methods, override max position size
-                position_sizing_overrides['max_position_size_usd'] = override_position_size
-                click.echo(f"⚠️  Overriding max position size: ${current_position_info.get('max_position_size_usd', 'unknown')} → ${override_position_size}")
+        overrides['market'] = override_market
+        click.echo(f"⚠️  Overriding market: {strategy_config.market} → {override_market}")
 
-        # Initialize strategy components with overrides
+    if override_position_size:
+        if override_position_size <= 0:
+            raise ValidationError(
+                f"Position size must be positive: {override_position_size}",
+                fix_suggestions=[
+                    "Provide a positive number for position size",
+                    "Check position sizing method and appropriate range"
+                ]
+            )
+
+        position_sizing_overrides = _handle_position_size_override(
+            strategy_manager, override_position_size
+        )
+
+    return overrides, position_sizing_overrides
+
+
+@graceful_degradation(fallback_value={}, log_level=logging.WARNING)
+def _handle_position_size_override(strategy_manager, override_position_size):
+    """Handle position sizing override with graceful degradation."""
+    current_position_info = strategy_manager.get_current_position_sizing_info()
+
+    if 'error' in current_position_info:
+        click.echo(f"⚠️  Warning: Could not get current position sizing info: {current_position_info['error']}")
+        # Return default override
+        return {'fixed_usd_amount': override_position_size}
+
+    method = current_position_info.get('method', 'fixed_usd')
+    position_sizing_overrides = {}
+
+    if method == 'fixed_usd':
+        position_sizing_overrides['fixed_usd_amount'] = override_position_size
+        click.echo(f"⚠️  Overriding fixed USD amount: ${current_position_info.get('fixed_usd_amount', 'unknown')} → ${override_position_size}")
+    elif method == 'percentage_equity':
+        position_sizing_overrides['equity_percentage'] = override_position_size / 100.0
+        click.echo(f"⚠️  Overriding equity percentage: {current_position_info.get('equity_percentage', 'unknown')*100:.1f}% → {override_position_size}%")
+    else:
+        position_sizing_overrides['max_position_size_usd'] = override_position_size
+        click.echo(f"⚠️  Overriding max position size: ${current_position_info.get('max_position_size_usd', 'unknown')} → ${override_position_size}")
+
+    return position_sizing_overrides
+
+
+def _initialize_strategy_components(strategy_manager, overrides, position_sizing_overrides):
+    """Initialize strategy components with error handling."""
+    try:
         click.echo("🔧 Initializing strategy components...")
         strategy_manager.initialize_strategy_components(overrides)
+    except Exception as e:
+        raise StrategyError(
+            f"Failed to initialize strategy components: {str(e)}",
+            fix_suggestions=[
+                "Check strategy configuration validity",
+                "Verify all indicators are available",
+                "Ensure position sizing configuration is correct",
+                "Check exchange connectivity if required"
+            ]
+        )
 
-        # Apply position sizing overrides after initialization
-        if position_sizing_overrides:
+    # Apply position sizing overrides
+    if position_sizing_overrides:
+        try:
             click.echo("💰 Applying position sizing overrides...")
             strategy_manager.apply_position_sizing_overrides(position_sizing_overrides)
 
@@ -159,130 +384,313 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
                 elif final_position_info['method'] == 'percentage_equity':
                     click.echo(f"💰 Equity percentage: {final_position_info['equity_percentage']*100:.1f}%")
                 click.echo(f"💰 Max position size: ${final_position_info['max_position_size_usd']}")
-
-        click.echo(f"🎯 Running backtest for strategy: {strategy_name}")
-        click.echo(f"📊 Market: {strategy_config.market}")
-        click.echo(f"⏱️  Timeframe: {strategy_config.timeframe}")
-        click.echo(f"📅 Duration: {days} days")
-
-        # Parse scenarios
-        if scenarios.lower() == "all":
-            scenario_list = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
-        else:
-            scenario_list = [s.strip() for s in scenarios.split(",")]
-
-        # Validate scenario names
-        valid_scenarios = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
-        invalid_scenarios = [s for s in scenario_list if s not in valid_scenarios]
-        if invalid_scenarios:
-            raise click.ClickException(
-                f"Invalid scenarios: {', '.join(invalid_scenarios)}\n"
-                f"Valid scenarios: {', '.join(valid_scenarios)}"
+        except Exception as e:
+            raise StrategyError(
+                f"Failed to apply position sizing overrides: {str(e)}",
+                fix_suggestions=[
+                    "Check position sizing override values",
+                    "Verify position sizing method compatibility",
+                    "Ensure position sizing configuration is valid"
+                ]
             )
 
-        click.echo(f"🎲 Scenarios: {', '.join(scenario_list)}")
 
-        # Handle legacy use-real-data flag
-        if use_real_data and "real" not in scenario_list:
-            scenario_list = ["real"]
-            click.echo("⚠️  Legacy --use-real-data flag detected, running real data scenario only")
+def _display_strategy_info(strategy_name, strategy_config, days):
+    """Display strategy information."""
+    click.echo(f"🎯 Running backtest for strategy: {strategy_name}")
+    click.echo(f"📊 Market: {strategy_config.market}")
+    click.echo(f"⏱️  Timeframe: {strategy_config.timeframe}")
+    click.echo(f"📅 Duration: {days} days")
 
-        # Check for multi-scenario vs single scenario
-        if scenario_only and len(scenario_list) > 1:
-            click.echo("⚠️  --scenario-only flag specified but multiple scenarios selected. Running all specified scenarios.")
 
-        # Run backtesting based on scenario configuration
+def _parse_and_validate_scenarios(scenarios: str, use_real_data: bool, scenario_only: bool) -> List[str]:
+    """Parse and validate scenario configuration."""
+    # Parse scenarios
+    if scenarios.lower() == "all":
+        scenario_list = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
+    else:
+        scenario_list = [s.strip() for s in scenarios.split(",")]
+
+    # Validate scenario names
+    valid_scenarios = ["bull", "bear", "sideways", "volatile", "low-vol", "choppy", "gaps", "real"]
+    invalid_scenarios = [s for s in scenario_list if s not in valid_scenarios]
+    if invalid_scenarios:
+        raise ValidationError(
+            f"Invalid scenarios: {', '.join(invalid_scenarios)}",
+            fix_suggestions=[
+                f"Use valid scenarios: {', '.join(valid_scenarios)}",
+                "Check spelling of scenario names",
+                "Use comma-separated list for multiple scenarios"
+            ],
+            context={
+                "provided_scenarios": scenarios,
+                "invalid_scenarios": invalid_scenarios
+            }
+        )
+
+    click.echo(f"🎲 Scenarios: {', '.join(scenario_list)}")
+
+    # Handle legacy use-real-data flag
+    if use_real_data and "real" not in scenario_list:
+        scenario_list = ["real"]
+        click.echo("⚠️  Legacy --use-real-data flag detected, running real data scenario only")
+
+    # Check for multi-scenario vs single scenario
+    if scenario_only and len(scenario_list) > 1:
+        click.echo("⚠️  --scenario-only flag specified but multiple scenarios selected. Running all specified scenarios.")
+
+    return scenario_list
+
+
+@data_fetch_retry
+def _execute_strategy_backtest(strategy_manager, strategy_name, days, scenario_list,
+                             config_manager, data_manager, output_path, export_data, sensitivity_analysis):
+    """Execute strategy backtesting with retry and error handling."""
+    try:
         if len(scenario_list) == 1 and scenario_list[0] == "real":
             # Single real data backtest (legacy compatibility)
-            click.echo("\n🚀 Running single real data backtest...")
-            result = strategy_manager.backtest_strategy(
-                days=days,
-                use_real_data=True,
-                leverage=1.0
+            result = _execute_single_scenario_backtest(
+                strategy_manager, strategy_name, days, config_manager, output_path
             )
-
-            # Generate strategy report
-            strategy_reporter = StrategyReporter(config_manager, output_path)
-            report_path = strategy_reporter.generate_strategy_report(
-                strategy_name=strategy_name,
-                backtest_result=result,
-                output_format='html'
-            )
-
-            click.echo(f"✅ Backtest completed successfully!")
-            click.echo(f"📊 Total trades: {result.metrics.get('total_trades', 0)}")
-            click.echo(f"💰 Total return: {result.metrics.get('total_return_pct', 0):.2f}%")
-            click.echo(f"📈 Win rate: {result.metrics.get('win_rate', 0):.1f}%")
-            click.echo(f"📋 Report saved to: {report_path}")
-
         else:
             # Multi-scenario testing
-            click.echo(f"\n🚀 Running multi-scenario backtest across {len(scenario_list)} scenarios...")
-
-            # Initialize scenario manager and scenario backtest manager
-            scenario_manager = ScenarioManager(
-                data_manager=data_manager,
-                config_manager=config_manager,
-                default_duration_days=days
+            result = _execute_multi_scenario_backtest(
+                strategy_manager, strategy_name, days, scenario_list,
+                config_manager, data_manager, output_path
             )
 
-            scenario_backtest_manager = ScenarioBacktestManager(
-                config_manager=config_manager,
-                data_manager=data_manager,
-                scenario_manager=scenario_manager,
-                strategy_manager=strategy_manager,
-                output_dir=output_path
+        # Run configuration sensitivity analysis if requested
+        if sensitivity_analysis:
+            _execute_configuration_sensitivity_analysis(
+                strategy_manager, strategy_name, result, config_manager, output_path
             )
-
-            # Run scenario testing
-            scenario_results = scenario_backtest_manager.run_strategy_scenarios(
-                strategy_name=strategy_name,
-                days=days,
-                scenario_filter=scenario_list
-            )
-
-            # Generate scenario report
-            scenario_reporter = ScenarioReporter(config_manager, data_manager, output_path)
-            report_path = scenario_reporter.generate_scenario_report(
-                strategy_name=strategy_name,
-                scenario_results=scenario_results,
-                output_format='html'
-            )
-
-            # Display summary
-            click.echo(f"✅ Multi-scenario backtest completed!")
-            click.echo(f"📊 Scenarios tested: {len(scenario_results)}")
-
-            # Show key metrics across scenarios
-            for scenario_name, result in scenario_results.items():
-                if hasattr(result, 'backtest_result'):
-                    metrics = result.backtest_result.metrics
-                    click.echo(f"  {scenario_name}: {metrics.get('total_return_pct', 0):.1f}% return, {metrics.get('total_trades', 0)} trades")
-                elif hasattr(result, 'total_return'):
-                    click.echo(f"  {scenario_name}: {result.total_return:.1f}% return, {result.total_trades} trades")
-
-            click.echo(f"📋 Comprehensive report saved to: {report_path}")
-
-            # Calculate and display robustness score
-            total_returns = []
-            for result in scenario_results.values():
-                if hasattr(result, 'backtest_result'):
-                    total_returns.append(result.backtest_result.metrics.get('total_return_pct', 0))
-                elif hasattr(result, 'total_return'):
-                    total_returns.append(result.total_return)
-
-            if total_returns:
-                avg_return = sum(total_returns) / len(total_returns)
-                return_variance = sum((r - avg_return) ** 2 for r in total_returns) / len(total_returns) if len(total_returns) > 1 else 0
-                consistency_score = max(0, 100 - (return_variance / (avg_return ** 2) * 100)) if avg_return != 0 else 0
-                click.echo(f"🎯 Strategy robustness score: {consistency_score:.1f}% (higher is better)")
 
         if export_data:
             click.echo(f"📁 Scenario data exported to: {output_path}/scenario_data/")
 
     except Exception as e:
-        logger.error(f"Strategy backtesting failed: {e}")
-        raise click.ClickException(f"Strategy backtesting failed: {str(e)}")
+        raise DataFetchingError(
+            f"Strategy backtesting execution failed: {str(e)}",
+            fix_suggestions=[
+                "Check network connectivity for data fetching",
+                "Verify exchange API access and rate limits",
+                "Ensure sufficient disk space for results",
+                "Try with fewer scenarios or shorter duration"
+            ],
+            context={
+                "strategy_name": strategy_name,
+                "days": days,
+                "scenarios": scenario_list
+            }
+        )
+
+
+def _execute_configuration_sensitivity_analysis(strategy_manager, strategy_name, base_results,
+                                               config_manager, output_path):
+    """Execute configuration sensitivity analysis for the strategy."""
+    click.echo("\n🔬 Running configuration sensitivity analysis...")
+
+    try:
+        # Initialize strategy reporter
+        strategy_reporter = StrategyReporter(config_manager)
+
+        # Convert base results to the format expected by sensitivity analysis
+        if hasattr(base_results, 'backtest_result'):
+            backtest_data = {
+                "trades": base_results.backtest_result.trades,
+                "metrics": base_results.backtest_result.metrics,
+                "equity_curve": getattr(base_results.backtest_result, 'equity_curve', [])
+            }
+        elif isinstance(base_results, dict):
+            # Multi-scenario results - use the first scenario as base
+            first_scenario = next(iter(base_results.values()))
+            if hasattr(first_scenario, 'backtest_result'):
+                backtest_data = {
+                    "trades": first_scenario.backtest_result.trades,
+                    "metrics": first_scenario.backtest_result.metrics,
+                    "equity_curve": getattr(first_scenario.backtest_result, 'equity_curve', [])
+                }
+            else:
+                backtest_data = {
+                    "trades": getattr(first_scenario, 'trades', []),
+                    "metrics": getattr(first_scenario, 'metrics', {}),
+                    "equity_curve": getattr(first_scenario, 'equity_curve', [])
+                }
+        else:
+            # Fallback for other result formats
+            backtest_data = {
+                "trades": getattr(base_results, 'trades', []),
+                "metrics": getattr(base_results, 'metrics', {}),
+                "equity_curve": getattr(base_results, 'equity_curve', [])
+            }
+
+        # Run sensitivity analysis
+        analysis_results = strategy_reporter.generate_configuration_sensitivity_analysis(
+            strategy_name=strategy_name,
+            base_backtest_results=backtest_data,
+            analysis_options={
+                "test_position_sizing": True,
+                "test_timeframes": True,
+                "test_indicator_parameters": True,
+                "test_risk_parameters": True
+            }
+        )
+
+        # Save sensitivity analysis report
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sensitivity_report_path = output_path / f"sensitivity_analysis_{strategy_name}_{timestamp}.json"
+
+        with open(sensitivity_report_path, 'w') as f:
+            import json
+            json.dump(analysis_results, f, indent=2, default=str)
+
+        # Display summary of findings
+        _display_sensitivity_analysis_summary(analysis_results)
+
+        click.echo(f"📊 Sensitivity analysis completed!")
+        click.echo(f"📋 Detailed report saved to: {sensitivity_report_path}")
+
+    except Exception as e:
+        click.echo(f"⚠️  Sensitivity analysis failed: {str(e)}")
+        logger.error(f"Configuration sensitivity analysis error: {e}")
+
+
+def _display_sensitivity_analysis_summary(analysis_results):
+    """Display a summary of sensitivity analysis findings."""
+    click.echo("\n📈 Configuration Sensitivity Analysis Summary:")
+
+    # Display optimization suggestions
+    suggestions = analysis_results.get("optimization_suggestions", [])
+    if suggestions:
+        click.echo(f"\n🎯 Top optimization opportunities ({len(suggestions)} found):")
+        for i, suggestion in enumerate(suggestions[:3], 1):  # Show top 3
+            category = suggestion.get("category", "unknown")
+            description = suggestion.get("description", "No description")
+            priority = suggestion.get("priority", "medium")
+            click.echo(f"  {i}. [{priority.upper()}] {category}: {description}")
+
+    # Display feasibility assessment
+    feasibility = analysis_results.get("feasibility_analysis", {})
+    overall_assessment = feasibility.get("overall_assessment", {})
+    if overall_assessment:
+        feasibility_level = overall_assessment.get("overall_feasibility", "unknown")
+        feasible_count = overall_assessment.get("feasible_suggestions", 0)
+        total_count = overall_assessment.get("total_suggestions", 0)
+        effort_estimate = overall_assessment.get("effort_estimate", "unknown")
+
+        click.echo(f"\n✅ Feasibility Assessment:")
+        click.echo(f"  Overall feasibility: {feasibility_level}")
+        click.echo(f"  Feasible suggestions: {feasible_count}/{total_count}")
+        click.echo(f"  Estimated effort: {effort_estimate}")
+
+    # Display sensitivity test results summary
+    sensitivity_tests = analysis_results.get("sensitivity_tests", {})
+    if sensitivity_tests:
+        click.echo(f"\n🔍 Sensitivity Tests Completed:")
+        for test_name, test_results in sensitivity_tests.items():
+            if isinstance(test_results, dict):
+                variations_count = len(test_results.get("variations", {}))
+                recommendations_count = len(test_results.get("recommendations", []))
+                click.echo(f"  {test_name}: {variations_count} variations tested, {recommendations_count} recommendations")
+
+
+def _execute_single_scenario_backtest(strategy_manager, strategy_name, days, config_manager, output_path):
+    """Execute single scenario backtest."""
+    click.echo("\n🚀 Running single real data backtest...")
+
+    result = strategy_manager.backtest_strategy(
+        days=days,
+        use_real_data=True,
+        leverage=1.0
+    )
+
+    # Generate strategy report
+    strategy_reporter = StrategyReporter(config_manager, output_path)
+    report_path = strategy_reporter.generate_strategy_report(
+        strategy_name=strategy_name,
+        backtest_result=result,
+        output_format='html'
+    )
+
+    click.echo(f"✅ Backtest completed successfully!")
+    click.echo(f"📊 Total trades: {result.metrics.get('total_trades', 0)}")
+    click.echo(f"💰 Total return: {result.metrics.get('total_return_pct', 0):.2f}%")
+    click.echo(f"📈 Win rate: {result.metrics.get('win_rate', 0):.1f}%")
+    click.echo(f"📋 Report saved to: {report_path}")
+
+    return result
+
+
+def _execute_multi_scenario_backtest(strategy_manager, strategy_name, days, scenario_list,
+                                   config_manager, data_manager, output_path):
+    """Execute multi-scenario backtest."""
+    click.echo(f"\n🚀 Running multi-scenario backtest across {len(scenario_list)} scenarios...")
+
+    # Initialize scenario manager and scenario backtest manager
+    scenario_manager = ScenarioManager(
+        data_manager=data_manager,
+        config_manager=config_manager,
+        default_duration_days=days
+    )
+
+    scenario_backtest_manager = ScenarioBacktestManager(
+        config_manager=config_manager,
+        data_manager=data_manager,
+        scenario_manager=scenario_manager,
+        strategy_manager=strategy_manager,
+        output_dir=output_path
+    )
+
+    # Run scenario testing
+    scenario_results = scenario_backtest_manager.run_strategy_scenarios(
+        strategy_name=strategy_name,
+        days=days,
+        scenario_filter=scenario_list
+    )
+
+    # Generate scenario report
+    scenario_reporter = ScenarioReporter(config_manager, data_manager, output_path)
+    report_path = scenario_reporter.generate_scenario_report(
+        strategy_name=strategy_name,
+        scenario_results=scenario_results,
+        output_format='html'
+    )
+
+    # Display summary
+    click.echo(f"✅ Multi-scenario backtest completed!")
+    click.echo(f"📊 Scenarios tested: {len(scenario_results)}")
+
+    # Show key metrics across scenarios
+    for scenario_name, result in scenario_results.items():
+        if hasattr(result, 'backtest_result'):
+            metrics = result.backtest_result.metrics
+            click.echo(f"  {scenario_name}: {metrics.get('total_return_pct', 0):.1f}% return, {metrics.get('total_trades', 0)} trades")
+        elif hasattr(result, 'total_return'):
+            click.echo(f"  {scenario_name}: {result.total_return:.1f}% return, {result.total_trades} trades")
+
+    click.echo(f"📋 Comprehensive report saved to: {report_path}")
+
+    # Calculate and display robustness score
+    _calculate_and_display_robustness_score(scenario_results)
+
+    return scenario_results
+
+
+@graceful_degradation(fallback_value=None, log_level=logging.WARNING)
+def _calculate_and_display_robustness_score(scenario_results):
+    """Calculate and display strategy robustness score."""
+    total_returns = []
+    for result in scenario_results.values():
+        if hasattr(result, 'backtest_result'):
+            total_returns.append(result.backtest_result.metrics.get('total_return_pct', 0))
+        elif hasattr(result, 'total_return'):
+            total_returns.append(result.total_return)
+
+    if total_returns:
+        avg_return = sum(total_returns) / len(total_returns)
+        return_variance = sum((r - avg_return) ** 2 for r in total_returns) / len(total_returns) if len(total_returns) > 1 else 0
+        consistency_score = max(0, 100 - (return_variance / (avg_return ** 2) * 100)) if avg_return != 0 else 0
+        click.echo(f"🎯 Strategy robustness score: {consistency_score:.1f}% (higher is better)")
 
 
 @click.command("compare-strategies")
@@ -294,6 +702,7 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
 @click.option("--scenarios", default="all", help="Scenarios for comparison: all, bull, bear, etc.")
 @click.option("--output-dir", help="Output directory for reports (default: tests/results)")
 @click.pass_context
+@strategy_error_handler
 def compare_strategies(ctx, strategy_names: Optional[str], all_strategies: bool,
                       same_market: Optional[str], same_exchange: Optional[str],
                       days: int, scenarios: str, output_dir: Optional[str]):

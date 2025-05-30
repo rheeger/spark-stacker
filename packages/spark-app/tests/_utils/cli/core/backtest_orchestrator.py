@@ -8,18 +8,25 @@ This module provides centralized orchestration for backtesting operations:
 - Add progress tracking and user updates
 - Handle interruption and graceful shutdown
 - Coordinate between different manager types (strategy, indicator, scenario, comparison)
+- Enhanced resource management with cleanup, timeouts, and disk space monitoring
 """
 
 import asyncio
+import gc
 import logging
+import os
+import shutil
 import signal
+# Import validation modules for pre-flight checks
+import sys
+import tempfile
 import threading
 import time
 from concurrent.futures import (ProcessPoolExecutor, ThreadPoolExecutor,
-                                as_completed)
+                                TimeoutError, as_completed)
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
@@ -29,6 +36,15 @@ from tqdm import tqdm
 
 from .config_manager import ConfigManager
 from .data_manager import DataManager
+
+cli_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, cli_dir)
+from validation.config_validator import ConfigValidator
+from validation.data_validator import DataValidator
+from validation.strategy_validator import StrategyValidator
+
+from ..utils.progress_trackers import (PerformanceMetricType,
+                                       get_performance_tracker)
 
 logger = logging.getLogger(__name__)
 
@@ -58,58 +74,268 @@ class ResourceLimitType(Enum):
     MAX_CPU_PERCENT = "max_cpu_percent"
     MAX_CONCURRENT_JOBS = "max_concurrent_jobs"
     MAX_EXECUTION_TIME_SECONDS = "max_execution_time_seconds"
+    MAX_DISK_USAGE_MB = "max_disk_usage_mb"
+    MIN_FREE_DISK_MB = "min_free_disk_mb"
+
+
+class ResourceState(Enum):
+    """Resource usage states."""
+    NORMAL = "normal"
+    WARNING = "warning"
+    CRITICAL = "critical"
+    EXCEEDED = "exceeded"
 
 
 @dataclass
-class BacktestJob:
-    """Represents a single backtest job."""
-    job_id: str
-    job_type: BacktestType
-    parameters: Dict[str, Any]
-    priority: int = 50  # 0=lowest, 100=highest
-    estimated_duration_seconds: Optional[float] = None
-    dependencies: List[str] = field(default_factory=list)  # Job IDs this depends on
-    metadata: Dict[str, Any] = field(default_factory=dict)
+class ResourceUsage:
+    """Current resource usage snapshot."""
+    memory_mb: float = 0.0
+    memory_percent: float = 0.0
+    cpu_percent: float = 0.0
+    disk_usage_mb: float = 0.0
+    disk_free_mb: float = 0.0
+    active_jobs: int = 0
+    timestamp: datetime = field(default_factory=datetime.now)
+
+    def get_memory_state(self, limit_mb: float) -> ResourceState:
+        """Get memory usage state relative to limit."""
+        if self.memory_mb > limit_mb:
+            return ResourceState.EXCEEDED
+        elif self.memory_mb > limit_mb * 0.9:
+            return ResourceState.CRITICAL
+        elif self.memory_mb > limit_mb * 0.7:
+            return ResourceState.WARNING
+        else:
+            return ResourceState.NORMAL
+
+    def get_disk_state(self, min_free_mb: float) -> ResourceState:
+        """Get disk usage state relative to minimum free space."""
+        if self.disk_free_mb < min_free_mb:
+            return ResourceState.EXCEEDED
+        elif self.disk_free_mb < min_free_mb * 1.5:
+            return ResourceState.CRITICAL
+        elif self.disk_free_mb < min_free_mb * 2.0:
+            return ResourceState.WARNING
+        else:
+            return ResourceState.NORMAL
 
 
-@dataclass
-class JobResult:
-    """Result of a backtest job execution."""
-    job_id: str
-    success: bool
-    result_data: Optional[Any] = None
-    error: Optional[Exception] = None
-    execution_time_seconds: float = 0.0
-    resource_usage: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+class ResourceManager:
+    """Manages system resources for backtest operations."""
 
+    def __init__(self,
+                 resource_limits: Dict[ResourceLimitType, Any],
+                 monitoring_interval: float = 2.0,
+                 cleanup_interval: float = 30.0):
+        """
+        Initialize resource manager.
 
-@dataclass
-class OrchestrationState:
-    """Current state of the orchestration process."""
-    total_jobs: int = 0
-    completed_jobs: int = 0
-    failed_jobs: int = 0
-    running_jobs: int = 0
-    queued_jobs: int = 0
-    start_time: Optional[datetime] = None
-    estimated_completion_time: Optional[datetime] = None
-    current_resource_usage: Dict[str, Any] = field(default_factory=dict)
+        Args:
+            resource_limits: Dictionary of resource limits
+            monitoring_interval: How often to check resource usage (seconds)
+            cleanup_interval: How often to run cleanup (seconds)
+        """
+        self.resource_limits = resource_limits
+        self.monitoring_interval = monitoring_interval
+        self.cleanup_interval = cleanup_interval
 
+        self._monitoring = False
+        self._monitor_thread: Optional[threading.Thread] = None
+        self._cleanup_thread: Optional[threading.Thread] = None
+        self._resource_lock = threading.Lock()
 
-class BacktestOrchestratorError(Exception):
-    """Base exception for orchestrator errors."""
-    pass
+        self._current_usage = ResourceUsage()
+        self._usage_history: List[ResourceUsage] = []
+        self._temp_directories: Set[Path] = set()
+        self._active_processes: Set[int] = set()
 
+        # Performance tracking
+        self._performance_tracker = get_performance_tracker()
 
-class ResourceLimitExceededError(BacktestOrchestratorError):
-    """Raised when resource limits are exceeded."""
-    pass
+    def start_monitoring(self) -> None:
+        """Start resource monitoring."""
+        if self._monitoring:
+            return
 
+        self._monitoring = True
+        self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._monitor_thread.start()
 
-class JobExecutionError(BacktestOrchestratorError):
-    """Raised when job execution fails."""
-    pass
+        self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self._cleanup_thread.start()
+
+        logger.info("Resource monitoring started")
+
+    def stop_monitoring(self) -> None:
+        """Stop resource monitoring."""
+        self._monitoring = False
+
+        if self._monitor_thread:
+            self._monitor_thread.join(timeout=5.0)
+        if self._cleanup_thread:
+            self._cleanup_thread.join(timeout=5.0)
+
+        logger.info("Resource monitoring stopped")
+
+    def get_current_usage(self) -> ResourceUsage:
+        """Get current resource usage."""
+        with self._resource_lock:
+            return self._current_usage
+
+    def check_resource_limits(self) -> List[str]:
+        """Check if any resource limits are exceeded."""
+        warnings = []
+        usage = self.get_current_usage()
+
+        # Check memory limit
+        if ResourceLimitType.MAX_MEMORY_MB in self.resource_limits:
+            limit = self.resource_limits[ResourceLimitType.MAX_MEMORY_MB]
+            state = usage.get_memory_state(limit)
+            if state == ResourceState.EXCEEDED:
+                warnings.append(f"Memory usage ({usage.memory_mb:.1f}MB) exceeds limit ({limit}MB)")
+            elif state == ResourceState.CRITICAL:
+                warnings.append(f"Memory usage ({usage.memory_mb:.1f}MB) approaching limit ({limit}MB)")
+
+        # Check disk space
+        if ResourceLimitType.MIN_FREE_DISK_MB in self.resource_limits:
+            limit = self.resource_limits[ResourceLimitType.MIN_FREE_DISK_MB]
+            state = usage.get_disk_state(limit)
+            if state == ResourceState.EXCEEDED:
+                warnings.append(f"Free disk space ({usage.disk_free_mb:.1f}MB) below minimum ({limit}MB)")
+            elif state == ResourceState.CRITICAL:
+                warnings.append(f"Free disk space ({usage.disk_free_mb:.1f}MB) approaching minimum ({limit}MB)")
+
+        # Check CPU usage
+        if ResourceLimitType.MAX_CPU_PERCENT in self.resource_limits:
+            limit = self.resource_limits[ResourceLimitType.MAX_CPU_PERCENT]
+            if usage.cpu_percent > limit:
+                warnings.append(f"CPU usage ({usage.cpu_percent:.1f}%) exceeds limit ({limit}%)")
+
+        return warnings
+
+    def can_start_job(self, estimated_memory_mb: float = 0) -> Tuple[bool, List[str]]:
+        """Check if a new job can be started given current resource usage."""
+        warnings = self.check_resource_limits()
+
+        # Check if we have room for the estimated additional memory
+        if ResourceLimitType.MAX_MEMORY_MB in self.resource_limits:
+            limit = self.resource_limits[ResourceLimitType.MAX_MEMORY_MB]
+            projected_memory = self._current_usage.memory_mb + estimated_memory_mb
+            if projected_memory > limit:
+                warnings.append(f"Cannot start job: projected memory usage ({projected_memory:.1f}MB) would exceed limit ({limit}MB)")
+
+        # Check concurrent job limit
+        if ResourceLimitType.MAX_CONCURRENT_JOBS in self.resource_limits:
+            limit = self.resource_limits[ResourceLimitType.MAX_CONCURRENT_JOBS]
+            if self._current_usage.active_jobs >= limit:
+                warnings.append(f"Cannot start job: already at concurrent job limit ({limit})")
+
+        can_start = len(warnings) == 0
+        return can_start, warnings
+
+    def register_temp_directory(self, temp_dir: Path) -> None:
+        """Register a temporary directory for cleanup."""
+        with self._resource_lock:
+            self._temp_directories.add(temp_dir)
+
+    def register_process(self, pid: int) -> None:
+        """Register a process for monitoring."""
+        with self._resource_lock:
+            self._active_processes.add(pid)
+
+    def cleanup_temp_files(self) -> int:
+        """Clean up temporary files and directories."""
+        cleaned_count = 0
+
+        with self._resource_lock:
+            temp_dirs_to_remove = []
+
+            for temp_dir in self._temp_directories:
+                try:
+                    if temp_dir.exists():
+                        shutil.rmtree(temp_dir)
+                        cleaned_count += 1
+                        logger.debug(f"Cleaned temp directory: {temp_dir}")
+                    temp_dirs_to_remove.append(temp_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to clean temp directory {temp_dir}: {e}")
+
+            for temp_dir in temp_dirs_to_remove:
+                self._temp_directories.discard(temp_dir)
+
+        if cleaned_count > 0:
+            logger.info(f"Cleaned {cleaned_count} temporary directories")
+
+        return cleaned_count
+
+    def _monitor_loop(self) -> None:
+        """Main resource monitoring loop."""
+        while self._monitoring:
+            try:
+                # Get current system usage
+                process = psutil.Process()
+                memory_info = process.memory_info()
+                disk_usage = shutil.disk_usage("/")
+
+                usage = ResourceUsage(
+                    memory_mb=memory_info.rss / 1024 / 1024,
+                    memory_percent=process.memory_percent(),
+                    cpu_percent=process.cpu_percent(),
+                    disk_usage_mb=(disk_usage.total - disk_usage.free) / 1024 / 1024,
+                    disk_free_mb=disk_usage.free / 1024 / 1024,
+                    active_jobs=len(self._active_processes)
+                )
+
+                with self._resource_lock:
+                    self._current_usage = usage
+                    self._usage_history.append(usage)
+
+                    # Keep only recent history (last hour)
+                    cutoff_time = datetime.now() - timedelta(hours=1)
+                    self._usage_history = [
+                        u for u in self._usage_history
+                        if u.timestamp > cutoff_time
+                    ]
+
+                # Track performance metrics
+                if self._performance_tracker:
+                    self._performance_tracker.add_metric(
+                        PerformanceMetricType.MEMORY_USAGE,
+                        usage.memory_mb,
+                        "MB"
+                    )
+                    self._performance_tracker.add_metric(
+                        PerformanceMetricType.CPU_USAGE,
+                        usage.cpu_percent,
+                        "percent"
+                    )
+
+                time.sleep(self.monitoring_interval)
+
+            except Exception as e:
+                logger.warning(f"Error in resource monitoring: {e}")
+                time.sleep(self.monitoring_interval)
+
+    def _cleanup_loop(self) -> None:
+        """Periodic cleanup loop."""
+        while self._monitoring:
+            try:
+                # Clean up temporary files
+                self.cleanup_temp_files()
+
+                # Force garbage collection if memory usage is high
+                usage = self.get_current_usage()
+                if ResourceLimitType.MAX_MEMORY_MB in self.resource_limits:
+                    limit = self.resource_limits[ResourceLimitType.MAX_MEMORY_MB]
+                    if usage.memory_mb > limit * 0.8:  # > 80% of limit
+                        gc.collect()
+                        logger.debug("Forced garbage collection due to high memory usage")
+
+                time.sleep(self.cleanup_interval)
+
+            except Exception as e:
+                logger.warning(f"Error in cleanup loop: {e}")
+                time.sleep(self.cleanup_interval)
 
 
 class BacktestOrchestrator:
@@ -121,8 +347,10 @@ class BacktestOrchestrator:
     - Manage parallel execution with resource limits and monitoring
     - Provide real-time progress tracking and user updates
     - Handle graceful interruption and cleanup
-    - Resource allocation and cleanup management
+    - Resource allocation and cleanup management with enhanced monitoring
     - Job dependency management and execution scheduling
+    - Timeout handling for long-running operations
+    - Disk space management for large report generation
     """
 
     def __init__(self,
@@ -131,7 +359,10 @@ class BacktestOrchestrator:
                  max_workers: Optional[int] = None,
                  default_execution_mode: ExecutionMode = ExecutionMode.ADAPTIVE,
                  resource_limits: Optional[Dict[ResourceLimitType, Any]] = None,
-                 progress_callback: Optional[Callable[[OrchestrationState], None]] = None):
+                 progress_callback: Optional[Callable[[OrchestrationState], None]] = None,
+                 enable_timeout_handling: bool = True,
+                 default_job_timeout_seconds: float = 3600.0,
+                 enable_resource_monitoring: bool = True):
         """
         Initialize the backtest orchestrator.
 
@@ -142,9 +373,15 @@ class BacktestOrchestrator:
             default_execution_mode: Default execution mode for jobs
             resource_limits: Resource limits for job execution
             progress_callback: Optional callback for progress updates
+            enable_timeout_handling: Enable timeout handling for jobs
+            default_job_timeout_seconds: Default timeout for jobs
+            enable_resource_monitoring: Enable resource monitoring
         """
         self.config_manager = config_manager or ConfigManager()
         self.data_manager = data_manager or DataManager()
+        self.enable_timeout_handling = enable_timeout_handling
+        self.default_job_timeout_seconds = default_job_timeout_seconds
+        self.enable_resource_monitoring = enable_resource_monitoring
 
         # Worker configuration
         if max_workers is None:
@@ -155,12 +392,14 @@ class BacktestOrchestrator:
         self.default_execution_mode = default_execution_mode
         self.progress_callback = progress_callback
 
-        # Resource limits
+        # Enhanced resource limits with disk space management
         self.resource_limits = resource_limits or {
             ResourceLimitType.MAX_MEMORY_MB: 8192,  # 8GB default
             ResourceLimitType.MAX_CPU_PERCENT: 80,
             ResourceLimitType.MAX_CONCURRENT_JOBS: self.max_workers,
-            ResourceLimitType.MAX_EXECUTION_TIME_SECONDS: 3600  # 1 hour
+            ResourceLimitType.MAX_EXECUTION_TIME_SECONDS: 3600,  # 1 hour
+            ResourceLimitType.MIN_FREE_DISK_MB: 1024,  # 1GB minimum free
+            ResourceLimitType.MAX_DISK_USAGE_MB: 10240  # 10GB max usage
         }
 
         # Internal state
@@ -179,10 +418,34 @@ class BacktestOrchestrator:
         # Manager instances (lazy-loaded)
         self._manager_cache: Dict[str, Any] = {}
 
+        # Enhanced resource management
+        self._resource_manager: Optional[ResourceManager] = None
+        if enable_resource_monitoring:
+            self._resource_manager = ResourceManager(self.resource_limits)
+
+        # Temporary file management
+        self._temp_directories: Set[Path] = set()
+        self._active_futures: Set[Any] = set()
+
+        # Performance tracking
+        self._performance_tracker = get_performance_tracker()
+
         # Setup signal handlers for graceful shutdown
         self._setup_signal_handlers()
 
         logger.info(f"BacktestOrchestrator initialized with {self.max_workers} max workers")
+        logger.info(f"Resource monitoring enabled: {enable_resource_monitoring}")
+        logger.info(f"Timeout handling enabled: {enable_timeout_handling}")
+
+    def __enter__(self):
+        """Context manager entry."""
+        if self._resource_manager:
+            self._resource_manager.start_monitoring()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with cleanup."""
+        self.shutdown(cleanup=True)
 
     def add_job(self, job: BacktestJob) -> str:
         """
@@ -197,319 +460,367 @@ class BacktestOrchestrator:
         # Validate job parameters
         self._validate_job(job)
 
+        # Set default timeout if not specified
+        if job.timeout_seconds is None and self.enable_timeout_handling:
+            job.timeout_seconds = self.default_job_timeout_seconds
+
         # Add to queue
         self.job_queue.append(job)
         self.state.total_jobs += 1
         self.state.queued_jobs += 1
 
-        logger.info(f"Added job {job.job_id} of type {job.job_type} to queue")
-        logger.debug(f"Job parameters: {job.parameters}")
-
-        # Update progress
-        self._update_progress()
-
+        logger.info(f"Added job {job.job_id} to queue (type: {job.job_type.value})")
         return job.job_id
 
-    def add_strategy_backtest(self,
-                            strategy_name: str,
-                            days: int = 30,
-                            scenarios: Optional[List[str]] = None,
-                            **kwargs) -> str:
+    def execute_jobs(self,
+                    execution_mode: Optional[ExecutionMode] = None,
+                    max_retries: int = 1) -> Dict[str, JobResult]:
         """
-        Add a strategy backtesting job.
+        Execute all queued jobs with enhanced resource management and timeout handling.
 
         Args:
-            strategy_name: Name of strategy from configuration
-            days: Number of days to backtest
-            scenarios: Optional list of scenarios to test
-            **kwargs: Additional parameters for the backtest
+            execution_mode: Execution mode override
+            max_retries: Maximum number of retries for failed jobs
 
         Returns:
-            Job ID for tracking
-        """
-        job_id = f"strategy_{strategy_name}_{int(time.time())}"
-
-        parameters = {
-            'strategy_name': strategy_name,
-            'days': days,
-            'scenarios': scenarios or ['real'],
-            **kwargs
-        }
-
-        job = BacktestJob(
-            job_id=job_id,
-            job_type=BacktestType.SINGLE_STRATEGY,
-            parameters=parameters,
-            priority=75,  # Higher priority for strategy tests
-            estimated_duration_seconds=self._estimate_strategy_duration(strategy_name, days, scenarios)
-        )
-
-        return self.add_job(job)
-
-    def add_scenario_testing(self,
-                           strategy_name: str,
-                           scenarios: List[str],
-                           days: int = 30,
-                           **kwargs) -> str:
-        """
-        Add a multi-scenario testing job.
-
-        Args:
-            strategy_name: Name of strategy to test
-            scenarios: List of scenarios to test against
-            days: Number of days per scenario
-            **kwargs: Additional parameters
-
-        Returns:
-            Job ID for tracking
-        """
-        job_id = f"scenario_{strategy_name}_{int(time.time())}"
-
-        parameters = {
-            'strategy_name': strategy_name,
-            'scenarios': scenarios,
-            'days': days,
-            **kwargs
-        }
-
-        job = BacktestJob(
-            job_id=job_id,
-            job_type=BacktestType.SCENARIO_TESTING,
-            parameters=parameters,
-            priority=60,
-            estimated_duration_seconds=self._estimate_scenario_duration(scenarios, days)
-        )
-
-        return self.add_job(job)
-
-    def add_strategy_comparison(self,
-                              strategy_names: List[str],
-                              days: int = 30,
-                              scenarios: Optional[List[str]] = None,
-                              **kwargs) -> str:
-        """
-        Add a strategy comparison job.
-
-        Args:
-            strategy_names: List of strategy names to compare
-            days: Number of days to backtest each strategy
-            scenarios: Optional list of scenarios for comparison
-            **kwargs: Additional parameters
-
-        Returns:
-            Job ID for tracking
-        """
-        job_id = f"comparison_{len(strategy_names)}strategies_{int(time.time())}"
-
-        parameters = {
-            'strategy_names': strategy_names,
-            'days': days,
-            'scenarios': scenarios or ['real'],
-            **kwargs
-        }
-
-        # Create dependency jobs for individual strategy testing
-        dependency_jobs = []
-        for strategy_name in strategy_names:
-            dep_job_id = self.add_strategy_backtest(
-                strategy_name=strategy_name,
-                days=days,
-                scenarios=scenarios,
-                **kwargs
-            )
-            dependency_jobs.append(dep_job_id)
-
-        job = BacktestJob(
-            job_id=job_id,
-            job_type=BacktestType.COMPARISON,
-            parameters=parameters,
-            dependencies=dependency_jobs,
-            priority=40,  # Lower priority, runs after dependencies
-            estimated_duration_seconds=len(strategy_names) * 60  # Comparison is relatively fast
-        )
-
-        return self.add_job(job)
-
-    def execute_all(self,
-                   execution_mode: Optional[ExecutionMode] = None,
-                   timeout_seconds: Optional[float] = None) -> Dict[str, JobResult]:
-        """
-        Execute all queued jobs with the specified execution mode.
-
-        Args:
-            execution_mode: How to execute jobs (sequential, parallel, etc.)
-            timeout_seconds: Optional timeout for the entire execution
-
-        Returns:
-            Dictionary mapping job_id to JobResult
+            Dictionary mapping job IDs to their results
         """
         if not self.job_queue:
-            logger.warning("No jobs in queue to execute")
+            logger.warning("No jobs queued for execution")
             return {}
 
         execution_mode = execution_mode or self.default_execution_mode
+        operation_name = f"execute_{len(self.job_queue)}_jobs_{execution_mode.value}"
 
-        logger.info(f"Starting execution of {len(self.job_queue)} jobs using {execution_mode}")
+        if self._performance_tracker:
+            with self._performance_tracker.track_operation(operation_name):
+                return self._execute_jobs_internal(execution_mode, max_retries)
+        else:
+            return self._execute_jobs_internal(execution_mode, max_retries)
+
+    def _execute_jobs_internal(self,
+                              execution_mode: ExecutionMode,
+                              max_retries: int) -> Dict[str, JobResult]:
+        """Internal job execution logic."""
+        logger.info(f"Starting execution of {len(self.job_queue)} jobs in {execution_mode.value} mode")
+
         self.state.start_time = datetime.now()
 
-        # Start resource monitoring
-        self._start_resource_monitoring()
-
         try:
-            # Choose execution strategy based on mode
             if execution_mode == ExecutionMode.SEQUENTIAL:
-                results = self._execute_sequential()
+                return self._execute_sequential(max_retries)
             elif execution_mode == ExecutionMode.PARALLEL_THREADS:
-                results = self._execute_parallel_threads()
+                return self._execute_parallel_threads(max_retries)
             elif execution_mode == ExecutionMode.PARALLEL_PROCESSES:
-                results = self._execute_parallel_processes()
+                return self._execute_parallel_processes(max_retries)
             elif execution_mode == ExecutionMode.ADAPTIVE:
-                results = self._execute_adaptive()
+                return self._execute_adaptive(max_retries)
             else:
                 raise ValueError(f"Unsupported execution mode: {execution_mode}")
 
-            # Wait for all jobs to complete or timeout
-            if timeout_seconds:
-                self._wait_for_completion(timeout_seconds)
-
-            logger.info(f"Execution completed. Success: {len(self.completed_jobs)}, "
-                       f"Failed: {len(self.failed_jobs)}")
-
-            return {**self.completed_jobs, **self.failed_jobs}
-
         except KeyboardInterrupt:
-            logger.info("Execution interrupted by user")
-            self.shutdown(graceful=True)
+            logger.warning("Execution interrupted by user")
+            self._handle_interruption()
             raise
+        except Exception as e:
+            logger.error(f"Error during job execution: {e}")
+            self._handle_execution_error(e)
+            raise
+        finally:
+            self._finalize_execution()
+
+    def _execute_with_timeout(self,
+                             job: BacktestJob,
+                             executor: Union[ThreadPoolExecutor, ProcessPoolExecutor]) -> JobResult:
+        """Execute a job with timeout handling."""
+        start_time = time.time()
+
+        try:
+            # Check resource limits before starting
+            if self._resource_manager:
+                can_start, warnings = self._resource_manager.can_start_job()
+                if not can_start:
+                    raise ResourceLimitExceededError(f"Cannot start job {job.job_id}: {'; '.join(warnings)}")
+
+                if warnings:
+                    logger.warning(f"Resource warnings for job {job.job_id}: {'; '.join(warnings)}")
+
+            # Create temporary directory for job
+            temp_dir = self._create_job_temp_directory(job.job_id)
+            job.temp_files.append(temp_dir)
+
+            if self._resource_manager:
+                self._resource_manager.register_temp_directory(temp_dir)
+
+            # Submit job with timeout
+            future = executor.submit(self._execute_single_job, job)
+            self._active_futures.add(future)
+
+            try:
+                if self.enable_timeout_handling and job.timeout_seconds:
+                    result_data = future.result(timeout=job.timeout_seconds)
+                else:
+                    result_data = future.result()
+
+                execution_time = time.time() - start_time
+
+                # Get resource usage during execution
+                resource_usage = {}
+                if self._resource_manager:
+                    current_usage = self._resource_manager.get_current_usage()
+                    resource_usage = {
+                        'peak_memory_mb': current_usage.memory_mb,
+                        'avg_cpu_percent': current_usage.cpu_percent,
+                        'execution_time': execution_time
+                    }
+
+                result = JobResult(
+                    job_id=job.job_id,
+                    success=True,
+                    result_data=result_data,
+                    execution_time_seconds=execution_time,
+                    resource_usage=resource_usage
+                )
+
+                # Cleanup job resources
+                self._cleanup_job_resources(job)
+
+                return result
+
+            except TimeoutError:
+                logger.error(f"Job {job.job_id} timed out after {job.timeout_seconds}s")
+                future.cancel()
+
+                result = JobResult(
+                    job_id=job.job_id,
+                    success=False,
+                    error=TimeoutError(f"Job timed out after {job.timeout_seconds}s"),
+                    execution_time_seconds=time.time() - start_time,
+                    was_timeout=True
+                )
+
+                # Force cleanup after timeout
+                self._cleanup_job_resources(job, force=True)
+
+                return result
 
         except Exception as e:
-            logger.error(f"Execution failed: {e}")
-            self.shutdown(graceful=False)
-            raise
+            execution_time = time.time() - start_time
+            logger.error(f"Error executing job {job.job_id}: {e}")
 
+            result = JobResult(
+                job_id=job.job_id,
+                success=False,
+                error=e,
+                execution_time_seconds=execution_time
+            )
+
+            # Cleanup after error
+            self._cleanup_job_resources(job, force=True)
+
+            return result
         finally:
-            # Stop resource monitoring
-            self._stop_resource_monitoring()
+            self._active_futures.discard(future)
 
-            # Run cleanup functions
-            self._run_cleanup()
+    def _cleanup_job_resources(self, job: BacktestJob, force: bool = False) -> None:
+        """Clean up resources used by a job."""
+        cleanup_successful = True
 
-    def shutdown(self, graceful: bool = True) -> None:
+        try:
+            # Run custom cleanup functions
+            for cleanup_func in job.cleanup_functions:
+                try:
+                    cleanup_func()
+                except Exception as e:
+                    logger.warning(f"Job {job.job_id} cleanup function failed: {e}")
+                    cleanup_successful = False
+
+            # Clean up temporary files
+            for temp_path in job.temp_files:
+                try:
+                    if temp_path.exists():
+                        if temp_path.is_file():
+                            temp_path.unlink()
+                        else:
+                            shutil.rmtree(temp_path)
+                        logger.debug(f"Cleaned up temp path: {temp_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up {temp_path}: {e}")
+                    cleanup_successful = False
+
+            # Force garbage collection if requested
+            if force:
+                gc.collect()
+
+        except Exception as e:
+            logger.error(f"Error during job cleanup for {job.job_id}: {e}")
+            cleanup_successful = False
+
+        if not cleanup_successful:
+            logger.warning(f"Some cleanup operations failed for job {job.job_id}")
+
+    def _create_job_temp_directory(self, job_id: str) -> Path:
+        """Create a temporary directory for job execution."""
+        temp_dir = Path(tempfile.mkdtemp(prefix=f"backtest_job_{job_id}_"))
+        self._temp_directories.add(temp_dir)
+        return temp_dir
+
+    def cleanup_all_resources(self) -> None:
+        """Clean up all orchestrator resources."""
+        logger.info("Starting comprehensive resource cleanup")
+
+        cleanup_count = 0
+
+        # Cancel any active futures
+        for future in list(self._active_futures):
+            try:
+                if not future.done():
+                    future.cancel()
+                    cleanup_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to cancel future: {e}")
+
+        self._active_futures.clear()
+
+        # Clean up temporary directories
+        for temp_dir in list(self._temp_directories):
+            try:
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+                    cleanup_count += 1
+                    logger.debug(f"Cleaned temp directory: {temp_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to clean temp directory {temp_dir}: {e}")
+
+        self._temp_directories.clear()
+
+        # Run registered cleanup functions
+        for cleanup_func in self._cleanup_functions:
+            try:
+                cleanup_func()
+                cleanup_count += 1
+            except Exception as e:
+                logger.warning(f"Cleanup function failed: {e}")
+
+        # Clean up data manager caches
+        if hasattr(self.data_manager, 'cleanup_temp_files'):
+            try:
+                cache_cleaned = self.data_manager.cleanup_temp_files()
+                cleanup_count += cache_cleaned
+            except Exception as e:
+                logger.warning(f"Failed to clean data manager cache: {e}")
+
+        # Stop resource monitoring
+        if self._resource_manager:
+            try:
+                self._resource_manager.stop_monitoring()
+                cleanup_count += self._resource_manager.cleanup_temp_files()
+            except Exception as e:
+                logger.warning(f"Failed to stop resource manager: {e}")
+
+        # Force garbage collection
+        gc.collect()
+
+        logger.info(f"Resource cleanup completed. Cleaned {cleanup_count} items")
+
+    def shutdown(self, cleanup: bool = True, timeout: float = 30.0) -> None:
         """
-        Shutdown the orchestrator and cleanup resources.
+        Gracefully shutdown the orchestrator.
 
         Args:
-            graceful: Whether to wait for running jobs to complete
+            cleanup: Whether to perform resource cleanup
+            timeout: Maximum time to wait for shutdown
         """
-        logger.info(f"Initiating {'graceful' if graceful else 'immediate'} shutdown")
+        logger.info("Shutting down BacktestOrchestrator")
+
         self._shutdown_requested = True
 
-        if graceful:
-            # Wait for running jobs to complete
-            timeout = 30  # seconds
-            start_time = time.time()
+        # Wait for running jobs to complete or timeout
+        start_time = time.time()
+        while self.state.running_jobs > 0 and (time.time() - start_time) < timeout:
+            time.sleep(0.5)
 
-            while self.running_jobs and (time.time() - start_time) < timeout:
-                logger.info(f"Waiting for {len(self.running_jobs)} running jobs to complete...")
-                time.sleep(1)
+        if self.state.running_jobs > 0:
+            logger.warning(f"{self.state.running_jobs} jobs still running after timeout")
 
-            if self.running_jobs:
-                logger.warning(f"Timeout reached, {len(self.running_jobs)} jobs still running")
+        if cleanup:
+            self.cleanup_all_resources()
 
-        # Run cleanup
-        self._run_cleanup()
+        logger.info("BacktestOrchestrator shutdown complete")
 
-        logger.info("Orchestrator shutdown complete")
-
-    def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get the current status of a specific job.
-
-        Args:
-            job_id: ID of the job to check
-
-        Returns:
-            Dictionary with job status information, or None if not found
-        """
-        # Check completed jobs
-        if job_id in self.completed_jobs:
-            result = self.completed_jobs[job_id]
-            return {
-                'status': 'completed',
-                'success': result.success,
-                'execution_time': result.execution_time_seconds,
-                'error': str(result.error) if result.error else None
+    def get_resource_usage_report(self) -> Dict[str, Any]:
+        """Get comprehensive resource usage report."""
+        report = {
+            'timestamp': datetime.now().isoformat(),
+            'orchestrator_state': {
+                'total_jobs': self.state.total_jobs,
+                'completed_jobs': self.state.completed_jobs,
+                'failed_jobs': self.state.failed_jobs,
+                'running_jobs': self.state.running_jobs,
+                'queued_jobs': self.state.queued_jobs
             }
-
-        # Check failed jobs
-        if job_id in self.failed_jobs:
-            result = self.failed_jobs[job_id]
-            return {
-                'status': 'failed',
-                'success': False,
-                'execution_time': result.execution_time_seconds,
-                'error': str(result.error) if result.error else None
-            }
-
-        # Check running jobs
-        if job_id in self.running_jobs:
-            return {
-                'status': 'running',
-                'started_at': datetime.now().isoformat()  # Approximate
-            }
-
-        # Check queued jobs
-        for job in self.job_queue:
-            if job.job_id == job_id:
-                return {
-                    'status': 'queued',
-                    'job_type': job.job_type.value,
-                    'priority': job.priority,
-                    'dependencies': job.dependencies
-                }
-
-        return None
-
-    def get_overall_progress(self) -> Dict[str, Any]:
-        """
-        Get overall progress information.
-
-        Returns:
-            Dictionary with progress information
-        """
-        total_time = None
-        estimated_remaining = None
-
-        if self.state.start_time:
-            elapsed = (datetime.now() - self.state.start_time).total_seconds()
-
-            if self.state.completed_jobs > 0:
-                avg_time_per_job = elapsed / self.state.completed_jobs
-                remaining_jobs = self.state.total_jobs - self.state.completed_jobs - self.state.failed_jobs
-                estimated_remaining = remaining_jobs * avg_time_per_job
-
-        return {
-            'total_jobs': self.state.total_jobs,
-            'completed_jobs': self.state.completed_jobs,
-            'failed_jobs': self.state.failed_jobs,
-            'running_jobs': self.state.running_jobs,
-            'queued_jobs': self.state.queued_jobs,
-            'success_rate': (self.state.completed_jobs / max(1, self.state.completed_jobs + self.state.failed_jobs)) * 100,
-            'elapsed_time_seconds': elapsed if self.state.start_time else 0,
-            'estimated_remaining_seconds': estimated_remaining,
-            'current_resource_usage': self.state.current_resource_usage
         }
 
-    def add_cleanup_function(self, cleanup_func: Callable[[], None]) -> None:
-        """
-        Add a function to be called during cleanup.
+        if self._resource_manager:
+            current_usage = self._resource_manager.get_current_usage()
+            warnings = self._resource_manager.check_resource_limits()
 
-        Args:
-            cleanup_func: Function to call during cleanup
-        """
-        self._cleanup_functions.append(cleanup_func)
+            report['resource_usage'] = {
+                'memory_mb': current_usage.memory_mb,
+                'memory_percent': current_usage.memory_percent,
+                'cpu_percent': current_usage.cpu_percent,
+                'disk_free_mb': current_usage.disk_free_mb,
+                'active_jobs': current_usage.active_jobs,
+                'warnings': warnings
+            }
 
-    # Private methods for internal functionality
+            report['resource_limits'] = self.resource_limits
+
+        # Add data manager cache stats if available
+        if hasattr(self.data_manager, 'get_enhanced_cache_stats'):
+            try:
+                report['cache_stats'] = self.data_manager.get_enhanced_cache_stats()
+            except Exception as e:
+                logger.warning(f"Failed to get cache stats: {e}")
+
+        return report
+
+    def _setup_signal_handlers(self) -> None:
+        """Setup signal handlers for graceful shutdown."""
+        def signal_handler(signum, frame):
+            logger.info(f"Received signal {signum}, initiating graceful shutdown")
+            self.shutdown(cleanup=True)
+
+        try:
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+        except ValueError:
+            # Signal handlers can only be set from main thread
+            logger.debug("Could not set signal handlers (not in main thread)")
+
+    def _handle_interruption(self) -> None:
+        """Handle user interruption."""
+        logger.info("Handling interruption - cleaning up resources")
+        self._shutdown_requested = True
+        self.cleanup_all_resources()
+
+    def _handle_execution_error(self, error: Exception) -> None:
+        """Handle execution errors."""
+        logger.error(f"Execution error occurred: {error}")
+        # Perform any error-specific cleanup here
+
+    def _finalize_execution(self) -> None:
+        """Finalize execution and update state."""
+        end_time = datetime.now()
+        if self.state.start_time:
+            total_duration = end_time - self.state.start_time
+            logger.info(f"Job execution completed in {total_duration.total_seconds():.2f}s")
+
+        # Update final state
+        self.state.estimated_completion_time = end_time
+
+        # Log final statistics
+        self._log_execution_summary()
 
     def _validate_job(self, job: BacktestJob) -> None:
         """Validate job parameters and configuration."""
@@ -535,99 +846,7 @@ class BacktestOrchestrator:
             except Exception as e:
                 raise ValueError(f"Failed to validate strategy configuration: {e}")
 
-    def _estimate_strategy_duration(self, strategy_name: str, days: int, scenarios: Optional[List[str]]) -> float:
-        """Estimate duration for a strategy backtest."""
-        base_time = 60  # 1 minute base time
-
-        # Adjust for days (more data = more time)
-        day_factor = max(1, days / 30)  # Scale based on 30-day baseline
-
-        # Adjust for scenarios
-        scenario_count = len(scenarios) if scenarios else 1
-        scenario_factor = scenario_count * 0.8  # Each scenario adds 80% of base time
-
-        # Adjust for strategy complexity (number of indicators)
-        complexity_factor = 1.0
-        try:
-            strategy_config = self.config_manager.get_strategy_config(strategy_name)
-            if strategy_config:
-                indicator_count = len(strategy_config.get('indicators', []))
-                complexity_factor = 1 + (indicator_count * 0.2)  # Each indicator adds 20%
-        except Exception:
-            pass  # Use default if strategy config can't be loaded
-
-        return base_time * day_factor * scenario_factor * complexity_factor
-
-    def _estimate_scenario_duration(self, scenarios: List[str], days: int) -> float:
-        """Estimate duration for scenario testing."""
-        base_time_per_scenario = 45  # 45 seconds per scenario
-        day_factor = max(1, days / 30)
-
-        return len(scenarios) * base_time_per_scenario * day_factor
-
-    def _setup_signal_handlers(self) -> None:
-        """Setup signal handlers for graceful shutdown."""
-        def signal_handler(signum, frame):
-            logger.info(f"Received signal {signum}, initiating graceful shutdown")
-            self.shutdown(graceful=True)
-
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-
-    def _start_resource_monitoring(self) -> None:
-        """Start monitoring system resources."""
-        def monitor_resources():
-            while not self._shutdown_requested:
-                try:
-                    # Get current resource usage
-                    memory_mb = psutil.virtual_memory().used / (1024 * 1024)
-                    cpu_percent = psutil.cpu_percent(interval=1)
-
-                    with self._monitor_lock:
-                        self.state.current_resource_usage = {
-                            'memory_mb': memory_mb,
-                            'cpu_percent': cpu_percent,
-                            'concurrent_jobs': len(self.running_jobs)
-                        }
-
-                    # Check resource limits
-                    self._check_resource_limits()
-
-                    time.sleep(5)  # Monitor every 5 seconds
-
-                except Exception as e:
-                    logger.warning(f"Resource monitoring error: {e}")
-                    time.sleep(10)  # Back off on error
-
-        self._resource_monitor_thread = threading.Thread(target=monitor_resources, daemon=True)
-        self._resource_monitor_thread.start()
-
-    def _stop_resource_monitoring(self) -> None:
-        """Stop resource monitoring."""
-        if self._resource_monitor_thread and self._resource_monitor_thread.is_alive():
-            # Thread will stop when _shutdown_requested is True
-            self._resource_monitor_thread.join(timeout=10)
-
-    def _check_resource_limits(self) -> None:
-        """Check if resource limits are exceeded."""
-        current_usage = self.state.current_resource_usage
-
-        # Check memory limit
-        memory_limit = self.resource_limits.get(ResourceLimitType.MAX_MEMORY_MB)
-        if memory_limit and current_usage.get('memory_mb', 0) > memory_limit:
-            logger.warning(f"Memory usage ({current_usage['memory_mb']:.1f} MB) exceeds limit ({memory_limit} MB)")
-
-        # Check CPU limit
-        cpu_limit = self.resource_limits.get(ResourceLimitType.MAX_CPU_PERCENT)
-        if cpu_limit and current_usage.get('cpu_percent', 0) > cpu_limit:
-            logger.warning(f"CPU usage ({current_usage['cpu_percent']:.1f}%) exceeds limit ({cpu_limit}%)")
-
-        # Check concurrent jobs limit
-        jobs_limit = self.resource_limits.get(ResourceLimitType.MAX_CONCURRENT_JOBS)
-        if jobs_limit and current_usage.get('concurrent_jobs', 0) > jobs_limit:
-            logger.warning(f"Concurrent jobs ({current_usage['concurrent_jobs']}) exceeds limit ({jobs_limit})")
-
-    def _execute_sequential(self) -> Dict[str, JobResult]:
+    def _execute_sequential(self, max_retries: int) -> Dict[str, JobResult]:
         """Execute jobs sequentially."""
         results = {}
 
@@ -654,7 +873,7 @@ class BacktestOrchestrator:
 
         return results
 
-    def _execute_parallel_threads(self) -> Dict[str, JobResult]:
+    def _execute_parallel_threads(self, max_retries: int) -> Dict[str, JobResult]:
         """Execute jobs using thread pool."""
         results = {}
 
@@ -699,25 +918,25 @@ class BacktestOrchestrator:
 
         return results
 
-    def _execute_parallel_processes(self) -> Dict[str, JobResult]:
+    def _execute_parallel_processes(self, max_retries: int) -> Dict[str, JobResult]:
         """Execute jobs using process pool (for CPU-intensive tasks)."""
         # Note: Process pool execution would require careful serialization
         # For now, fall back to thread execution
         logger.info("Process pool execution not fully implemented, falling back to thread execution")
-        return self._execute_parallel_threads()
+        return self._execute_parallel_threads(max_retries)
 
-    def _execute_adaptive(self) -> Dict[str, JobResult]:
+    def _execute_adaptive(self, max_retries: int) -> Dict[str, JobResult]:
         """Adaptively choose execution mode based on workload."""
         total_jobs = len(self.job_queue)
 
         # Simple heuristic for choosing execution mode
         if total_jobs == 1:
-            return self._execute_sequential()
+            return self._execute_sequential(max_retries)
         elif total_jobs <= 4:
-            return self._execute_parallel_threads()
+            return self._execute_parallel_threads(max_retries)
         else:
             # For larger workloads, use threading with dynamic adjustment
-            return self._execute_parallel_threads()
+            return self._execute_parallel_threads(max_retries)
 
     def _execute_single_job(self, job: BacktestJob) -> JobResult:
         """Execute a single backtest job."""
@@ -901,64 +1120,19 @@ class BacktestOrchestrator:
             except Exception as e:
                 logger.warning(f"Progress callback failed: {e}")
 
-    def _wait_for_completion(self, timeout_seconds: float) -> None:
-        """Wait for all jobs to complete or timeout."""
-        start_time = time.time()
+    def _log_execution_summary(self) -> None:
+        """Log execution summary and performance metrics."""
+        end_time = datetime.now()
+        if self.state.start_time:
+            total_duration = end_time - self.state.start_time
+            logger.info(f"Total execution time: {total_duration.total_seconds():.2f}s")
 
-        while self.running_jobs and (time.time() - start_time) < timeout_seconds:
-            time.sleep(1)
+            if self._performance_tracker:
+                self._performance_tracker.add_metric(
+                    PerformanceMetricType.TOTAL_EXECUTION_TIME,
+                    total_duration.total_seconds(),
+                    "seconds"
+                )
 
-        if self.running_jobs:
-            raise TimeoutError(f"Jobs did not complete within {timeout_seconds} seconds")
-
-    def _run_cleanup(self) -> None:
-        """Run all registered cleanup functions."""
-        for cleanup_func in self._cleanup_functions:
-            try:
-                cleanup_func()
-            except Exception as e:
-                logger.error(f"Cleanup function failed: {e}")
-
-        self._cleanup_functions.clear()
-
-
-# Convenience functions for common orchestration patterns
-
-def create_strategy_orchestrator(config_path: Optional[str] = None,
-                               max_workers: Optional[int] = None) -> BacktestOrchestrator:
-    """
-    Create a preconfigured orchestrator for strategy backtesting.
-
-    Args:
-        config_path: Optional path to configuration file
-        max_workers: Optional maximum number of workers
-
-    Returns:
-        Configured BacktestOrchestrator instance
-    """
-    config_manager = ConfigManager(config_path=config_path)
-    data_manager = DataManager()
-
-    return BacktestOrchestrator(
-        config_manager=config_manager,
-        data_manager=data_manager,
-        max_workers=max_workers,
-        default_execution_mode=ExecutionMode.PARALLEL_THREADS
-    )
-
-
-@contextmanager
-def orchestrated_backtest(orchestrator: BacktestOrchestrator):
-    """
-    Context manager for orchestrated backtesting with automatic cleanup.
-
-    Args:
-        orchestrator: BacktestOrchestrator instance
-
-    Yields:
-        The orchestrator instance
-    """
-    try:
-        yield orchestrator
-    finally:
-        orchestrator.shutdown(graceful=True)
+        # Log final state
+        self.get_resource_usage_report()
