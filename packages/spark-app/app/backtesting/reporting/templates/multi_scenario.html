@@ -1,0 +1,899 @@
+{% extends "base.html" %} {% block title %}{{ strategy_name }} Multi-Scenario
+Analysis{% endblock %} {% block report_title %}{{ strategy_name }}
+Multi-Scenario Performance Analysis{% endblock %} {% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="{{ static_path }}/multi_scenario.css" />
+<style>
+  /* Multi-Scenario Specific Styling */
+  .scenario-dashboard {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+  }
+
+  .scenario-tabs {
+    display: flex;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+    overflow-x: auto;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 0;
+  }
+
+  .scenario-tab {
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    min-width: fit-content;
+  }
+
+  .scenario-tab:hover {
+    background: #e9ecef;
+  }
+
+  .scenario-tab.active {
+    background: #007bff;
+    color: white;
+    border-bottom: 3px solid #0056b3;
+  }
+
+  .scenario-content {
+    display: none;
+    padding: 2rem;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+  }
+
+  .scenario-content.active {
+    display: block;
+  }
+
+  .comparison-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+  }
+
+  .metric-card {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .metric-card h4 {
+    margin-top: 0;
+    color: #495057;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 0.5rem;
+    font-size: 1.1rem;
+  }
+
+  .metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #007bff;
+    margin: 0.5rem 0;
+  }
+
+  .metric-change {
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+
+  .metric-change.positive {
+    color: #28a745;
+  }
+
+  .metric-change.negative {
+    color: #dc3545;
+  }
+
+  .metric-change.neutral {
+    color: #6c757d;
+  }
+
+  .scenario-heatmap {
+    margin: 2rem 0;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+
+  .heatmap-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .control-group label {
+    font-weight: bold;
+    color: #495057;
+  }
+
+  .scenario-filters {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 150px;
+  }
+
+  .filter-group label {
+    font-weight: bold;
+    color: #495057;
+    font-size: 0.9rem;
+  }
+
+  .filter-group select,
+  .filter-group input {
+    padding: 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+  }
+
+  .expandable-section {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin: 1rem 0;
+    overflow: hidden;
+  }
+
+  .section-header {
+    background: #f8f9fa;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-header:hover {
+    background: #e9ecef;
+  }
+
+  .section-header h3 {
+    margin: 0;
+    color: #495057;
+  }
+
+  .expand-icon {
+    transition: transform 0.3s ease;
+    font-size: 1.2rem;
+    color: #6c757d;
+  }
+
+  .expand-icon.expanded {
+    transform: rotate(180deg);
+  }
+
+  .section-content {
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+  }
+
+  .section-content.expanded {
+    padding: 1.5rem;
+    max-height: 2000px;
+  }
+
+  .export-controls {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+
+  .export-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid #007bff;
+    background: #007bff;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .export-btn:hover {
+    background: #0056b3;
+    border-color: #0056b3;
+    color: white;
+    text-decoration: none;
+  }
+
+  .export-btn.secondary {
+    background: white;
+    color: #007bff;
+  }
+
+  .export-btn.secondary:hover {
+    background: #f8f9fa;
+  }
+
+  .visualization-container {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .chart-container {
+    position: relative;
+    height: 400px;
+    margin: 1rem 0;
+  }
+
+  .chart-title {
+    text-align: center;
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 1rem;
+  }
+
+  .robustness-scores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+
+  .score-item {
+    text-align: center;
+    padding: 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+  }
+
+  .score-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #007bff;
+  }
+
+  .score-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+  }
+
+  /* Mobile Responsive Design */
+  @media (max-width: 768px) {
+    .scenario-tabs {
+      flex-direction: column;
+    }
+
+    .scenario-tab {
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+
+    .comparison-dashboard {
+      grid-template-columns: 1fr;
+    }
+
+    .filter-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .filter-group {
+      min-width: auto;
+    }
+
+    .export-controls {
+      flex-direction: column;
+    }
+
+    .chart-container {
+      height: 300px;
+    }
+
+    .robustness-scores {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .scenario-content {
+      padding: 1rem;
+    }
+
+    .metric-card {
+      padding: 1rem;
+    }
+
+    .section-header {
+      padding: 0.75rem 1rem;
+    }
+
+    .robustness-scores {
+      grid-template-columns: 1fr;
+    }
+
+    .chart-container {
+      height: 250px;
+    }
+  }
+
+  /* Accessibility Features */
+  @media (prefers-reduced-motion: reduce) {
+    .scenario-tab,
+    .metric-card,
+    .section-header,
+    .expand-icon,
+    .section-content {
+      transition: none;
+    }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .scenario-tab.active {
+      border: 2px solid;
+    }
+
+    .metric-card {
+      border: 2px solid;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="scenario-dashboard">
+  <h2>Multi-Scenario Performance Analysis</h2>
+  <p>Strategy: <strong>{{ strategy_name }}</strong></p>
+  <p>Analysis Period: {{ start_date }} - {{ end_date }}</p>
+  <p>Scenarios Tested: {{ scenario_results | length }}</p>
+</div>
+
+<!-- Scenario Filters and Controls -->
+<div class="scenario-filters">
+  <h3>Analysis Controls</h3>
+  <div class="filter-row">
+    <div class="filter-group">
+      <label for="scenario-filter">Filter Scenarios:</label>
+      <select id="scenario-filter" onchange="filterScenarios()">
+        <option value="all">All Scenarios</option>
+        <option value="profitable">Profitable Only</option>
+        <option value="unprofitable">Unprofitable Only</option>
+        <option value="high-vol">High Volatility</option>
+        <option value="trending">Trending Markets</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="sort-by">Sort By:</label>
+      <select id="sort-by" onchange="sortScenarios()">
+        <option value="return">Total Return</option>
+        <option value="sharpe">Sharpe Ratio</option>
+        <option value="drawdown">Max Drawdown</option>
+        <option value="win-rate">Win Rate</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="metric-display">Primary Metric:</label>
+      <select id="metric-display" onchange="updatePrimaryMetric()">
+        <option value="return">Total Return</option>
+        <option value="sharpe">Sharpe Ratio</option>
+        <option value="win-rate">Win Rate</option>
+        <option value="profit-factor">Profit Factor</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="export-controls">
+    <a href="#" class="export-btn" onclick="exportScenarioData('json')"
+      >Export JSON</a
+    >
+    <a href="#" class="export-btn" onclick="exportScenarioData('csv')"
+      >Export CSV</a
+    >
+    <a href="#" class="export-btn" onclick="exportScenarioData('pdf')"
+      >Export PDF</a
+    >
+    <a href="#" class="export-btn secondary" onclick="printReport()"
+      >Print Report</a
+    >
+  </div>
+</div>
+
+<!-- Scenario Comparison Dashboard -->
+<div class="comparison-dashboard">
+  <div class="metric-card">
+    <h4>Overall Performance</h4>
+    <div class="metric-value" id="overall-return">
+      {{ overall_stats.avg_return | round(2) }}%
+    </div>
+    <div class="metric-change positive">
+      Across {{ scenario_results | length }} scenarios
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <h4>Best Scenario</h4>
+    <div class="metric-value" id="best-scenario">{{ best_scenario.name }}</div>
+    <div class="metric-change positive">
+      +{{ best_scenario.return | round(2) }}%
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <h4>Worst Scenario</h4>
+    <div class="metric-value" id="worst-scenario">
+      {{ worst_scenario.name }}
+    </div>
+    <div class="metric-change negative">
+      {{ worst_scenario.return | round(2) }}%
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <h4>Robustness Score</h4>
+    <div class="metric-value" id="robustness-score">
+      {{ robustness_analysis.overall_score | round(1) }}/100
+    </div>
+    <div
+      class="metric-change {{ 'positive' if robustness_analysis.overall_score >= 70 else 'negative' }}"
+    >
+      {{ robustness_analysis.assessment }}
+    </div>
+  </div>
+</div>
+
+<!-- Robustness Analysis Summary -->
+<div class="expandable-section">
+  <div class="section-header" onclick="toggleSection('robustness-summary')">
+    <h3>Robustness Analysis Summary</h3>
+    <span class="expand-icon">▼</span>
+  </div>
+  <div class="section-content" id="robustness-summary">
+    <div class="robustness-scores">
+      <div class="score-item">
+        <div class="score-value">
+          {{ robustness_analysis.consistency_score | round(1) }}
+        </div>
+        <div class="score-label">Consistency Score</div>
+      </div>
+      <div class="score-item">
+        <div class="score-value">
+          {{ robustness_analysis.adaptability_score | round(1) }}
+        </div>
+        <div class="score-label">Adaptability Score</div>
+      </div>
+      <div class="score-item">
+        <div class="score-value">
+          {{ robustness_analysis.risk_adjusted_robustness | round(1) }}
+        </div>
+        <div class="score-label">Risk-Adjusted Robustness</div>
+      </div>
+    </div>
+
+    <div class="visualization-container">
+      <div class="chart-title">Robustness Analysis Breakdown</div>
+      <div id="robustness-chart" class="chart-container"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Scenario Performance Heatmap -->
+<div class="scenario-heatmap">
+  <h3>Scenario Performance Heatmap</h3>
+  <div class="heatmap-controls">
+    <div class="control-group">
+      <label for="heatmap-metric">Metric:</label>
+      <select id="heatmap-metric" onchange="updateHeatmap()">
+        <option value="return">Total Return</option>
+        <option value="sharpe">Sharpe Ratio</option>
+        <option value="win-rate">Win Rate</option>
+        <option value="drawdown">Max Drawdown</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="color-scale">Color Scale:</label>
+      <select id="color-scale" onchange="updateHeatmap()">
+        <option value="RdYlGn">Red-Yellow-Green</option>
+        <option value="Viridis">Viridis (Colorblind Friendly)</option>
+        <option value="Blues">Blues</option>
+        <option value="RdBu">Red-Blue</option>
+      </select>
+    </div>
+  </div>
+  <div id="scenario-heatmap" class="chart-container"></div>
+</div>
+
+<!-- Scenario Tabs -->
+<div class="scenario-tabs" role="tablist">
+  {% for scenario_name in scenario_results.keys() %}
+  <button
+    class="scenario-tab {% if loop.first %}active{% endif %}"
+    onclick="showScenario('{{ scenario_name }}')"
+    role="tab"
+    aria-selected="{% if loop.first %}true{% else %}false{% endif %}"
+    aria-controls="{{ scenario_name }}-content"
+  >
+    {{ scenario_name | replace('_', ' ') | title }}
+  </button>
+  {% endfor %}
+
+  <!-- Comparison View Tab -->
+  <button
+    class="scenario-tab"
+    onclick="showScenario('comparison')"
+    role="tab"
+    aria-selected="false"
+    aria-controls="comparison-content"
+  >
+    📊 All Scenarios Comparison
+  </button>
+</div>
+
+<!-- Individual Scenario Content -->
+{% for scenario_name, scenario_data in scenario_results.items() %}
+<div
+  class="scenario-content {% if loop.first %}active{% endif %}"
+  id="{{ scenario_name }}-content"
+  role="tabpanel"
+>
+  <h3>{{ scenario_name | replace('_', ' ') | title }} Analysis</h3>
+
+  <!-- Scenario Characteristics -->
+  <div class="expandable-section">
+    <div
+      class="section-header"
+      onclick="toggleSection('{{ scenario_name }}-characteristics')"
+    >
+      <h4>Market Characteristics</h4>
+      <span class="expand-icon">▼</span>
+    </div>
+    <div class="section-content" id="{{ scenario_name }}-characteristics">
+      {% if scenario_characteristics[scenario_name] %}
+      <div
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+        "
+      >
+        <div>
+          <strong>Trend Direction:</strong> {{
+          scenario_characteristics[scenario_name].trend_direction }}
+        </div>
+        <div>
+          <strong>Volatility Level:</strong> {{
+          scenario_characteristics[scenario_name].volatility_level }}
+        </div>
+        <div>
+          <strong>Market Sentiment:</strong> {{
+          scenario_characteristics[scenario_name].market_sentiment }}
+        </div>
+      </div>
+      <p style="margin-top: 1rem">
+        <em>{{ scenario_characteristics[scenario_name].description }}</em>
+      </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Scenario Performance Metrics -->
+  <div class="comparison-dashboard">
+    <div class="metric-card">
+      <h4>Total Return</h4>
+      <div
+        class="metric-value {{ 'positive' if scenario_data.total_return_pct > 0 else 'negative' }}"
+      >
+        {{ scenario_data.total_return_pct | round(2) }}%
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <h4>Win Rate</h4>
+      <div class="metric-value">
+        {{ (scenario_data.win_rate * 100) | round(1) }}%
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <h4>Sharpe Ratio</h4>
+      <div class="metric-value">
+        {{ scenario_data.sharpe_ratio | round(3) if scenario_data.sharpe_ratio
+        else 'N/A' }}
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <h4>Max Drawdown</h4>
+      <div class="metric-value negative">
+        {{ scenario_data.max_drawdown_pct | round(2) if
+        scenario_data.max_drawdown_pct else 'N/A' }}%
+      </div>
+    </div>
+  </div>
+
+  <!-- Scenario-Specific Charts -->
+  <div class="expandable-section">
+    <div
+      class="section-header"
+      onclick="toggleSection('{{ scenario_name }}-charts')"
+    >
+      <h4>Performance Charts</h4>
+      <span class="expand-icon">▼</span>
+    </div>
+    <div class="section-content" id="{{ scenario_name }}-charts">
+      <div class="visualization-container">
+        <div class="chart-title">Equity Curve</div>
+        <div
+          id="{{ scenario_name }}-equity-chart"
+          class="chart-container"
+        ></div>
+      </div>
+
+      <div class="visualization-container">
+        <div class="chart-title">Trade Distribution</div>
+        <div id="{{ scenario_name }}-trade-chart" class="chart-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trade Analysis -->
+  {% if scenario_data.trades %}
+  <div class="expandable-section">
+    <div
+      class="section-header"
+      onclick="toggleSection('{{ scenario_name }}-trades')"
+    >
+      <h4>Trade Analysis ({{ scenario_data.trades | length }} trades)</h4>
+      <span class="expand-icon">▼</span>
+    </div>
+    <div class="section-content" id="{{ scenario_name }}-trades">
+      <div class="trade-analysis-container">
+        <div class="trade-list-container">
+          <div class="trade-list-header">
+            <div>Trade Details</div>
+          </div>
+          {% for trade in scenario_data.trades %}
+          <div
+            class="trade-item"
+            onclick="highlightTrade('{{ scenario_name }}', {{ loop.index0 }})"
+          >
+            <strong>Trade {{ loop.index }}</strong><br />
+            Entry: {{ trade.entry_time | strftime('%Y-%m-%d %H:%M') if
+            trade.entry_time else 'N/A' }}<br />
+            P&L:
+            <span class="{{ 'positive' if trade.pnl > 0 else 'negative' }}"
+              >{{ trade.pnl | round(2) }}%</span
+            >
+          </div>
+          {% endfor %}
+        </div>
+        <div class="chart-container">
+          <div
+            id="{{ scenario_name }}-trade-highlights"
+            class="chart-container"
+          ></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<!-- Comparison View Content -->
+<div class="scenario-content" id="comparison-content" role="tabpanel">
+  <h3>All Scenarios Comparison</h3>
+
+  <!-- Radar Chart Comparison -->
+  <div class="visualization-container">
+    <div class="chart-title">Multi-Scenario Radar Chart</div>
+    <div
+      id="radar-comparison-chart"
+      class="chart-container"
+      style="height: 500px"
+    ></div>
+  </div>
+
+  <!-- Equity Curves Overlay -->
+  <div class="visualization-container">
+    <div class="chart-title">Equity Curves Overlay</div>
+    <div
+      id="equity-overlay-chart"
+      class="chart-container"
+      style="height: 500px"
+    ></div>
+  </div>
+
+  <!-- Performance Summary Table -->
+  <div class="expandable-section">
+    <div class="section-header" onclick="toggleSection('performance-table')">
+      <h4>Performance Summary Table</h4>
+      <span class="expand-icon">▼</span>
+    </div>
+    <div class="section-content" id="performance-table">
+      <div style="overflow-x: auto">
+        <table
+          class="performance-table"
+          style="width: 100%; border-collapse: collapse"
+        >
+          <thead>
+            <tr style="background: #f8f9fa">
+              <th style="padding: 0.75rem; border: 1px solid #dee2e6">
+                Scenario
+              </th>
+              <th style="padding: 0.75rem; border: 1px solid #dee2e6">
+                Total Return
+              </th>
+              <th style="padding: 0.75rem; border: 1px solid #dee2e6">
+                Win Rate
+              </th>
+              <th style="padding: 0.75rem; border: 1px solid #dee2e6">
+                Sharpe Ratio
+              </th>
+              <th style="padding: 0.75rem; border: 1px solid #dee2e6">
+                Max Drawdown
+              </th>
+              <th style="padding: 0.75rem; border: 1px solid #dee2e6">
+                Total Trades
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for scenario_name, scenario_data in scenario_results.items() %}
+            <tr>
+              <td
+                style="
+                  padding: 0.75rem;
+                  border: 1px solid #dee2e6;
+                  font-weight: bold;
+                "
+              >
+                {{ scenario_name | replace('_', ' ') | title }}
+              </td>
+              <td
+                style="
+                  padding: 0.75rem;
+                  border: 1px solid #dee2e6;
+                  text-align: center;
+                "
+                class="{{ 'positive' if scenario_data.total_return_pct > 0 else 'negative' }}"
+              >
+                {{ scenario_data.total_return_pct | round(2) }}%
+              </td>
+              <td
+                style="
+                  padding: 0.75rem;
+                  border: 1px solid #dee2e6;
+                  text-align: center;
+                "
+              >
+                {{ (scenario_data.win_rate * 100) | round(1) }}%
+              </td>
+              <td
+                style="
+                  padding: 0.75rem;
+                  border: 1px solid #dee2e6;
+                  text-align: center;
+                "
+              >
+                {{ scenario_data.sharpe_ratio | round(3) if
+                scenario_data.sharpe_ratio else 'N/A' }}
+              </td>
+              <td
+                style="
+                  padding: 0.75rem;
+                  border: 1px solid #dee2e6;
+                  text-align: center;
+                "
+              >
+                {{ scenario_data.max_drawdown_pct | round(2) if
+                scenario_data.max_drawdown_pct else 'N/A' }}%
+              </td>
+              <td
+                style="
+                  padding: 0.75rem;
+                  border: 1px solid #dee2e6;
+                  text-align: center;
+                "
+              >
+                {{ scenario_data.total_trades if scenario_data.total_trades else
+                'N/A' }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ static_path }}/multi_scenario.js"></script>
+<script type="text/javascript">
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize multi-scenario functionality
+    if (typeof initializeMultiScenario === 'function') {
+      initializeMultiScenario();
+    }
+    if (typeof generateCharts === 'function') {
+      generateCharts();
+    }
+  });
+
+  // Pass data to JavaScript safely
+  try {
+    window.scenarioData = {{ scenario_results | tojson | safe }};
+  } catch (e) {
+    window.scenarioData = {};
+    console.warn('Failed to load scenario data:', e);
+  }
+
+  try {
+    window.visualizationData = {{ visualization_data | tojson | safe }};
+  } catch (e) {
+    window.visualizationData = {};
+    console.warn('Failed to load visualization data:', e);
+  }
+
+  try {
+    window.robustnessData = {{ robustness_analysis | tojson | safe }};
+  } catch (e) {
+    window.robustnessData = {};
+    console.warn('Failed to load robustness data:', e);
+  }
+</script>
+{% endblock %}

@@ -621,51 +621,51 @@ of concerns.
 
 ### 3.5 Multi-Scenario Performance Reporting
 
-- [ ] **Create comprehensive scenario comparison reports** (now in
+- [x] **Create comprehensive scenario comparison reports** (now in
       `cli/reporting/scenario_reporter.py`)
 
-  - [ ] Generate side-by-side performance comparison across all market scenarios
-  - [ ] Include **Bull Market**, **Bear Market**, **Sideways**, **High Vol**, **Low Vol**,
+  - [x] Generate side-by-side performance comparison across all market scenarios
+  - [x] Include **Bull Market**, **Bear Market**, **Sideways**, **High Vol**, **Low Vol**,
         **Choppy**, **Gap-Heavy**, and **Real Data** results
-  - [ ] Display unified metrics table with win rate, total return, Sharpe ratio, max drawdown for
+  - [x] Display unified metrics table with win rate, total return, Sharpe ratio, max drawdown for
         each scenario
-  - [ ] Add scenario ranking by different performance criteria
-  - [ ] Include statistical significance testing between scenarios
-  - [ ] Generate scenario robustness score based on consistency across conditions
-  - [ ] **Integrate with ScenarioManager for scenario coordination**
-  - [ ] **Use ComparisonReporter for cross-scenario comparison features**
+  - [x] Add scenario ranking by different performance criteria
+  - [x] Include statistical significance testing between scenarios
+  - [x] Generate scenario robustness score based on consistency across conditions
+  - [x] **Integrate with ScenarioManager for scenario coordination**
+  - [x] **Use ComparisonReporter for cross-scenario comparison features**
 
-- [ ] **Add visual scenario performance comparison** (in `cli/reporting/scenario_reporter.py`)
+- [x] **Add visual scenario performance comparison** (in `cli/reporting/scenario_reporter.py`)
 
-  - [ ] Create radar/spider charts showing strategy performance across all scenarios
-  - [ ] Add scenario performance heatmap (green=good, red=poor performance)
-  - [ ] Generate overlay charts showing equity curves for all scenarios
-  - [ ] Create trade distribution charts by scenario type
-  - [ ] Add scenario-specific trade highlighting in interactive charts
-  - [ ] Include market condition timeline showing when each scenario type occurred
-  - [ ] **Coordinate with InteractiveReporter for scenario-specific interactivity**
+  - [x] Create radar/spider charts showing strategy performance across all scenarios
+  - [x] Add scenario performance heatmap (green=good, red=poor performance)
+  - [x] Generate overlay charts showing equity curves for all scenarios
+  - [x] Create trade distribution charts by scenario type
+  - [x] Add scenario-specific trade highlighting in interactive charts
+  - [x] Include market condition timeline showing when each scenario type occurred
+  - [x] **Coordinate with InteractiveReporter for scenario-specific interactivity**
 
-- [ ] **Enhanced strategy robustness analysis** (in `cli/core/scenario_manager.py`)
+- [x] **Enhanced strategy robustness analysis** (in `cli/core/scenario_manager.py`)
 
-  - [ ] Calculate **consistency score** (low variance across scenarios)
-  - [ ] Compute **adaptability score** (performance in diverse conditions)
-  - [ ] Generate **risk-adjusted robustness** (Sharpe ratio consistency)
-  - [ ] Add **worst-case scenario analysis** (performance in hardest conditions)
-  - [ ] Calculate **scenario correlation** (which scenarios strategy struggles with)
-  - [ ] Generate **optimization recommendations** based on weak scenarios
-  - [ ] **Integrate with StrategyValidator for robustness validation**
-  - [ ] **Use ScenarioReporter for robustness report generation**
+  - [x] Calculate **consistency score** (low variance across scenarios)
+  - [x] Compute **adaptability score** (performance in diverse conditions)
+  - [x] Generate **risk-adjusted robustness** (Sharpe ratio consistency)
+  - [x] Add **worst-case scenario analysis** (performance in hardest conditions)
+  - [x] Calculate **scenario correlation** (which scenarios strategy struggles with)
+  - [x] Generate **optimization recommendations** based on weak scenarios
+  - [x] **Integrate with StrategyValidator for robustness validation**
+  - [x] **Use ScenarioReporter for robustness report generation**
 
-- [ ] **Update HTML templates for multi-scenario display** (coordinated by
+- [x] **Update HTML templates for multi-scenario display** (coordinated by
       `cli/reporting/scenario_reporter.py`)
       (`packages/spark-app/app/backtesting/reporting/templates/`)
-  - [ ] Add tabbed interface for switching between scenarios
-  - [ ] Create scenario comparison dashboard with key metrics
-  - [ ] Add expandable sections for detailed scenario analysis
-  - [ ] Include scenario filtering and sorting controls
-  - [ ] Add export functionality for scenario performance data
-  - [ ] Create mobile-responsive design for scenario navigation
-  - [ ] **Integrate with modular template system**
+  - [x] Add tabbed interface for switching between scenarios
+  - [x] Create scenario comparison dashboard with key metrics
+  - [x] Add expandable sections for detailed scenario analysis
+  - [x] Include scenario filtering and sorting controls
+  - [x] Add export functionality for scenario performance data
+  - [x] Create mobile-responsive design for scenario navigation
+  - [x] **Integrate with modular template system**
 
 ## 🏗️ **4. Validation and Error Handling**
 

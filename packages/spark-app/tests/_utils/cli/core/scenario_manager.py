@@ -1031,4 +1031,261 @@ Optimization Recommendations:
         for result in sorted(successful_results, key=lambda x: x.total_return, reverse=True):
             summary += f"- {result.scenario_name}: {result.total_return:.2%} return, {result.win_rate:.1%} win rate\n"
 
-        return summary
+    def _analyze_individual_worst_case(self, result: ScenarioResult) -> Dict[str, Any]:
+        """Analyze an individual worst-case scenario result."""
+        analysis = {
+            "primary_issues": [],
+            "performance_breakdown": {
+                "total_return": result.total_return,
+                "win_rate": result.win_rate,
+                "sharpe_ratio": result.sharpe_ratio,
+                "max_drawdown": result.max_drawdown,
+                "total_trades": result.total_trades
+            }
+        }
+
+        # Identify primary issues
+        if result.total_return < -0.1:
+            analysis["primary_issues"].append("Significant negative returns")
+        if result.win_rate < 0.4:
+            analysis["primary_issues"].append("Low win rate")
+        if result.sharpe_ratio and result.sharpe_ratio < 0:
+            analysis["primary_issues"].append("Negative risk-adjusted returns")
+        if result.max_drawdown and abs(result.max_drawdown) > 0.2:
+            analysis["primary_issues"].append("High maximum drawdown")
+
+        return analysis
+
+    def _identify_systematic_weaknesses(self, scenario_results: List[ScenarioResult]) -> List[str]:
+        """Identify systematic weaknesses across scenarios."""
+        weaknesses = []
+
+        # Analyze patterns across all scenarios
+        negative_returns = sum(1 for r in scenario_results if r.total_return < 0)
+        low_win_rates = sum(1 for r in scenario_results if r.win_rate < 0.45)
+        high_drawdowns = sum(1 for r in scenario_results if r.max_drawdown and abs(r.max_drawdown) > 0.15)
+        negative_sharpes = sum(1 for r in scenario_results if r.sharpe_ratio and r.sharpe_ratio < 0)
+
+        total_scenarios = len(scenario_results)
+
+        if negative_returns / total_scenarios > 0.4:
+            weaknesses.append("Frequently produces negative returns across different market conditions")
+        if low_win_rates / total_scenarios > 0.5:
+            weaknesses.append("Consistently low win rates suggest poor entry/exit timing")
+        if high_drawdowns / total_scenarios > 0.3:
+            weaknesses.append("Prone to large drawdowns indicating poor risk management")
+        if negative_sharpes / total_scenarios > 0.4:
+            weaknesses.append("Poor risk-adjusted returns suggest inefficient risk-taking")
+
+        return weaknesses
+
+    def _calculate_worst_case_impact(self, scenario_results: List[ScenarioResult]) -> Dict[str, Any]:
+        """Calculate the impact of worst-case scenarios."""
+        returns = [r.total_return for r in scenario_results]
+        worst_return = min(returns)
+        avg_return = np.mean(returns)
+
+        impact = {
+            "worst_case_return": worst_return,
+            "average_return": avg_return,
+            "impact_magnitude": abs(worst_return - avg_return),
+            "worst_case_frequency": sum(1 for r in returns if r <= worst_return * 1.1) / len(returns),
+            "severity_level": "high" if worst_return < -0.2 else "medium" if worst_return < -0.1 else "low"
+        }
+
+        return impact
+
+    def _generate_worst_case_improvements(self, scenario_results: List[ScenarioResult]) -> List[str]:
+        """Generate specific improvements for worst-case scenarios."""
+        improvements = []
+
+        worst_result = min(scenario_results, key=lambda x: x.total_return)
+
+        if worst_result.win_rate < 0.4:
+            improvements.append("Improve signal quality to increase win rate")
+        if worst_result.max_drawdown and abs(worst_result.max_drawdown) > 0.2:
+            improvements.append("Implement tighter stop-loss or position sizing controls")
+        if worst_result.sharpe_ratio and worst_result.sharpe_ratio < -0.5:
+            improvements.append("Review risk-reward ratio of trades")
+        if worst_result.total_trades and worst_result.total_trades < 5:
+            improvements.append("Strategy may be too selective, consider relaxing entry criteria")
+
+        return improvements
+
+    def _identify_scenario_issues(self, result: ScenarioResult) -> List[str]:
+        """Identify specific issues with a scenario result."""
+        issues = []
+
+        if result.total_return < -0.05:
+            issues.append("negative_returns")
+        if result.win_rate < 0.45:
+            issues.append("low_win_rate")
+        if result.sharpe_ratio and result.sharpe_ratio < 0:
+            issues.append("poor_risk_adjustment")
+        if result.max_drawdown and abs(result.max_drawdown) > 0.15:
+            issues.append("high_drawdown")
+
+        return issues
+
+    def _identify_failure_patterns(self, scenario_results: List[ScenarioResult]) -> Dict[str, Any]:
+        """Identify patterns in scenario failures."""
+        patterns = {
+            "volatility_sensitivity": False,
+            "trend_dependency": False,
+            "market_regime_issues": False
+        }
+
+        # Check volatility sensitivity
+        high_vol_scenarios = [r for r in scenario_results if r.scenario_type in [ScenarioType.HIGH_VOLATILITY, ScenarioType.CHOPPY]]
+        if high_vol_scenarios:
+            high_vol_performance = np.mean([self._calculate_scenario_performance_score(r) for r in high_vol_scenarios])
+            if high_vol_performance < 40:
+                patterns["volatility_sensitivity"] = True
+
+        # Check trend dependency
+        trend_scenarios = [r for r in scenario_results if r.scenario_type in [ScenarioType.BULL, ScenarioType.BEAR]]
+        sideways_scenarios = [r for r in scenario_results if r.scenario_type == ScenarioType.SIDEWAYS]
+
+        if trend_scenarios and sideways_scenarios:
+            trend_performance = np.mean([self._calculate_scenario_performance_score(r) for r in trend_scenarios])
+            sideways_performance = np.mean([self._calculate_scenario_performance_score(r) for r in sideways_scenarios])
+
+            if abs(trend_performance - sideways_performance) > 30:
+                patterns["trend_dependency"] = True
+
+        return patterns
+
+    def _generate_correlation_insights(self, scenario_results: List[ScenarioResult], struggling_scenarios: List[Dict]) -> List[str]:
+        """Generate insights from correlation analysis."""
+        insights = []
+
+        if struggling_scenarios:
+            struggling_types = [s["scenario_type"] for s in struggling_scenarios]
+
+            if "high_volatility" in struggling_types or "choppy" in struggling_types:
+                insights.append("Strategy struggles in high volatility conditions")
+            if "sideways" in struggling_types:
+                insights.append("Strategy performs poorly in range-bound markets")
+            if "bear" in struggling_types:
+                insights.append("Strategy has difficulty with downtrending markets")
+
+            if len(struggling_scenarios) > len(scenario_results) / 2:
+                insights.append("Strategy shows poor robustness across multiple market conditions")
+
+        return insights
+
+    def _generate_scenario_specific_recommendations(self, scenario_type: str, scenario_results: List[ScenarioResult]) -> List[str]:
+        """Generate recommendations specific to struggling scenario types."""
+        recommendations = []
+
+        if scenario_type == "high_volatility":
+            recommendations.append("Consider volatility-based position sizing")
+            recommendations.append("Implement tighter stop losses for high volatility periods")
+        elif scenario_type == "sideways":
+            recommendations.append("Add range detection and adjust strategy for sideways markets")
+            recommendations.append("Consider mean reversion components for range-bound conditions")
+        elif scenario_type == "bear":
+            recommendations.append("Implement bear market detection and defensive positioning")
+            recommendations.append("Consider short-bias or hedging strategies")
+        elif scenario_type == "choppy":
+            recommendations.append("Add trend strength filters to avoid whipsaw conditions")
+            recommendations.append("Increase minimum trend duration requirements")
+
+        return recommendations
+
+    def get_robustness_validation_report(self, strategy_name: str) -> Dict[str, Any]:
+        """
+        Generate comprehensive robustness validation report for StrategyValidator integration.
+
+        Args:
+            strategy_name: Name of the strategy to validate
+
+        Returns:
+            Comprehensive robustness validation report
+        """
+        try:
+            if strategy_name not in self.scenario_results:
+                return {"error": f"No results found for strategy: {strategy_name}"}
+
+            scenario_results = self.scenario_results[strategy_name]
+
+            # Calculate all robustness metrics
+            consistency_score = self.calculate_consistency_score(scenario_results)
+            adaptability_score = self.compute_adaptability_score(scenario_results)
+            risk_adjusted_robustness = self.generate_risk_adjusted_robustness(scenario_results)
+            worst_case_analysis = self.analyze_worst_case_scenarios(scenario_results)
+            correlation_analysis = self.calculate_scenario_correlation(scenario_results)
+            optimization_recommendations = self.generate_optimization_recommendations_from_weak_scenarios(scenario_results)
+
+            # Generate validation report
+            validation_report = {
+                "strategy_name": strategy_name,
+                "validation_timestamp": datetime.now().isoformat(),
+                "robustness_metrics": {
+                    "consistency_score": consistency_score,
+                    "adaptability_score": adaptability_score,
+                    "risk_adjusted_robustness": risk_adjusted_robustness,
+                    "overall_robustness": (consistency_score + adaptability_score + risk_adjusted_robustness) / 3
+                },
+                "worst_case_analysis": worst_case_analysis,
+                "scenario_correlation": correlation_analysis,
+                "optimization_recommendations": optimization_recommendations,
+                "validation_summary": self._generate_validation_summary(
+                    consistency_score, adaptability_score, risk_adjusted_robustness
+                ),
+                "pass_fail_assessment": self._assess_robustness_pass_fail(
+                    consistency_score, adaptability_score, risk_adjusted_robustness
+                )
+            }
+
+            return validation_report
+
+        except Exception as e:
+            logger.error(f"Error generating robustness validation report: {e}")
+            return {"error": f"Validation report generation failed: {str(e)}"}
+
+    def _generate_validation_summary(self, consistency: float, adaptability: float, risk_adjusted: float) -> str:
+        """Generate a summary of the robustness validation."""
+        overall = (consistency + adaptability + risk_adjusted) / 3
+
+        if overall >= 80:
+            level = "Excellent"
+        elif overall >= 70:
+            level = "Good"
+        elif overall >= 60:
+            level = "Acceptable"
+        elif overall >= 50:
+            level = "Poor"
+        else:
+            level = "Unacceptable"
+
+        return f"""Robustness Assessment: {level} (Score: {overall:.1f}/100)
+- Consistency: {consistency:.1f}/100
+- Adaptability: {adaptability:.1f}/100
+- Risk-Adjusted Performance: {risk_adjusted:.1f}/100"""
+
+    def _assess_robustness_pass_fail(self, consistency: float, adaptability: float, risk_adjusted: float) -> Dict[str, Any]:
+        """Assess whether the strategy passes robustness validation."""
+        overall = (consistency + adaptability + risk_adjusted) / 3
+
+        # Define pass/fail thresholds
+        min_overall = 60
+        min_individual = 40
+
+        passes = {
+            "overall_pass": overall >= min_overall,
+            "consistency_pass": consistency >= min_individual,
+            "adaptability_pass": adaptability >= min_individual,
+            "risk_adjusted_pass": risk_adjusted >= min_individual
+        }
+
+        overall_pass = all(passes.values())
+
+        return {
+            "overall_pass": overall_pass,
+            "individual_passes": passes,
+            "overall_score": overall,
+            "pass_threshold": min_overall,
+            "individual_threshold": min_individual,
+            "recommendation": "APPROVED" if overall_pass else "REQUIRES_IMPROVEMENT"
+        }
