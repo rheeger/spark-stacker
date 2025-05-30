@@ -831,3 +831,120 @@ class DataValidator:
         result.quality_score = min(100.0, max(0.0, 80.0 + quality_improvement))
 
         return result
+
+    def validate_strategy_data_requirements(self, strategy_config) -> 'ValidationResult':
+        """
+        Validate that strategy data requirements can be met.
+
+        Args:
+            strategy_config: Strategy configuration to validate
+
+        Returns:
+            ValidationResult indicating whether requirements can be met
+        """
+        from .strategy_validator import ValidationResult
+
+        result = ValidationResult(
+            is_valid=True,
+            errors=[],
+            warnings=[],
+            suggestions=[]
+        )
+        result.component = "data_requirements"
+
+        try:
+            # Check if strategy has valid market and exchange
+            if not strategy_config.market:
+                result.add_error("Strategy missing market specification")
+                return result
+
+            if not strategy_config.exchange:
+                result.add_error("Strategy missing exchange specification")
+                return result
+
+            # Check if timeframe is valid
+            if not strategy_config.timeframe:
+                result.add_error("Strategy missing timeframe specification")
+                return result
+
+            # Validate timeframe format
+            valid_timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w']
+            if strategy_config.timeframe not in valid_timeframes:
+                result.add_warning(f"Unusual timeframe '{strategy_config.timeframe}', may not be supported by all exchanges")
+
+            # Check data availability for each indicator
+            for indicator_name in strategy_config.indicators:
+                # Since indicators is just a list of strings, we can only do basic validation
+                self._validate_indicator_data_requirements_by_name(indicator_name, result)
+
+            # Add success messages
+            if result.is_valid:
+                # Since ValidationResult doesn't have add_info, we'll use suggestions for informational messages
+                result.add_suggestion(f"Strategy '{strategy_config.name}' data requirements validated successfully")
+                result.add_suggestion(f"Market: {strategy_config.market}, Exchange: {strategy_config.exchange}")
+                result.add_suggestion(f"Primary timeframe: {strategy_config.timeframe}")
+
+                indicator_count = len(strategy_config.indicators)
+                result.add_suggestion(f"Validated data requirements for {indicator_count} indicators")
+
+        except Exception as e:
+            result.add_error(f"Error validating strategy data requirements: {str(e)}")
+
+        return result
+
+    def _validate_indicator_data_requirements_by_name(self, indicator_name: str, result) -> None:
+        """
+        Validate data requirements for an indicator by name.
+
+        Args:
+            indicator_name: Name of the indicator
+            result: ValidationResult to populate
+        """
+        # Check for indicators that require specific data based on name
+        if 'volume' in indicator_name.lower():
+            result.add_suggestion(f"Indicator '{indicator_name}' requires volume data")
+
+        if 'sma' in indicator_name.lower() or 'ema' in indicator_name.lower():
+            result.add_suggestion(f"Indicator '{indicator_name}' is a moving average - ensure sufficient historical data")
+
+        if 'rsi' in indicator_name.lower():
+            result.add_suggestion(f"Indicator '{indicator_name}' (RSI) requires minimum 14+ candles for reliable signals")
+
+        if 'bollinger' in indicator_name.lower() or 'bb' in indicator_name.lower():
+            result.add_suggestion(f"Indicator '{indicator_name}' (Bollinger Bands) requires substantial historical data")
+
+        if 'macd' in indicator_name.lower():
+            result.add_suggestion(f"Indicator '{indicator_name}' (MACD) requires minimum 100+ candles for reliable signals")
+
+    def _validate_indicator_data_requirements(self, indicator_config, result) -> None:
+        """
+        Validate data requirements for a specific indicator.
+
+        Args:
+            indicator_config: Indicator configuration
+            result: ValidationResult to populate
+        """
+        indicator_name = getattr(indicator_config, 'name', 'unknown')
+
+        # Check for indicators that require specific data
+        if 'volume' in indicator_name.lower():
+            result.add_suggestion(f"Indicator '{indicator_name}' requires volume data")
+
+        if 'sma' in indicator_name.lower() or 'ema' in indicator_name.lower():
+            period = getattr(indicator_config, 'period', getattr(indicator_config, 'length', None))
+            if period and period > 200:
+                result.add_warning(f"Indicator '{indicator_name}' requires {period} periods - ensure sufficient historical data")
+
+        if 'rsi' in indicator_name.lower():
+            period = getattr(indicator_config, 'period', 14)
+            if period > 50:
+                result.add_warning(f"RSI with period {period} may require significant historical data")
+
+        if 'bollinger' in indicator_name.lower() or 'bb' in indicator_name.lower():
+            period = getattr(indicator_config, 'period', 20)
+            if period > 100:
+                result.add_warning(f"Bollinger Bands with period {period} requires substantial historical data")
+
+        if 'macd' in indicator_name.lower():
+            # MACD typically requires at least 100+ periods for reliable signals
+            result.add_suggestion(f"Indicator '{indicator_name}' requires minimum 100+ candles for reliable signals")

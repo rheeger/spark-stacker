@@ -442,21 +442,21 @@ of concerns.
 
 ### 2.3 Data Management Updates
 
-- [ ] **Enhanced data fetching for strategies** (now in `cli/core/data_manager.py`)
+- [x] **Enhanced data fetching for strategies** (now in `cli/core/data_manager.py`)
 
-  - [ ] Use strategy's market and exchange for data fetching
-  - [ ] Respect strategy's timeframe for data requirements
-  - [ ] Add multi-timeframe data support for strategies with mixed indicator timeframes
-  - [ ] Cache data efficiently for multiple strategies on same market
-  - [ ] Add data validation specific to strategy requirements through DataValidator
-  - [ ] **Centralize all data operations in DataManager module**
+  - [x] Use strategy's market and exchange for data fetching
+  - [x] Respect strategy's timeframe for data requirements
+  - [x] Add multi-timeframe data support for strategies with mixed indicator timeframes
+  - [x] Cache data efficiently for multiple strategies on same market
+  - [x] Add data validation specific to strategy requirements through DataValidator
+  - [x] **Centralize all data operations in DataManager module**
 
-- [ ] **Update synthetic data generation** (now in `cli/core/data_manager.py`)
-  - [ ] Generate data appropriate for strategy's market and timeframe
-  - [ ] Create market scenario data for strategy testing (trending, sideways, volatile)
-  - [ ] Add support for multi-timeframe synthetic data generation
-  - [ ] Include volume and other market data required by strategy indicators
-  - [ ] **Integrate with ScenarioManager for scenario-specific data generation**
+- [x] **Update synthetic data generation** (now in `cli/core/data_manager.py`)
+  - [x] Generate data appropriate for strategy's market and timeframe
+  - [x] Create market scenario data for strategy testing (trending, sideways, volatile)
+  - [x] Add support for multi-timeframe synthetic data generation
+  - [x] Include volume and other market data required by strategy indicators
+  - [x] **Integrate with ScenarioManager for scenario-specific data generation**
 
 ### 2.4 Multi-Scenario Testing Framework
 

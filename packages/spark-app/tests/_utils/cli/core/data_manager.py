@@ -8,6 +8,7 @@ This module provides centralized data management for the CLI with:
 - Data quality validation and cleanup
 - Data source failover and retry logic with exponential backoff
 - Data export and import functionality for analysis
+- Strategy-specific data management for enhanced backtesting
 """
 
 import asyncio
@@ -27,6 +28,7 @@ import numpy as np
 import pandas as pd
 from app.backtesting.data_manager import DataManager as AppDataManager
 from app.connectors.hyperliquid_connector import HyperliquidConnector
+from app.core.strategy_config import StrategyConfig
 from tests._helpers.data_factory import make_price_dataframe
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,60 @@ class DataQuality(Enum):
     ACCEPTABLE = "acceptable"
     POOR = "poor"
     INVALID = "invalid"
+
+
+class MarketScenarioType(Enum):
+    """Types of market scenarios for strategy testing."""
+    BULL_MARKET = "bull_market"
+    BEAR_MARKET = "bear_market"
+    SIDEWAYS_RANGING = "sideways_ranging"
+    HIGH_VOLATILITY = "high_volatility"
+    LOW_VOLATILITY = "low_volatility"
+    CHOPPY_WHIPSAW = "choppy_whipsaw"
+    GAP_HEAVY = "gap_heavy"
+    REAL_DATA = "real_data"
+
+
+@dataclass
+class StrategyDataRequest:
+    """Represents a strategy-specific data request with all parameters."""
+    strategy_config: StrategyConfig
+    scenario_type: Optional[MarketScenarioType] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    days_back: Optional[int] = None
+    include_volume: bool = True
+    source_preference: List[DataSourceType] = field(default_factory=lambda: [
+        DataSourceType.CACHED, DataSourceType.REAL_EXCHANGE, DataSourceType.SYNTHETIC
+    ])
+
+
+@dataclass
+class MultiTimeframeDataSet:
+    """Container for multi-timeframe data required by strategies."""
+    primary_timeframe: str
+    data: Dict[str, pd.DataFrame]  # timeframe -> DataFrame
+    metadata: Dict[str, Any]
+    quality_reports: Dict[str, 'DataQualityReport']
+
+    def get_data(self, timeframe: str) -> Optional[pd.DataFrame]:
+        """Get data for a specific timeframe."""
+        return self.data.get(timeframe)
+
+    def get_primary_data(self) -> pd.DataFrame:
+        """Get data for the primary timeframe."""
+        return self.data[self.primary_timeframe]
+
+
+@dataclass
+class ScenarioDataSet:
+    """Container for scenario-specific data for strategy testing."""
+    scenario_type: MarketScenarioType
+    symbol: str
+    timeframe: str
+    data: pd.DataFrame
+    characteristics: Dict[str, Any]
+    generated_at: datetime
 
 
 @dataclass
@@ -861,3 +917,540 @@ class DataManager:
             # Default to 1 hour if can't parse
             logger.warning(f"Unknown timeframe {timeframe}, defaulting to 60 minutes")
             return 60
+
+    # Strategy-specific data management methods
+
+    def get_strategy_data(self, request: StrategyDataRequest) -> MultiTimeframeDataSet:
+        """
+        Get data for a strategy with all required timeframes.
+
+        Args:
+            request: StrategyDataRequest containing strategy config and options
+
+        Returns:
+            MultiTimeframeDataSet with data for all required timeframes
+
+        Raises:
+            DataFetchError: If any required data cannot be fetched
+        """
+        strategy_config = request.strategy_config
+
+        # Determine all required timeframes
+        required_timeframes = self._get_strategy_timeframes(strategy_config)
+        primary_timeframe = strategy_config.timeframe
+
+        logger.info(f"Fetching data for strategy '{strategy_config.name}' - timeframes: {required_timeframes}")
+
+        # Prepare data collection
+        data = {}
+        quality_reports = {}
+
+        # Fetch data for each timeframe
+        for timeframe in required_timeframes:
+            # Create data request for this timeframe
+            data_request = DataRequest(
+                symbol=strategy_config.market,
+                timeframe=timeframe,
+                exchange=strategy_config.exchange,
+                start_date=request.start_date,
+                end_date=request.end_date,
+                days_back=request.days_back,
+                source_preference=request.source_preference
+            )
+
+            # Handle scenario-specific data if specified
+            if request.scenario_type and request.scenario_type != MarketScenarioType.REAL_DATA:
+                scenario_data = self.generate_scenario_data(
+                    scenario_type=request.scenario_type,
+                    symbol=strategy_config.market,
+                    timeframe=timeframe,
+                    days_back=request.days_back or 30,
+                    include_volume=request.include_volume
+                )
+                data[timeframe] = scenario_data.data
+                quality_reports[timeframe] = self._assess_data_quality(scenario_data.data, data_request)
+            else:
+                # Fetch real or cached data
+                timeframe_data = self.get_data(data_request)
+                data[timeframe] = timeframe_data
+                quality_reports[timeframe] = self._assess_data_quality(timeframe_data, data_request)
+
+        # Validate data completeness
+        self._validate_strategy_data_completeness(data, strategy_config)
+
+        return MultiTimeframeDataSet(
+            primary_timeframe=primary_timeframe,
+            data=data,
+            metadata={
+                'strategy_name': strategy_config.name,
+                'market': strategy_config.market,
+                'exchange': strategy_config.exchange,
+                'scenario_type': request.scenario_type.value if request.scenario_type else None,
+                'data_source': request.source_preference[0].value
+            },
+            quality_reports=quality_reports
+        )
+
+    def generate_scenario_data(self,
+                              scenario_type: MarketScenarioType,
+                              symbol: str,
+                              timeframe: str,
+                              days_back: int = 30,
+                              include_volume: bool = True) -> ScenarioDataSet:
+        """
+        Generate synthetic data for specific market scenarios.
+
+        Args:
+            scenario_type: Type of market scenario to generate
+            symbol: Trading symbol (e.g., 'ETH-USD')
+            timeframe: Data timeframe (e.g., '1h', '4h', '1d')
+            days_back: Number of days of data to generate
+            include_volume: Whether to include volume data
+
+        Returns:
+            ScenarioDataSet containing the generated scenario data
+        """
+        logger.info(f"Generating {scenario_type.value} scenario data for {symbol} {timeframe}")
+
+        # Calculate number of candles needed
+        candles_per_day = self._get_candles_per_day(timeframe)
+        num_candles = int(days_back * candles_per_day)
+
+        # Generate base price action
+        base_price = 2000.0  # Starting price
+
+        if scenario_type == MarketScenarioType.BULL_MARKET:
+            data = self._generate_bull_market_data(base_price, num_candles, timeframe, include_volume)
+            characteristics = {
+                'trend': 'bullish',
+                'volatility': 'moderate',
+                'up_days_percentage': 0.70,
+                'expected_return': 0.25
+            }
+        elif scenario_type == MarketScenarioType.BEAR_MARKET:
+            data = self._generate_bear_market_data(base_price, num_candles, timeframe, include_volume)
+            characteristics = {
+                'trend': 'bearish',
+                'volatility': 'moderate',
+                'down_days_percentage': 0.70,
+                'expected_return': -0.20
+            }
+        elif scenario_type == MarketScenarioType.SIDEWAYS_RANGING:
+            data = self._generate_sideways_market_data(base_price, num_candles, timeframe, include_volume)
+            characteristics = {
+                'trend': 'sideways',
+                'volatility': 'low',
+                'range_percentage': 0.10,
+                'expected_return': 0.02
+            }
+        elif scenario_type == MarketScenarioType.HIGH_VOLATILITY:
+            data = self._generate_high_volatility_data(base_price, num_candles, timeframe, include_volume)
+            characteristics = {
+                'trend': 'random',
+                'volatility': 'high',
+                'daily_range_percentage': 0.20,
+                'expected_return': 0.05
+            }
+        elif scenario_type == MarketScenarioType.LOW_VOLATILITY:
+            data = self._generate_low_volatility_data(base_price, num_candles, timeframe, include_volume)
+            characteristics = {
+                'trend': 'stable',
+                'volatility': 'low',
+                'daily_range_percentage': 0.015,
+                'expected_return': 0.01
+            }
+        elif scenario_type == MarketScenarioType.CHOPPY_WHIPSAW:
+            data = self._generate_choppy_market_data(base_price, num_candles, timeframe, include_volume)
+            characteristics = {
+                'trend': 'choppy',
+                'volatility': 'moderate',
+                'direction_changes': 'frequent',
+                'expected_return': -0.05
+            }
+        elif scenario_type == MarketScenarioType.GAP_HEAVY:
+            data = self._generate_gap_heavy_data(base_price, num_candles, timeframe, include_volume)
+            characteristics = {
+                'trend': 'gapping',
+                'volatility': 'high',
+                'gap_frequency': 'high',
+                'expected_return': 0.08
+            }
+        else:
+            raise ValueError(f"Unsupported scenario type: {scenario_type}")
+
+        return ScenarioDataSet(
+            scenario_type=scenario_type,
+            symbol=symbol,
+            timeframe=timeframe,
+            data=data,
+            characteristics=characteristics,
+            generated_at=datetime.now()
+        )
+
+    def cache_strategy_data(self,
+                           strategy_data: MultiTimeframeDataSet,
+                           strategy_name: str) -> None:
+        """
+        Cache strategy data efficiently for reuse across multiple strategies.
+
+        Args:
+            strategy_data: MultiTimeframeDataSet to cache
+            strategy_name: Name of the strategy for cache key generation
+        """
+        for timeframe, data in strategy_data.data.items():
+            cache_key = f"strategy_{strategy_name}_{timeframe}_{strategy_data.metadata.get('market', 'unknown')}"
+
+            # Create a dummy request for caching
+            dummy_request = DataRequest(
+                symbol=strategy_data.metadata.get('market', 'unknown'),
+                timeframe=timeframe,
+                exchange=strategy_data.metadata.get('exchange')
+            )
+
+            quality_report = strategy_data.quality_reports.get(timeframe)
+            if quality_report is None:
+                quality_report = self._assess_data_quality(data, dummy_request)
+
+            self._cache_data(
+                cache_key=cache_key,
+                data=data,
+                source=DataSourceType.CACHED,
+                quality_report=quality_report,
+                request=dummy_request
+            )
+
+        logger.info(f"Cached strategy data for '{strategy_name}' with {len(strategy_data.data)} timeframes")
+
+    def validate_strategy_data_requirements(self, strategy_config: StrategyConfig) -> 'ValidationResult':
+        """
+        Validate that strategy data requirements can be met.
+
+        Args:
+            strategy_config: Strategy configuration to validate
+
+        Returns:
+            ValidationResult indicating whether requirements can be met
+        """
+        from tests._utils.cli.validation.data_validator import (
+            DataValidator, ValidationResult)
+
+        validator = DataValidator()
+        return validator.validate_strategy_data_requirements(strategy_config)
+
+    def _get_strategy_timeframes(self, strategy_config: StrategyConfig) -> Set[str]:
+        """
+        Get all timeframes required by a strategy and its indicators.
+
+        Args:
+            strategy_config: Strategy configuration
+
+        Returns:
+            Set of required timeframes
+        """
+        timeframes = {strategy_config.timeframe}
+
+        # Since indicators is List[str] in the actual StrategyConfig,
+        # we can only return the strategy's primary timeframe for now.
+        # In a full implementation, we would need to look up indicator
+        # configurations from the config manager to get their timeframes.
+
+        # For now, just use the strategy's primary timeframe
+        return timeframes
+
+    def _validate_strategy_data_completeness(self,
+                                           data: Dict[str, pd.DataFrame],
+                                           strategy_config: StrategyConfig) -> None:
+        """
+        Validate that all required data for the strategy is available.
+
+        Args:
+            data: Dictionary of timeframe -> DataFrame
+            strategy_config: Strategy configuration
+
+        Raises:
+            DataFetchError: If required data is missing or insufficient
+        """
+        required_timeframes = self._get_strategy_timeframes(strategy_config)
+
+        for timeframe in required_timeframes:
+            if timeframe not in data:
+                raise DataFetchError(f"Missing data for required timeframe {timeframe}")
+
+            df = data[timeframe]
+            if df.empty:
+                raise DataFetchError(f"Empty data for timeframe {timeframe}")
+
+            # Check minimum data requirements (at least 100 candles for reliable indicators)
+            min_candles = 100
+            if len(df) < min_candles:
+                logger.warning(f"Limited data for {timeframe}: {len(df)} candles (recommended: {min_candles}+)")
+
+    # Market scenario data generation methods
+
+    def _generate_bull_market_data(self, start_price: float, num_candles: int,
+                                  timeframe: str, include_volume: bool) -> pd.DataFrame:
+        """Generate bullish trending market data."""
+        np.random.seed(42)  # For reproducible results
+
+        # Parameters for bull market
+        trend_strength = 0.0003  # 0.03% per candle average drift upward
+        volatility = 0.02  # 2% volatility
+        up_bias = 0.6  # 60% chance of up moves
+
+        prices = [start_price]
+        volumes = [1000000] if include_volume else []
+
+        for i in range(num_candles - 1):
+            # Add trend component and random walk
+            trend_component = trend_strength
+            random_component = np.random.normal(0, volatility)
+
+            # Apply upward bias
+            if np.random.random() < up_bias:
+                random_component = abs(random_component)
+            else:
+                random_component = -abs(random_component) * 0.7  # Smaller down moves
+
+            price_change = trend_component + random_component
+            new_price = prices[-1] * (1 + price_change)
+            prices.append(max(new_price, 1.0))  # Prevent negative prices
+
+            if include_volume:
+                # Volume tends to increase on up moves in bull markets
+                base_volume = 1000000
+                volume_multiplier = 1.0 + random_component * 2
+                volumes.append(max(int(base_volume * volume_multiplier), 100000))
+
+        return self._create_ohlcv_dataframe(prices, timeframe, include_volume, volumes)
+
+    def _generate_bear_market_data(self, start_price: float, num_candles: int,
+                                  timeframe: str, include_volume: bool) -> pd.DataFrame:
+        """Generate bearish trending market data."""
+        np.random.seed(43)
+
+        trend_strength = -0.0002  # -0.02% per candle average drift downward
+        volatility = 0.025  # 2.5% volatility (slightly higher in bear markets)
+        down_bias = 0.65  # 65% chance of down moves
+
+        prices = [start_price]
+        volumes = [1000000] if include_volume else []
+
+        for i in range(num_candles - 1):
+            trend_component = trend_strength
+            random_component = np.random.normal(0, volatility)
+
+            if np.random.random() < down_bias:
+                random_component = -abs(random_component)
+            else:
+                random_component = abs(random_component) * 0.6  # Smaller up moves
+
+            price_change = trend_component + random_component
+            new_price = prices[-1] * (1 + price_change)
+            prices.append(max(new_price, 1.0))
+
+            if include_volume:
+                base_volume = 1200000  # Higher volume in bear markets
+                volume_multiplier = 1.0 + abs(random_component) * 1.5
+                volumes.append(max(int(base_volume * volume_multiplier), 100000))
+
+        return self._create_ohlcv_dataframe(prices, timeframe, include_volume, volumes)
+
+    def _generate_sideways_market_data(self, start_price: float, num_candles: int,
+                                      timeframe: str, include_volume: bool) -> pd.DataFrame:
+        """Generate sideways/ranging market data."""
+        np.random.seed(44)
+
+        range_center = start_price
+        range_width = start_price * 0.05  # 5% range
+        volatility = 0.01  # 1% volatility
+
+        prices = [start_price]
+        volumes = [800000] if include_volume else []
+
+        for i in range(num_candles - 1):
+            current_price = prices[-1]
+
+            # Mean reversion toward range center
+            distance_from_center = (current_price - range_center) / range_width
+            mean_reversion = -distance_from_center * 0.0001
+
+            random_component = np.random.normal(0, volatility)
+            price_change = mean_reversion + random_component
+
+            new_price = current_price * (1 + price_change)
+            new_price = max(new_price, range_center - range_width)
+            new_price = min(new_price, range_center + range_width)
+            prices.append(new_price)
+
+            if include_volume:
+                base_volume = 800000  # Lower volume in sideways markets
+                volume_multiplier = 1.0 + abs(random_component) * 0.8
+                volumes.append(max(int(base_volume * volume_multiplier), 100000))
+
+        return self._create_ohlcv_dataframe(prices, timeframe, include_volume, volumes)
+
+    def _generate_high_volatility_data(self, start_price: float, num_candles: int,
+                                      timeframe: str, include_volume: bool) -> pd.DataFrame:
+        """Generate high volatility market data."""
+        np.random.seed(45)
+
+        volatility = 0.05  # 5% volatility
+
+        prices = [start_price]
+        volumes = [1500000] if include_volume else []
+
+        for i in range(num_candles - 1):
+            random_component = np.random.normal(0, volatility)
+            price_change = random_component
+
+            new_price = prices[-1] * (1 + price_change)
+            prices.append(max(new_price, 1.0))
+
+            if include_volume:
+                base_volume = 1500000  # High volume with high volatility
+                volume_multiplier = 1.0 + abs(random_component) * 3
+                volumes.append(max(int(base_volume * volume_multiplier), 100000))
+
+        return self._create_ohlcv_dataframe(prices, timeframe, include_volume, volumes)
+
+    def _generate_low_volatility_data(self, start_price: float, num_candles: int,
+                                     timeframe: str, include_volume: bool) -> pd.DataFrame:
+        """Generate low volatility market data."""
+        np.random.seed(46)
+
+        volatility = 0.005  # 0.5% volatility
+        drift = 0.00005  # Very small upward drift
+
+        prices = [start_price]
+        volumes = [600000] if include_volume else []
+
+        for i in range(num_candles - 1):
+            random_component = np.random.normal(0, volatility)
+            price_change = drift + random_component
+
+            new_price = prices[-1] * (1 + price_change)
+            prices.append(max(new_price, 1.0))
+
+            if include_volume:
+                base_volume = 600000  # Low volume with low volatility
+                volume_multiplier = 1.0 + abs(random_component) * 0.5
+                volumes.append(max(int(base_volume * volume_multiplier), 100000))
+
+        return self._create_ohlcv_dataframe(prices, timeframe, include_volume, volumes)
+
+    def _generate_choppy_market_data(self, start_price: float, num_candles: int,
+                                    timeframe: str, include_volume: bool) -> pd.DataFrame:
+        """Generate choppy/whipsaw market data with frequent direction changes."""
+        np.random.seed(47)
+
+        volatility = 0.03  # 3% volatility
+        direction_change_freq = 0.3  # 30% chance of direction change each candle
+
+        prices = [start_price]
+        volumes = [900000] if include_volume else []
+        current_direction = 1  # 1 for up, -1 for down
+
+        for i in range(num_candles - 1):
+            # Potentially change direction
+            if np.random.random() < direction_change_freq:
+                current_direction *= -1
+
+            # Generate move in current direction with some noise
+            base_move = current_direction * np.random.uniform(0.005, 0.015)
+            noise = np.random.normal(0, volatility * 0.5)
+            price_change = base_move + noise
+
+            new_price = prices[-1] * (1 + price_change)
+            prices.append(max(new_price, 1.0))
+
+            if include_volume:
+                base_volume = 900000
+                volume_multiplier = 1.0 + abs(price_change) * 2
+                volumes.append(max(int(base_volume * volume_multiplier), 100000))
+
+        return self._create_ohlcv_dataframe(prices, timeframe, include_volume, volumes)
+
+    def _generate_gap_heavy_data(self, start_price: float, num_candles: int,
+                                timeframe: str, include_volume: bool) -> pd.DataFrame:
+        """Generate market data with frequent price gaps."""
+        np.random.seed(48)
+
+        volatility = 0.02  # 2% base volatility
+        gap_frequency = 0.05  # 5% chance of gap each candle
+        gap_size_range = (0.02, 0.08)  # 2-8% gaps
+
+        prices = [start_price]
+        volumes = [1100000] if include_volume else []
+
+        for i in range(num_candles - 1):
+            # Check for gap
+            if np.random.random() < gap_frequency:
+                # Generate gap
+                gap_size = np.random.uniform(*gap_size_range)
+                gap_direction = 1 if np.random.random() < 0.5 else -1
+                gap_change = gap_direction * gap_size
+
+                # Normal volatility on top of gap
+                normal_change = np.random.normal(0, volatility * 0.5)
+                total_change = gap_change + normal_change
+            else:
+                # Normal price movement
+                total_change = np.random.normal(0, volatility)
+
+            new_price = prices[-1] * (1 + total_change)
+            prices.append(max(new_price, 1.0))
+
+            if include_volume:
+                base_volume = 1100000
+                # Higher volume on gaps
+                volume_multiplier = 1.0 + abs(total_change) * 4
+                volumes.append(max(int(base_volume * volume_multiplier), 100000))
+
+        return self._create_ohlcv_dataframe(prices, timeframe, include_volume, volumes)
+
+    def _create_ohlcv_dataframe(self, close_prices: List[float], timeframe: str,
+                               include_volume: bool, volumes: Optional[List[int]] = None) -> pd.DataFrame:
+        """Create OHLCV DataFrame from close prices."""
+        timeframe_minutes = self._timeframe_to_minutes(timeframe)
+
+        # Create timestamps
+        end_time = datetime.now()
+        start_time = end_time - timedelta(minutes=timeframe_minutes * len(close_prices))
+        timestamps = pd.date_range(start=start_time, end=end_time, periods=len(close_prices))
+
+        # Generate OHLC from close prices
+        data = []
+        for i, close in enumerate(close_prices):
+            if i == 0:
+                open_price = close
+                high = close
+                low = close
+            else:
+                # Generate realistic OHLC based on previous close and current close
+                prev_close = close_prices[i-1]
+                open_price = prev_close
+
+                # High and low around the range between open and close
+                if close > open_price:
+                    # Up candle
+                    high = close * (1 + np.random.uniform(0, 0.005))
+                    low = min(open_price, close) * (1 - np.random.uniform(0, 0.003))
+                else:
+                    # Down candle
+                    high = max(open_price, close) * (1 + np.random.uniform(0, 0.003))
+                    low = close * (1 - np.random.uniform(0, 0.005))
+
+            candle_data = {
+                'open': open_price,
+                'high': high,
+                'low': low,
+                'close': close
+            }
+
+            if include_volume and volumes:
+                candle_data['volume'] = volumes[i]
+
+            data.append(candle_data)
+
+        df = pd.DataFrame(data, index=timestamps)
+        return df
