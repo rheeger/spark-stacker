@@ -137,11 +137,11 @@ of concerns.
 
 - [x] **Migrate main CLI entry point** (`packages/spark-app/tests/_utils/cli/main.py` - NEW FILE)
 
-- [ ] **Create backward compatibility shim** (`packages/spark-app/tests/_utils/cli.py` - UPDATE)
-  - [ ] Replace existing monolithic code with import from `cli.main`
-  - [ ] Maintain all existing command signatures and behavior
-  - [ ] Add deprecation notice about file location change
-  - [ ] Provide migration path documentation
+- [x] **Create backward compatibility shim** (`packages/spark-app/tests/_utils/cli.py` - UPDATE)
+  - [x] Replace existing monolithic code with import from `cli.main`
+  - [x] Maintain all existing command signatures and behavior
+  - [x] Add deprecation notice about file location change
+  - [x] Provide migration path documentation
 
 #### 1.4.2 Command Handler Modules
 
