@@ -148,7 +148,18 @@ class StrategyValidator:
             result.add_error("Strategy must have at least one indicator")
             return
 
-        for indicator_name, indicator_config in strategy_config.indicators.items():
+        # Get the full config to access indicator definitions
+        config = self.config_manager.load_config()
+        available_indicators = {ind.get('name'): ind for ind in config.get('indicators', [])}
+
+        # Validate each indicator name in the strategy
+        for indicator_name in strategy_config.indicators:
+            if indicator_name not in available_indicators:
+                result.add_error(f"Indicator '{indicator_name}' referenced by strategy but not found in configuration")
+                continue
+
+            indicator_config = available_indicators[indicator_name]
+
             # Check indicator type
             indicator_type = indicator_config.get('type')
             if not indicator_type:
@@ -256,8 +267,16 @@ class StrategyValidator:
         """Validate timeframe consistency across strategy components."""
         strategy_timeframe = strategy_config.timeframe
 
+        # Get the full config to access indicator definitions
+        config = self.config_manager.load_config()
+        available_indicators = {ind.get('name'): ind for ind in config.get('indicators', [])}
+
         # Check indicator timeframes
-        for indicator_name, indicator_config in strategy_config.indicators.items():
+        for indicator_name in strategy_config.indicators:
+            if indicator_name not in available_indicators:
+                continue  # This error will be caught in _validate_indicators
+
+            indicator_config = available_indicators[indicator_name]
             indicator_timeframe = indicator_config.get('timeframe')
 
             if indicator_timeframe and indicator_timeframe != strategy_timeframe:
@@ -315,20 +334,14 @@ class StrategyValidator:
 
     def _validate_risk_parameters(self, strategy_config: StrategyConfig, result: ValidationResult) -> None:
         """Validate risk management parameters."""
-        risk_config = strategy_config.risk_management
-
-        if not risk_config:
-            result.add_suggestion("Consider adding risk management parameters (stop_loss, take_profit)")
-            return
-
         # Validate stop loss
-        stop_loss = risk_config.get('stop_loss_pct')
+        stop_loss = strategy_config.stop_loss_pct
         if stop_loss is not None:
             if stop_loss <= 0 or stop_loss > 50:
                 result.add_error(f"Stop loss percentage must be between 0 and 50, got {stop_loss}")
 
         # Validate take profit
-        take_profit = risk_config.get('take_profit_pct')
+        take_profit = strategy_config.take_profit_pct
         if take_profit is not None:
             if take_profit <= 0 or take_profit > 200:
                 result.add_error(f"Take profit percentage must be between 0 and 200, got {take_profit}")
@@ -342,8 +355,18 @@ class StrategyValidator:
 
     def _analyze_strategy_feasibility(self, strategy_config: StrategyConfig, result: ValidationResult) -> None:
         """Analyze overall strategy feasibility."""
+        # Get the full config to access indicator definitions
+        config = self.config_manager.load_config()
+        available_indicators = {ind.get('name'): ind for ind in config.get('indicators', [])}
+
         # Check for indicator conflicts
-        indicator_types = [config.get('type') for config in strategy_config.indicators.values()]
+        indicator_types = []
+        for indicator_name in strategy_config.indicators:
+            if indicator_name in available_indicators:
+                indicator_config = available_indicators[indicator_name]
+                indicator_type = indicator_config.get('type')
+                if indicator_type:
+                    indicator_types.append(indicator_type)
 
         # Warn about too many trend-following indicators
         trend_indicators = [t for t in indicator_types if t in ['sma', 'ema', 'macd']]
@@ -375,20 +398,29 @@ class StrategyValidator:
         """Get the maximum period required by any indicator."""
         max_period = 0
 
-        for indicator_config in strategy_config.indicators.values():
+        # Get the full config to access indicator definitions
+        config = self.config_manager.load_config()
+        available_indicators = {ind.get('name'): ind for ind in config.get('indicators', [])}
+
+        for indicator_name in strategy_config.indicators:
+            if indicator_name not in available_indicators:
+                continue
+
+            indicator_config = available_indicators[indicator_name]
             indicator_type = indicator_config.get('type')
 
             if indicator_type in ['rsi', 'sma', 'ema']:
-                period = indicator_config.get('period', 20)
+                period = indicator_config.get('parameters', {}).get('period', 20)
                 max_period = max(max_period, period)
 
             elif indicator_type == 'macd':
-                slow_period = indicator_config.get('slow_period', 26)
-                signal_period = indicator_config.get('signal_period', 9)
+                params = indicator_config.get('parameters', {})
+                slow_period = params.get('slow_period', 26)
+                signal_period = params.get('signal_period', 9)
                 max_period = max(max_period, slow_period + signal_period)
 
             elif indicator_type == 'bollinger_bands':
-                period = indicator_config.get('period', 20)
+                period = indicator_config.get('parameters', {}).get('period', 20)
                 max_period = max(max_period, period)
 
         return max_period
@@ -411,13 +443,19 @@ class StrategyValidator:
                 result.add_error(f"Strategy '{strategy_name}' not found in configuration")
                 return result
 
-            strategy_config = StrategyConfig.from_config_dict(strategy_config_dict)
+            strategy_config = StrategyConfig.from_dict(strategy_config_dict)
+
+            # Get the full config to access indicator definitions
+            config = self.config_manager.load_config()
+            available_indicators = {ind.get('name'): ind for ind in config.get('indicators', [])}
 
             # Validate that all configured indicators can be created
-            # This would typically involve checking with an IndicatorFactory
-            # For now, we'll do basic validation
+            for indicator_name in strategy_config.indicators:
+                if indicator_name not in available_indicators:
+                    result.add_error(f"Indicator '{indicator_name}' referenced by strategy but not found in configuration")
+                    continue
 
-            for indicator_name, indicator_config in strategy_config.indicators.items():
+                indicator_config = available_indicators[indicator_name]
                 indicator_type = indicator_config.get('type')
                 if not indicator_type:
                     result.add_error(f"Indicator '{indicator_name}' missing type specification")
@@ -452,7 +490,7 @@ class StrategyValidator:
                 result.add_error(f"Strategy '{strategy_name}' not found in configuration")
                 return result
 
-            strategy_config = StrategyConfig.from_config_dict(strategy_config_dict)
+            strategy_config = StrategyConfig.from_dict(strategy_config_dict)
             self._validate_timeframe_consistency(strategy_config, result)
 
             logger.debug(f"Timeframe consistency validation completed for {strategy_name}")
@@ -480,7 +518,7 @@ class StrategyValidator:
                 result.add_error(f"Strategy '{strategy_name}' not found in configuration")
                 return result
 
-            strategy_config = StrategyConfig.from_config_dict(strategy_config_dict)
+            strategy_config = StrategyConfig.from_dict(strategy_config_dict)
             self._validate_market_exchange_compatibility(strategy_config, result)
 
             logger.debug(f"Market-exchange compatibility validation completed for {strategy_name}")

@@ -170,15 +170,26 @@ class StrategyBacktestManager:
         """Initialize all indicators for the strategy."""
         self.strategy_indicators = {}
 
-        indicators_config = config.get('indicators', {})
+        # Get the strategy's indicator names
+        strategy_indicator_names = config.get('indicators', [])
 
-        for indicator_name, indicator_config in indicators_config.items():
+        # Get the global config to access indicator definitions
+        global_config = self.config_manager.load_config()
+        available_indicators = {ind.get('name'): ind for ind in global_config.get('indicators', [])}
+
+        for indicator_name in strategy_indicator_names:
+            if indicator_name not in available_indicators:
+                logger.warning(f"Indicator '{indicator_name}' referenced by strategy but not found in configuration")
+                continue
+
+            indicator_config = available_indicators[indicator_name]
+
             try:
                 # Create indicator instance
                 indicator = self.indicator_factory.create_indicator(
-                    indicator_type=indicator_config['type'],
                     name=indicator_name,
-                    config=indicator_config
+                    indicator_type=indicator_config['type'],
+                    params=indicator_config.get('parameters', {})
                 )
 
                 self.strategy_indicators[indicator_name] = indicator
