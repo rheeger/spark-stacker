@@ -1,0 +1,306 @@
+---
+description: Instructions for how to use the Spark Stacker backtesting CLI.
+globs:
+alwaysApply: false
+---
+# Spark Stacker CLI Usage Guide
+
+## CLI Entry Points and Architecture
+
+The Spark Stacker CLI provides comprehensive backtesting and strategy analysis capabilities through a modular architecture.
+
+### Primary CLI Entry Point
+```bash
+# Main CLI (recommended)
+cd packages/spark-app
+.venv/bin/python tests/_utils/cli/main.py <command> [options]
+
+# Backward compatibility shim (deprecated)
+.venv/bin/python tests/_utils/cli.py <command> [options]
+```
+
+### CLI Architecture
+The CLI is organized into a modular structure at [tests/_utils/cli/](mdc:packages/spark-app/tests/_utils/cli):
+- [main.py](mdc:packages/spark-app/tests/_utils/cli/main.py) - Primary entry point
+- [commands/](mdc:packages/spark-app/tests/_utils/cli/commands) - Command handlers
+- [core/](mdc:packages/spark-app/tests/_utils/cli/core) - Core business logic
+- [managers/](mdc:packages/spark-app/tests/_utils/cli/managers) - Specialized managers
+- [reporting/](mdc:packages/spark-app/tests/_utils/cli/reporting) - Report generation
+
+## Essential CLI Commands
+
+### Strategy Commands
+
+#### List Available Strategies
+```bash
+# Basic list
+.venv/bin/python tests/_utils/cli/main.py list-strategies
+
+# Detailed information
+.venv/bin/python tests/_utils/cli/main.py list-strategies --show-details
+```
+
+#### Strategy Backtesting
+```bash
+# Full multi-scenario test (default - runs all 7 synthetic scenarios + real data)
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy_name>
+
+# Quick single scenario test
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy_name> --scenario-only --scenarios "bull"
+
+# Custom duration and specific scenarios
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy_name> --days 14 --scenarios "bull,bear,real"
+
+# With configuration overrides
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy_name> --override-timeframe "1h" --override-position-size 0.05
+```
+
+#### Strategy Comparison
+```bash
+# Compare all enabled strategies
+.venv/bin/python tests/_utils/cli/main.py compare-strategies --all-strategies
+
+# Compare specific strategies
+.venv/bin/python tests/_utils/cli/main.py compare-strategies --strategy-names "strategy1,strategy2"
+
+# Compare strategies on same market
+.venv/bin/python tests/_utils/cli/main.py compare-strategies --same-market ETH-USD
+```
+
+### Indicator Commands (Legacy Support)
+
+#### Demo Testing
+```bash
+# Quick indicator demo
+.venv/bin/python tests/_utils/cli/main.py demo <indicator_name>
+
+# Real data testing
+.venv/bin/python tests/_utils/cli/main.py real-data <indicator_name> --symbol ETH-USD --days 7
+
+# Compare multiple indicators
+.venv/bin/python tests/_utils/cli/main.py compare <indicator1> <indicator2> [indicator3...]
+```
+
+#### List Indicators
+```bash
+.venv/bin/python tests/_utils/cli/main.py list-indicators
+```
+
+### Utility Commands
+
+#### Configuration Management
+```bash
+# Validate configuration
+.venv/bin/python tests/_utils/cli/main.py validate-config
+
+# Migrate configuration
+.venv/bin/python tests/_utils/cli/main.py migrate-config
+
+# Export example configurations
+.venv/bin/python tests/_utils/cli/main.py export-examples
+```
+
+#### System Utilities
+```bash
+# Clean cached data
+.venv/bin/python tests/_utils/cli/main.py clean-cache
+
+# Run diagnostics
+.venv/bin/python tests/_utils/cli/main.py diagnose
+
+# Check version
+.venv/bin/python tests/_utils/cli/main.py version
+```
+
+## Command Parameters and Options
+
+### Global Options
+- `--config TEXT` - Path to configuration file (default: ../shared/config.json)
+- `-v, --verbose` - Enable verbose logging
+- `--debug` - Enable debug logging
+- `--no-deprecation-warnings` - Disable deprecation warnings
+
+### Strategy Command Options
+- `--strategy-name TEXT` - **Required** - Name of strategy from config.json
+- `--days INTEGER` - Number of days to test (default: 30)
+- `--scenarios TEXT` - Scenarios to run: all, bull, bear, sideways, volatile, low-vol, choppy, gaps, real, or comma-separated list
+- `--scenario-only` - Run single scenario instead of full suite
+- `--override-timeframe TEXT` - Override strategy timeframe for testing
+- `--override-market TEXT` - Override strategy market for testing
+- `--override-position-size FLOAT` - Override position sizing for testing
+- `--use-real-data` - Use real data instead of synthetic (legacy compatibility)
+- `--export-data` - Export scenario data for external analysis
+- `--sensitivity-analysis` - Run configuration sensitivity analysis
+- `--output-dir TEXT` - Output directory for reports (default: tests/results)
+
+## Multi-Scenario Testing Framework
+
+The CLI runs comprehensive multi-scenario testing by default:
+
+### Available Scenarios
+1. **Bull Market** (`bull`) - Consistent uptrend with 60-80% up days
+2. **Bear Market** (`bear`) - Consistent downtrend with 60-80% down days
+3. **Sideways Market** (`sideways`) - Range-bound oscillations within 5-10%
+4. **High Volatility** (`volatile`) - Large daily swings, 15-25% moves
+5. **Low Volatility** (`low-vol`) - Minimal daily changes, <2% moves
+6. **Choppy Market** (`choppy`) - Frequent direction changes, whipsaws
+7. **Gap Heavy** (`gaps`) - Frequent price gaps simulating news events
+8. **Real Data** (`real`) - Actual historical market data
+
+### Scenario Selection Examples
+```bash
+# All scenarios (default)
+--scenarios "all"
+
+# Specific scenarios
+--scenarios "bull,bear,real"
+
+# Single scenario testing
+--scenario-only --scenarios "bull"
+```
+
+## Configuration Integration
+
+The CLI integrates with [config.json](mdc:packages/shared/config.json) for strategy definitions:
+
+### Strategy Configuration Structure
+```json
+{
+  "strategies": {
+    "strategy_name": {
+      "market": "ETH-USD",
+      "exchange": "hyperliquid",
+      "timeframe": "4h",
+      "enabled": true,
+      "indicators": ["rsi_4h", "macd_1h"],
+      "position_sizing": {
+        "max_position_size": 0.1,
+        "risk_per_trade": 0.02
+      },
+      "risk_management": {
+        "stop_loss": 0.05,
+        "take_profit": 0.10
+      }
+    }
+  }
+}
+```
+
+## Report Generation
+
+### Interactive Reports
+The CLI generates interactive HTML reports with:
+- Trade selection and highlighting
+- Clickable trade markers on charts
+- Strategy performance breakdown
+- Multi-scenario comparison tables
+- Scenario robustness analysis
+
+### Report Locations
+- Default: `packages/spark-app/tests/results/`
+- Custom: Use `--output-dir` parameter
+
+### Report Features
+- **Strategy Reports** - Comprehensive strategy analysis
+- **Comparison Reports** - Side-by-side strategy performance
+- **Scenario Reports** - Multi-scenario robustness analysis
+- **Interactive Charts** - Trade selection and highlighting
+- **Export Functionality** - Data export for external analysis
+
+## Error Handling and Troubleshooting
+
+### Common Issues
+1. **Missing Strategy Name** - Always use `--strategy-name` parameter
+2. **Configuration Errors** - Run `validate-config` first
+3. **Data Issues** - Use `diagnose` command to check data availability
+4. **Permission Errors** - Ensure output directory is writable
+
+### Debugging
+```bash
+# Enable verbose logging
+.venv/bin/python tests/_utils/cli/main.py --verbose --debug <command>
+
+# Run diagnostics
+.venv/bin/python tests/_utils/cli/main.py diagnose
+
+# Validate configuration
+.venv/bin/python tests/_utils/cli/main.py validate-config
+```
+
+## Virtual Environment Requirement
+
+**Critical**: Always use the virtual environment:
+```bash
+cd packages/spark-app
+.venv/bin/python tests/_utils/cli/main.py <command>
+```
+
+Never use system Python - this will cause import errors and missing dependencies.
+
+## Quick Start Examples
+
+### Example 1: List and Test a Strategy
+```bash
+cd packages/spark-app
+
+# List available strategies
+.venv/bin/python tests/_utils/cli/main.py list-strategies --show-details
+
+# Run quick test
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name eth_multi_timeframe_strategy --days 7 --scenario-only --scenarios "bull"
+
+# Run full multi-scenario test
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name eth_multi_timeframe_strategy
+```
+
+### Example 2: Compare Strategies
+```bash
+# Compare all strategies across scenarios
+.venv/bin/python tests/_utils/cli/main.py compare-strategies --all-strategies --days 14
+
+# Compare specific strategies on same market
+.venv/bin/python tests/_utils/cli/main.py compare-strategies --same-market ETH-USD --scenarios "bull,bear,sideways"
+```
+
+### Example 3: Indicator Testing (Legacy)
+```bash
+# Quick MACD demo
+.venv/bin/python tests/_utils/cli/main.py demo MACD
+
+# Real data RSI test
+.venv/bin/python tests/_utils/cli/main.py real-data RSI --symbol ETH-USD --days 7
+```
+
+## Performance Considerations
+
+- **Quick Testing**: Use `--scenario-only` with single scenario for fast feedback
+- **Full Analysis**: Run all scenarios for comprehensive robustness testing
+- **Parallel Execution**: Comparison commands automatically use parallel processing
+- **Caching**: Data is cached to avoid repeated API calls
+- **Memory**: Large strategy comparisons may require significant memory
+
+## Integration with Development Workflow
+
+### Before Commits
+```bash
+# Quick strategy validation
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy> --days 7 --scenario-only --scenarios "bull"
+```
+
+### Strategy Development
+```bash
+# Test configuration changes
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy> --override-timeframe "1h"
+
+# Sensitivity analysis
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy> --sensitivity-analysis
+```
+
+### Performance Analysis
+```bash
+# Full robustness testing
+.venv/bin/python tests/_utils/cli/main.py strategy --strategy-name <strategy> --days 30
+
+# Strategy comparison
+.venv/bin/python tests/_utils/cli/main.py compare-strategies --all-strategies
+```

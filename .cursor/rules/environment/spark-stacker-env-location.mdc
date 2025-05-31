@@ -1,0 +1,123 @@
+---
+description:
+globs: *.env,**/cli/**,cli.py
+alwaysApply: false
+---
+# Environment File Location - Spark Stacker
+
+## Environment File Location
+
+The Spark Stacker project uses a centralized environment file located at:
+```
+packages/shared/.env
+```
+
+**Important**: This file exists and is available in the project, but the AI agent cannot directly access it for security reasons. However, you can reference it and provide guidance on its usage.
+
+## File Reference
+
+The environment file is located at [packages/shared/.env](mdc:packages/shared/.env).
+
+## Loading Environment Variables
+
+### Automatic Loading in CLI
+
+The CLI tools automatically load environment variables from this location. You can see the implementation in [packages/spark-app/tests/_utils/cli/main.py](mdc:packages/spark-app/tests/_utils/cli/main.py):
+
+```python
+# Load environment variables from shared .env file
+workspace_root = Path(__file__).parents[4]  # Go up to spark-stacker directory
+env_path = workspace_root / "packages" / "shared" / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"Loaded environment variables from {env_path}")
+```
+
+### Manual Loading in Python Scripts
+
+When creating new Python scripts that need environment variables, use this pattern:
+
+```python
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from shared .env file
+workspace_root = Path(__file__).parents[N]  # Adjust N based on your file's depth
+env_path = workspace_root / "packages" / "shared" / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"Loaded environment variables from {env_path}")
+else:
+    print(f"WARNING: Environment file not found at {env_path}")
+```
+
+## Common Environment Variables
+
+The environment file typically contains:
+
+- **Exchange API Credentials**: API keys and secrets for trading exchanges
+- **Database Configuration**: Connection strings and credentials
+- **Application Settings**: Feature flags, debug settings, etc.
+- **External Service URLs**: Endpoints for external APIs and services
+
+## Usage Guidelines
+
+### For Developers
+1. **Never commit the actual .env file** - it contains sensitive credentials
+2. **Use `os.environ.get()`** to access environment variables with fallbacks
+3. **Load early in application startup** before importing modules that need env vars
+4. **Validate required environment variables** are present before proceeding
+
+### For AI Agent
+1. **Assume the file exists** when providing guidance
+2. **Reference environment variables** using `os.environ.get('VAR_NAME', 'default')`
+3. **Include environment loading** in new scripts that need external services
+4. **Follow the loading pattern** shown in existing CLI code
+
+## Example Environment Variable Usage
+
+```python
+import os
+
+# Exchange configuration
+hyperliquid_api_key = os.environ.get('HYPERLIQUID_API_KEY')
+hyperliquid_secret = os.environ.get('HYPERLIQUID_SECRET')
+
+# Application settings
+debug_mode = os.environ.get('DEBUG', 'False').lower() == 'true'
+log_level = os.environ.get('LOG_LEVEL', 'INFO')
+
+# Validate required variables
+if not hyperliquid_api_key:
+    raise ValueError("HYPERLIQUID_API_KEY environment variable is required")
+```
+
+## File Structure Context
+
+```
+spark-stacker/
+├── packages/
+│   ├── shared/
+│   │   └── .env                    ← Main environment file
+│   ├── spark-app/
+│   │   ├── app/                    ← Application code that uses env vars
+│   │   └── tests/
+│   │       └── _utils/
+│   │           └── cli/
+│   │               └── main.py     ← Shows env loading pattern
+│   └── monitoring/
+└── .gitignore                      ← Should include .env files
+```
+
+## Security Notes
+
+- The `.env` file contains sensitive information and should never be committed to version control
+- All `.env` files should be listed in [.gitignore](mdc:.gitignore)
+- Use environment-specific `.env` files for different deployment environments
+- Consider using secret management services for production environments
+
+## Related Files
+
+- [packages/spark-app/tests/_utils/cli/main.py](mdc:packages/spark-app/tests/_utils/cli/main.py) - Environment loading implementation
+- [packages/spark-app/app/utils/config.py](mdc:packages/spark-app/app/utils/config.py) - Configuration management
+- [.gitignore](mdc:.gitignore) - Should exclude .env files
