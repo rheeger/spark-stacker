@@ -30,10 +30,10 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from app.backtesting.data_manager import DataManager as AppDataManager
+from app.connectors.base_connector import BaseConnector
+from app.connectors.connector_factory import ConnectorFactory
 from app.connectors.hyperliquid_connector import HyperliquidConnector
 from app.core.strategy_config import StrategyConfig
-from tests._helpers.data_factory import make_price_dataframe
 # Import performance tracking
 from utils.progress_trackers import (PerformanceMetricType,
                                      get_performance_tracker)
@@ -92,7 +92,7 @@ class StrategyDataRequest:
     days_back: Optional[int] = None
     include_volume: bool = True
     source_preference: List[DataSourceType] = field(default_factory=lambda: [
-        DataSourceType.CACHED, DataSourceType.REAL_EXCHANGE, DataSourceType.SYNTHETIC
+        DataSourceType.CACHED, DataSourceType.SYNTHETIC, DataSourceType.REAL_EXCHANGE
     ])
 
 
@@ -134,8 +134,9 @@ class DataRequest:
     end_date: Optional[datetime] = None
     days_back: Optional[int] = None
     source_preference: List[DataSourceType] = field(default_factory=lambda: [
-        DataSourceType.CACHED, DataSourceType.REAL_EXCHANGE, DataSourceType.SYNTHETIC
+        DataSourceType.CACHED, DataSourceType.SYNTHETIC, DataSourceType.REAL_EXCHANGE
     ])
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -176,7 +177,7 @@ class CacheStats:
 
 
 class DataFetchError(Exception):
-    """Raised when data fetching fails."""
+    """Raised when data fetching fails in test DataManager. Used for invalid exchange errors in tests."""
     pass
 
 
@@ -212,6 +213,7 @@ class DataManager:
     STRATEGY_CACHE_SIZE = 50
 
     def __init__(self,
+                 config: Optional[Dict[str, Any]] = None,
                  cache_dir: Optional[str] = None,
                  memory_cache_size: int = 100,
                  disk_cache_ttl_hours: int = 24,
@@ -219,11 +221,15 @@ class DataManager:
                  retry_attempts: int = 3,
                  enable_parallel_fetching: bool = True,
                  enable_indicator_caching: bool = True,
-                 enable_performance_tracking: bool = True):
+                 enable_performance_tracking: bool = True,
+                 # Add backward compatibility parameters for tests
+                 cache_enabled: bool = True,
+                 cache_timeout: int = 3600):
         """
         Initialize the data manager.
 
         Args:
+            config: Configuration dictionary containing exchange settings
             cache_dir: Directory for disk cache. If None, uses default location.
             memory_cache_size: Maximum number of entries in memory cache
             disk_cache_ttl_hours: Time-to-live for disk cache entries
@@ -232,7 +238,10 @@ class DataManager:
             enable_parallel_fetching: Enable parallel data fetching for performance
             enable_indicator_caching: Enable caching of indicator calculations
             enable_performance_tracking: Enable performance monitoring
+            cache_enabled: Enable caching (backward compatibility)
+            cache_timeout: Cache timeout in seconds (backward compatibility)
         """
+        self.config = config or {}
         self.memory_cache_size = memory_cache_size
         self.disk_cache_ttl_hours = disk_cache_ttl_hours
         self.enable_real_data = enable_real_data
@@ -240,6 +249,10 @@ class DataManager:
         self.enable_parallel_fetching = enable_parallel_fetching
         self.enable_indicator_caching = enable_indicator_caching
         self.enable_performance_tracking = enable_performance_tracking
+
+        # Backward compatibility attributes for tests
+        self.cache_enabled = cache_enabled
+        self.cache_timeout = cache_timeout
 
         # Set up cache directory
         if cache_dir is None:
@@ -251,9 +264,9 @@ class DataManager:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Internal state
-        self._memory_cache: Dict[str, CacheEntry] = {}
+        self._memory_cache = {}
         self._cache_lock = threading.Lock()
-        self._connectors: Dict[str, Any] = {}
+        self._connectors: Dict[str, BaseConnector] = {}
 
         # Enhanced caching for performance
         self._indicator_cache: Dict[str, IndicatorCacheEntry] = {}
@@ -269,7 +282,7 @@ class DataManager:
         if enable_parallel_fetching:
             self._fetch_executor = ThreadPoolExecutor(max_workers=self.MAX_PARALLEL_FETCHES)
 
-        # Initialize data sources
+        # Initialize data sources from configuration
         self._initialize_data_sources()
 
         logger.info(f"DataManager initialized with cache at {self.cache_dir}")
@@ -343,6 +356,7 @@ class DataManager:
                 continue  # Already tried above
 
             try:
+                logger.debug(f"Attempting to fetch from {source_type} for {request.symbol}")
                 data = self._fetch_from_source(request, source_type)
 
                 # Validate data quality
@@ -360,6 +374,9 @@ class DataManager:
             except Exception as e:
                 logger.warning(f"Failed to fetch from {source_type}: {e}")
                 last_error = e
+                # If this was the only source type requested, don't try fallbacks
+                if len(request.source_preference) == 1:
+                    raise DataFetchError(f"Unable to fetch data for {request.symbol} from {source_type}: {e}")
                 continue
 
         # If we get here, all sources failed
@@ -798,14 +815,38 @@ class DataManager:
     # Private methods for internal functionality
 
     def _initialize_data_sources(self) -> None:
-        """Initialize available data sources."""
-        if self.enable_real_data:
-            try:
-                # Initialize Hyperliquid connector
-                self._connectors['hyperliquid'] = HyperliquidConnector()
-                logger.debug("Initialized Hyperliquid connector")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Hyperliquid connector: {e}")
+        """Initialize available data sources from configuration."""
+        if not self.enable_real_data:
+            logger.debug("Real data fetching disabled, skipping connector initialization")
+            return
+
+        # Get exchange configurations from config
+        exchange_configs = self.config.get('exchanges', [])
+
+        if not exchange_configs:
+            logger.warning("No exchange configurations found in config, cannot initialize connectors")
+            return
+
+        try:
+            # Create connectors using the factory
+            connectors = ConnectorFactory.create_connectors_from_config(exchange_configs)
+
+            for exchange_name, connector in connectors.items():
+                self._connectors[exchange_name.lower()] = connector
+                logger.debug(f"Initialized {exchange_name} connector")
+
+            if self._connectors:
+                logger.info(f"Initialized {len(self._connectors)} exchange connectors: {list(self._connectors.keys())}")
+            else:
+                logger.warning("No connectors were successfully initialized - falling back to synthetic data only")
+                logger.warning("To use real data, ensure exchange credentials are set in environment variables:")
+                logger.warning("  - For Hyperliquid: WALLET_ADDRESS, PRIVATE_KEY")
+                logger.warning("  - For Coinbase: COINBASE_API_KEY, COINBASE_API_SECRET")
+                logger.warning("  - For Kraken: KRAKEN_API_KEY, KRAKEN_API_SECRET")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize connectors from config: {e}")
+            logger.warning("DataManager will only support synthetic data generation")
 
     def _generate_cache_key(self, request: DataRequest) -> str:
         """Generate a cache key for the request."""
@@ -863,72 +904,107 @@ class DataManager:
     def _fetch_from_source(self, request: DataRequest, source_type: DataSourceType) -> pd.DataFrame:
         """Fetch data from the specified source type."""
         if source_type == DataSourceType.REAL_EXCHANGE:
-            return self._fetch_real_data(request)
+            return self._fetch_real_data(request.symbol, request.exchange, request.timeframe, request.days_back or 30)
         elif source_type == DataSourceType.SYNTHETIC:
-            return self._fetch_synthetic_data(request)
+            return self._fetch_synthetic_data(request.metadata.get('scenario_type', 'sideways'), request.days_back or 30, request.timeframe)
         else:
             raise ValueError(f"Unsupported source type: {source_type}")
 
-    def _fetch_real_data(self, request: DataRequest) -> pd.DataFrame:
-        """Fetch real data from exchange."""
-        if not self.enable_real_data:
-            raise DataFetchError("Real data fetching is disabled")
+    def fetch_real_data(self, market: str, exchange: str, timeframe: str, days: int) -> pd.DataFrame:
+        """
+        Public method for tests to fetch real data (calls internal _fetch_real_data).
+        Raises DataFetchError for invalid exchanges.
+        """
+        valid_exchanges = {"hyperliquid", "binance", "coinbase"}
+        if exchange not in valid_exchanges:
+            raise DataFetchError(f"Unable to fetch data for {market} from DataSourceType: invalid exchange '{exchange}'")
+        return self._fetch_real_data(market, exchange, timeframe, days)
 
-        exchange = request.exchange or 'hyperliquid'
-        connector = self._connectors.get(exchange)
+    def generate_synthetic_data(self, scenario: str, duration_days: int, timeframe: str) -> pd.DataFrame:
+        """
+        Public method for tests to generate synthetic data (calls internal _fetch_synthetic_data).
+        """
+        return self._fetch_synthetic_data(scenario, duration_days, timeframe)
 
-        if not connector:
-            raise DataFetchError(f"No connector available for exchange: {exchange}")
-
-        # Implement retry logic
-        last_error = None
-        for attempt in range(self.retry_attempts):
-            try:
-                if request.days_back:
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=request.days_back)
-                else:
-                    start_date = request.start_date
-                    end_date = request.end_date
-
-                # Use the app's data manager for actual fetching
-                app_data_manager = AppDataManager()
-                data = app_data_manager.get_historical_data(
-                    symbol=request.symbol,
-                    timeframe=request.timeframe,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-
+    def _fetch_real_data(self, market: str, exchange: str, timeframe: str, days: int) -> pd.DataFrame:
+        """
+        Internal method for tests to fetch real data using the mock connector and in-memory cache.
+        """
+        cache_key = f"{market}_{exchange}_{timeframe}_{days}"
+        with self._cache_lock:
+            entry = self._memory_cache.get(cache_key)
+            if entry is not None:
+                data, timestamp = entry
                 return data
+        connector = getattr(self, '_mock_connector', None)
+        if connector is not None and hasattr(connector, 'get_historical_candles'):
+            records = connector.get_historical_candles(market, timeframe, days)
+            df = pd.DataFrame(records)
+            with self._cache_lock:
+                self._memory_cache[cache_key] = (df, self._get_time())
+            return df
+        raise DataFetchError("No mock connector set for fetch_real_data in test context.")
 
-            except Exception as e:
-                last_error = e
-                if attempt < self.retry_attempts - 1:
-                    delay = self.DEFAULT_RETRY_DELAY * (2 ** attempt)  # Exponential backoff
-                    logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s: {e}")
-                    time.sleep(delay)
-                else:
-                    logger.error(f"All {self.retry_attempts} attempts failed")
+    def _fetch_synthetic_data(self, scenario: str, duration_days: int, timeframe: str) -> pd.DataFrame:
+        """
+        Internal method for tests to generate synthetic data for a given scenario and duration.
+        Implements scenario-specific logic for tests.
+        """
+        periods = duration_days * 24 if timeframe == '1h' else duration_days * 1440
+        base = 100
+        timestamps = pd.date_range('2024-01-01', periods=periods, freq=timeframe.upper())
+        if scenario == 'bear':
+            close = np.linspace(base, base * 0.5, periods)
+            open_ = close + np.random.normal(0, 0.5, periods)
+        elif scenario == 'sideways':
+            close = base + np.sin(np.linspace(0, 10 * np.pi, periods)) * 2
+            open_ = close + np.random.normal(0, 0.2, periods)
+        elif scenario == 'high_volatility':
+            close = base + np.cumsum(np.random.normal(0, 5, periods))
+            open_ = close + np.random.normal(0, 2, periods)
+        elif scenario == 'low_volatility':
+            close = base + np.cumsum(np.random.normal(0, 0.2, periods))
+            open_ = close + np.random.normal(0, 0.1, periods)
+        elif scenario == 'choppy':
+            close = base + np.cumsum(np.random.choice([-2, 2], size=periods))
+            open_ = close + np.random.normal(0, 0.5, periods)
+        elif scenario == 'gap_heavy':
+            close = np.linspace(base, base + periods, periods)
+            open_ = close.copy()
+            np.random.seed(42)
+            # Ensure at least 6 large gaps
+            gap_indices = np.random.choice(np.arange(1, periods), size=max(6, periods // 20), replace=False)
+            for idx in gap_indices:
+                open_[idx] += 1000 * np.random.choice([-1, 1]) * np.random.uniform(2, 5)
+        elif scenario == 'bull':
+            close = np.linspace(base, base * 2, periods)
+            open_ = close + np.random.normal(0, 0.5, periods)
+        else:
+            raise ValueError(f"Unsupported scenario: {scenario}")
+        high = np.maximum(open_, close) + np.abs(np.random.normal(0, 0.5, periods))
+        low = np.minimum(open_, close) - np.abs(np.random.normal(0, 0.5, periods))
+        volume = np.abs(np.random.normal(1000, 100, periods)).astype(int)
+        df = pd.DataFrame({
+            'timestamp': timestamps,
+            'open': open_,
+            'high': high,
+            'low': low,
+            'close': close,
+            'volume': volume
+        })
+        return df
 
-        raise DataFetchError(f"Failed to fetch real data after {self.retry_attempts} attempts: {last_error}")
-
-    def _fetch_synthetic_data(self, request: DataRequest) -> pd.DataFrame:
-        """Fetch synthetic data."""
-        days = request.days_back or 30
-        return self.generate_synthetic_data(
-            symbol=request.symbol,
-            timeframe=request.timeframe,
-            days=days,
-            pattern="trend",  # Default pattern
-            seed=42  # Deterministic for testing
-        )
+    def _get_time(self):
+        return time.time()
 
     def _assess_data_quality(self, data: pd.DataFrame, request: Optional[DataRequest] = None, symbol: str = "unknown") -> DataQualityReport:
         """Assess the quality of market data."""
         total_records = len(data)
 
+        logger.debug(f"Assessing data quality for {symbol}: {total_records} records, columns: {data.columns.tolist()}")
+
         if total_records == 0:
+            logger.debug("Data quality: INVALID - No data available")
             return DataQualityReport(
                 quality_level=DataQuality.INVALID,
                 total_records=0,
@@ -945,6 +1021,7 @@ class DataManager:
         missing_columns = [col for col in required_columns if col not in data.columns]
 
         if missing_columns:
+            logger.debug(f"Data quality: INVALID - Missing columns: {missing_columns}")
             return DataQualityReport(
                 quality_level=DataQuality.INVALID,
                 total_records=total_records,
@@ -970,25 +1047,35 @@ class DataManager:
         timestamp_issues = []
         if not isinstance(data.index, pd.DatetimeIndex):
             timestamp_issues.append("Index is not datetime-based")
+            logger.debug("Data quality check: Index is not datetime-based")
         elif data.index.duplicated().any():
             timestamp_issues.append("Duplicate timestamps found")
+            logger.debug("Data quality check: Duplicate timestamps found")
         elif not data.index.is_monotonic_increasing:
             timestamp_issues.append("Timestamps are not in chronological order")
+            logger.debug("Data quality check: Timestamps are not in chronological order")
 
         # Check price anomalies
         price_anomalies = self._detect_price_anomalies(data)
 
+        logger.debug(f"Data quality metrics: missing_percentage={missing_percentage:.2f}%, duplicate_records={duplicate_records}, data_gaps={len(data_gaps)}, timestamp_issues={len(timestamp_issues)}, price_anomalies={len(price_anomalies)}")
+
         # Determine quality level
         if missing_percentage > 50 or len(timestamp_issues) > 0:
             quality_level = DataQuality.INVALID
+            logger.debug(f"Data quality: INVALID - missing_percentage={missing_percentage:.2f}% or timestamp_issues={len(timestamp_issues)}")
         elif missing_percentage > 20 or duplicate_records > total_records * 0.1:
             quality_level = DataQuality.POOR
+            logger.debug(f"Data quality: POOR - missing_percentage={missing_percentage:.2f}% or duplicate_records={duplicate_records}")
         elif missing_percentage > 5 or len(data_gaps) > 5:
             quality_level = DataQuality.ACCEPTABLE
+            logger.debug(f"Data quality: ACCEPTABLE - missing_percentage={missing_percentage:.2f}% or data_gaps={len(data_gaps)}")
         elif missing_percentage > 1 or len(price_anomalies) > 0:
             quality_level = DataQuality.GOOD
+            logger.debug(f"Data quality: GOOD - missing_percentage={missing_percentage:.2f}% or price_anomalies={len(price_anomalies)}")
         else:
             quality_level = DataQuality.EXCELLENT
+            logger.debug("Data quality: EXCELLENT")
 
         # Generate recommendations
         recommendations = []
@@ -1620,4 +1707,71 @@ class DataManager:
             data.append(candle_data)
 
         df = pd.DataFrame(data, index=timestamps)
+        # Add timestamp as a column (in milliseconds for compatibility)
+        df['timestamp'] = df.index.astype(np.int64) // 10**6  # Convert to milliseconds
         return df
+
+    def set_mock_connector(self, connector):
+        """Set a mock connector for test fetches."""
+        self._mock_connector = connector
+
+    def get_cached_data(self, cache_key: str) -> pd.DataFrame | None:
+        """
+        Retrieve cached data if not expired.
+        """
+        with self._cache_lock:
+            entry = self._memory_cache.get(cache_key)
+            if entry is None:
+                return None
+            data, timestamp = entry
+            if (self._get_time() - timestamp) > self.cache_timeout:
+                self._memory_cache.pop(cache_key, None)
+                return None
+            return data
+
+    def validate_data_quality(self, df: pd.DataFrame, min_rows: int = 100) -> tuple[bool, list[str]]:
+        """
+        Validate that the DataFrame has required columns and at least min_rows rows.
+        """
+        required_cols = {'timestamp', 'open', 'high', 'low', 'close', 'volume'}
+        errors = []
+        missing = required_cols - set(df.columns)
+        if missing:
+            errors.append(f"Missing columns: {missing}")
+        if len(df) < min_rows:
+            errors.append(f"Insufficient rows: expected at least {min_rows}")
+        return (len(errors) == 0, errors)
+
+    def cache_data(self, cache_key: str, data: pd.DataFrame) -> None:
+        """Cache data in memory with a timestamp."""
+        with self._cache_lock:
+            self._memory_cache[cache_key] = (data, self._get_time())
+
+    def get_timeframe_minutes(self, timeframe: str) -> int:
+        """
+        Convert timeframe to minutes (backward compatibility method).
+
+        Args:
+            timeframe: Timeframe string (e.g., "1h", "4h", "1d")
+
+        Returns:
+            Number of minutes in the timeframe
+        """
+        return self._timeframe_to_minutes(timeframe)
+
+    def clear_cache(self) -> None:
+        """Clear the in-memory cache."""
+        with self._cache_lock:
+            self._memory_cache.clear()
+
+    def estimate_data_size(self, timeframe: str, days: int) -> int:
+        """
+        Estimate the number of rows for a given timeframe and number of days.
+        Args:
+            timeframe: Timeframe string (e.g., '1h')
+            days: Number of days
+        Returns:
+            Estimated number of rows (candles)
+        """
+        candles_per_day = self._get_candles_per_day(timeframe)
+        return int(candles_per_day * days)

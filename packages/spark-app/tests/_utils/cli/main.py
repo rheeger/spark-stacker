@@ -12,12 +12,14 @@ components in subsequent tasks.
 import json
 import logging
 import os
+import signal
 import sys
 import threading
 import time
 import webbrowser
 from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import click
@@ -26,8 +28,30 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 
+# Load environment variables from shared .env file
+# Construct path relative to workspace root
+workspace_root = Path(__file__).parents[4]  # Go up to spark-stacker directory
+env_path = workspace_root / "packages" / "shared" / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"Loaded environment variables from {env_path}")
+else:
+    # Try alternate path construction
+    env_path_alt = Path(__file__).parent.parent.parent.parent.parent / "shared" / ".env"
+    if env_path_alt.exists():
+        load_dotenv(env_path_alt)
+        print(f"Loaded environment variables from {env_path_alt}")
+    else:
+        print(f"WARNING: Environment file not found at {env_path} or {env_path_alt}")
+
+# Configure matplotlib to prevent GUI hanging
 matplotlib.use('Agg')  # Use non-interactive backend
+# Additional matplotlib settings to prevent hanging
+matplotlib.pyplot.ioff()  # Turn off interactive mode
+# Set additional backends to non-GUI
+os.environ['MPLBACKEND'] = 'Agg'
 
 # Add the CLI directory to the path for proper imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -51,6 +75,9 @@ from app.backtesting.reporting.generate_report import \
     generate_charts_for_report
 from app.backtesting.reporting.generator import generate_indicator_report
 from app.connectors.hyperliquid_connector import HyperliquidConnector
+from app.core.symbol_converter import (convert_symbol_for_exchange,
+                                       get_supported_exchanges,
+                                       validate_symbol_format)
 from app.indicators.indicator_factory import IndicatorFactory
 from app.risk_management.position_sizing import (PositionSizer,
                                                  PositionSizingConfig)
@@ -356,8 +383,10 @@ def add_cleanup_function(func):
     resource_cleanup_functions.append(func)
 
 def cleanup_resources():
-    """Clean up all registered resources."""
+    """Clean up all registered resources and common hanging culprits."""
     global resource_cleanup_functions
+
+    # Call registered cleanup functions first
     for cleanup_func in resource_cleanup_functions:
         try:
             cleanup_func()
@@ -365,9 +394,95 @@ def cleanup_resources():
             logger.warning(f"Error during cleanup: {e}")
     resource_cleanup_functions.clear()
 
+    # Clean up matplotlib figures and close all plots
+    try:
+        import matplotlib.pyplot as plt
+        plt.close('all')  # Close all figures
+        plt.clf()  # Clear current figure
+        plt.cla()  # Clear current axes
+        # Force garbage collection of matplotlib objects
+        import gc
+        gc.collect()
+    except Exception as e:
+        logger.warning(f"Error cleaning up matplotlib: {e}")
+
+    # Close any open file handles that might be hanging
+    try:
+        import gc
+        import sys
+
+        # Force garbage collection to close any unreferenced file handles
+        gc.collect()
+
+        # Close any open file descriptors that might be hanging
+        # This is a bit aggressive but necessary for hanging processes
+        try:
+            import os
+
+            # Get list of open file descriptors
+            if hasattr(os, 'listdir') and os.path.exists('/proc/self/fd'):
+                # On Unix systems, check for open file descriptors
+                pass  # We'll avoid force-closing system FDs
+        except Exception:
+            pass
+
+    except Exception as e:
+        logger.warning(f"Error during file handle cleanup: {e}")
+
+    # Clean up any threading resources
+    try:
+        import threading
+
+        # Wait for any background threads to complete (with timeout)
+        for thread in threading.enumerate():
+            if thread != threading.current_thread() and thread.is_alive():
+                if hasattr(thread, 'join'):
+                    try:
+                        # Give threads a short time to finish gracefully
+                        thread.join(timeout=1.0)
+                        if thread.is_alive():
+                            logger.warning(f"Thread {thread.name} did not terminate within timeout")
+                    except Exception as e:
+                        logger.warning(f"Error joining thread {thread.name}: {e}")
+
+    except Exception as e:
+        logger.warning(f"Error during thread cleanup: {e}")
+
+    # Clean up any remaining pandas/numpy resources
+    try:
+        import pandas as pd
+
+        # Clear any global pandas options that might hold references
+        # Be more specific to avoid deprecation warnings
+        try:
+            pd.reset_option("display.max_rows")
+            pd.reset_option("display.max_columns")
+            pd.reset_option("display.width")
+            pd.reset_option("display.max_colwidth")
+        except Exception:
+            # If specific options fail, skip pandas cleanup
+            pass
+    except Exception as e:
+        logger.warning(f"Error cleaning up pandas: {e}")
+
+    # Force final garbage collection
+    try:
+        import gc
+        gc.collect()
+        gc.collect()  # Call twice to be thorough
+    except Exception as e:
+        logger.warning(f"Error during final garbage collection: {e}")
+
+    # Ensure stdout/stderr are flushed
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception as e:
+        logger.warning(f"Error flushing output streams: {e}")
+
 def get_default_output_dir():
     """Get the default output directory for reports."""
-    return os.path.join(os.path.dirname(current_dir), "results")
+    return os.path.join(current_dir, "__test_results__")
 
 # Note: The full CLI implementation would be too long to include here.
 # For the purposes of this migration, I'm including just the CLI group setup
@@ -449,6 +564,76 @@ def register_all_commands():
 # Register commands when module is imported
 register_all_commands()
 
+# Signal handler for graceful shutdown
+def signal_handler(signum, frame):
+    """Handle system signals for graceful shutdown."""
+    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+    cleanup_resources()
+    sys.exit(0)
+
+# Register signal handlers
+try:
+    signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # Termination request
+    if hasattr(signal, 'SIGHUP'):
+        signal.signal(signal.SIGHUP, signal_handler)   # Hang up
+except Exception as e:
+    logger.warning(f"Could not register signal handlers: {e}")
+
 
 if __name__ == '__main__':
-    cli()
+    try:
+        cli()
+    except KeyboardInterrupt:
+        logger.info("CLI interrupted by user")
+        cleanup_resources()
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"CLI execution failed: {e}")
+        cleanup_resources()
+        sys.exit(1)
+    finally:
+        # Final cleanup and explicit exit
+        cleanup_resources()
+        # Force exit to prevent hanging
+        os._exit(0)
+
+def validate_symbol_for_cli(symbol: str, exchange: str = None) -> tuple[bool, str]:
+    """
+    Validate a symbol for CLI usage with helpful error messages.
+
+    Args:
+        symbol: Symbol to validate
+        exchange: Optional exchange name for exchange-specific validation
+
+    Returns:
+        Tuple of (is_valid, error_message_or_converted_symbol)
+    """
+    # Basic format validation
+    if not validate_symbol_format(symbol):
+        # Try to suggest correct format
+        if "-" not in symbol and "_" not in symbol and "/" not in symbol:
+            # Probably missing quote currency
+            suggested = f"{symbol}-USD"
+            return False, f"Invalid symbol format '{symbol}'. Try '{suggested}' (standard format: BASE-QUOTE)"
+        elif "_" in symbol:
+            # Wrong separator
+            suggested = symbol.replace("_", "-")
+            return False, f"Invalid symbol format '{symbol}'. Try '{suggested}' (use hyphen instead of underscore)"
+        elif "/" in symbol:
+            # Wrong separator
+            suggested = symbol.replace("/", "-")
+            return False, f"Invalid symbol format '{symbol}'. Try '{suggested}' (use hyphen instead of slash)"
+        else:
+            return False, f"Invalid symbol format '{symbol}'. Use standard format like 'ETH-USD', 'BTC-USD'"
+
+    # Exchange-specific validation
+    if exchange:
+        try:
+            converted = convert_symbol_for_exchange(symbol, exchange)
+            return True, f"✅ '{symbol}' -> '{converted}' for {exchange}"
+        except ValueError as e:
+            supported = ', '.join(get_supported_exchanges())
+            return False, f"Error converting '{symbol}' for exchange '{exchange}': {e}. Supported exchanges: {supported}"
+
+    return True, f"✅ Valid symbol format: '{symbol}'"

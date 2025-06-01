@@ -74,21 +74,24 @@ class ScenarioReporter:
         logger.info(f"Generating multi-scenario report for strategy: {strategy_name}")
 
         try:
+            # Convert ScenarioBacktestResult objects to expected dictionary format
+            converted_results = self._convert_scenario_results(scenario_results)
+
             report = {
                 "strategy_name": strategy_name,
                 "report_type": "multi_scenario_analysis",
                 "generated_at": datetime.now().isoformat(),
-                "scenarios_analyzed": list(scenario_results.keys()),
+                "scenarios_analyzed": list(converted_results.keys()),
                 "strategy_configuration": self._get_strategy_configuration(strategy_name),
-                "scenario_performance_comparison": self._compare_scenario_performance(scenario_results),
-                "robustness_analysis": self._analyze_strategy_robustness(scenario_results),
-                "scenario_correlation_analysis": self._analyze_scenario_correlations(scenario_results),
-                "worst_case_analysis": self._analyze_worst_case_scenarios(scenario_results),
-                "adaptability_analysis": self._analyze_strategy_adaptability(scenario_results),
-                "scenario_rankings": self._rank_scenarios_by_performance(scenario_results),
-                "optimization_recommendations": self._generate_scenario_optimizations(scenario_results),
-                "scenario_insights": self._generate_scenario_insights(scenario_results),
-                "visualization_data": self._prepare_visualization_data(scenario_results)
+                "scenario_performance_comparison": self._compare_scenario_performance(converted_results),
+                "robustness_analysis": self._analyze_strategy_robustness(converted_results),
+                "scenario_correlation_analysis": self._analyze_scenario_correlations(converted_results),
+                "worst_case_analysis": self._analyze_worst_case_scenarios(converted_results),
+                "adaptability_analysis": self._analyze_strategy_adaptability(converted_results),
+                "scenario_rankings": self._rank_scenarios_by_performance(converted_results),
+                "optimization_recommendations": self._generate_scenario_optimizations(converted_results),
+                "scenario_insights": self._generate_scenario_insights(converted_results),
+                "visualization_data": self._prepare_visualization_data(converted_results)
             }
 
             if output_path:
@@ -99,6 +102,44 @@ class ScenarioReporter:
         except Exception as e:
             logger.error(f"Error generating multi-scenario report for {strategy_name}: {e}")
             raise
+
+    def _convert_scenario_results(self, scenario_results: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """Convert ScenarioBacktestResult objects to expected dictionary format."""
+        converted = {}
+
+        for scenario_name, result in scenario_results.items():
+            # Check if result is a ScenarioBacktestResult object
+            if hasattr(result, 'backtest_result'):
+                backtest_result = result.backtest_result
+                # Skip scenarios that failed to produce results
+                if not backtest_result or not hasattr(backtest_result, 'metrics'):
+                    logger.warning(f"Skipping scenario {scenario_name} - no valid backtest results")
+                    continue
+
+                converted[scenario_name] = {
+                    "performance_metrics": {
+                        "total_return": backtest_result.metrics.get('total_return_pct', 0),
+                        "win_rate": backtest_result.metrics.get('win_rate', 0),
+                        "profit_factor": backtest_result.metrics.get('profit_factor', 0),
+                        "max_drawdown": backtest_result.metrics.get('max_drawdown', 0),
+                        "sharpe_ratio": backtest_result.metrics.get('sharpe_ratio', 0),
+                        "total_trades": backtest_result.metrics.get('total_trades', 0),
+                        "total_return_pct": backtest_result.metrics.get('total_return_pct', 0)
+                    },
+                    "trades": backtest_result.trades,
+                    "equity_curve": getattr(backtest_result, 'equity_curve', []),
+                    "scenario_metadata": result.scenario_metadata,
+                    "execution_time": result.execution_time
+                }
+            else:
+                # If it's already a dictionary, use it as is
+                converted[scenario_name] = result
+
+        # If no valid results, raise an error with helpful message
+        if not converted:
+            raise ValueError("No valid scenario results to generate report. All scenarios failed to produce backtest results.")
+
+        return converted
 
     def generate_cross_scenario_comparison_report(
         self,
@@ -148,7 +189,7 @@ class ScenarioReporter:
                 "market": config.get("market"),
                 "exchange": config.get("exchange"),
                 "timeframe": config.get("timeframe"),
-                "indicators": list(config.get("indicators", {}).keys()),
+                "indicators": config.get("indicators", []),  # Fix: indicators is a list, not a dict
                 "position_sizing": config.get("position_sizing", {}),
                 "risk_management": {
                     "stop_loss": config.get("stop_loss"),
@@ -471,15 +512,22 @@ class ScenarioReporter:
         return optimizations
 
     def _generate_scenario_insights(self, scenario_results: Dict[str, Dict[str, Any]]) -> List[str]:
-        """Generate actionable insights from scenario analysis."""
+        """Generate insights and observations from scenario analysis."""
         insights = []
 
-        # Performance insights
-        positive_scenarios = sum(1 for results in scenario_results.values()
-                               if results.get("performance_metrics", {}).get("total_return", 0) > 0)
-        total_scenarios = len(scenario_results)
+        if not scenario_results:
+            return ["No scenario results available for insight generation"]
 
-        if positive_scenarios / total_scenarios >= 0.75:
+        total_scenarios = len(scenario_results)
+        positive_scenarios = sum(
+            1 for results in scenario_results.values()
+            if results.get("performance_metrics", {}).get("total_return", 0) > 0
+        )
+
+        # Overall performance insights
+        if positive_scenarios == total_scenarios:
+            insights.append(f"Strategy shows excellent robustness with positive returns across all {total_scenarios} scenarios")
+        elif positive_scenarios / total_scenarios >= 0.75:
             insights.append(f"Strategy shows strong robustness with positive returns in {positive_scenarios}/{total_scenarios} scenarios")
         elif positive_scenarios / total_scenarios >= 0.5:
             insights.append(f"Strategy shows moderate robustness with positive returns in {positive_scenarios}/{total_scenarios} scenarios")
@@ -488,7 +536,9 @@ class ScenarioReporter:
 
         # Volatility insights
         real_data_result = scenario_results.get("real_data")
-        if real_data_result:
+
+        # Check for valid real_data_result to compare with synthetic scenarios
+        if real_data_result is not None and self._is_valid_result_data(real_data_result):
             real_return = real_data_result.get("performance_metrics", {}).get("total_return", 0)
             synthetic_returns = [
                 results.get("performance_metrics", {}).get("total_return", 0)
@@ -504,8 +554,8 @@ class ScenarioReporter:
                     insights.append("Real data performance exceeds synthetic scenario averages - strategy may perform better in live conditions")
                 else:
                     insights.append("Real data performance below synthetic scenario averages - consider additional validation")
-
-        return insights
+        else:
+            return insights
 
     def _prepare_visualization_data(self, scenario_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         """Prepare data for visualization components."""
@@ -733,7 +783,7 @@ class ScenarioReporter:
 
         for scenario_name, results in scenario_results.items():
             equity_curve = results.get("equity_curve", [])
-            if equity_curve:
+            if equity_curve is not None and len(equity_curve) > 0:
                 equity_curves[scenario_name] = equity_curve
 
         return {
@@ -1316,8 +1366,21 @@ class ScenarioReporter:
 
     def _save_report(self, report: Dict[str, Any], output_path: Path) -> None:
         """Save scenario report to file."""
+        # Check if output_path is a directory and construct filename if needed
+        if output_path.is_dir():
+            # Generate filename with timestamp for the report
+            strategy_name = report.get("strategy_name", "strategy")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"multi_scenario_report_{strategy_name}_{timestamp}.json"
+            output_path = output_path / filename
+
+        # Ensure parent directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
         with open(output_path, 'w') as f:
             json.dump(report, f, indent=2, default=str)
+
+        logger.info(f"Multi-scenario report saved to: {output_path}")
 
     def export_scenario_results(
         self,
@@ -1899,11 +1962,11 @@ class ScenarioReporter:
             scenario_colors = self._generate_scenario_colors()
 
             for scenario, results in scenario_results.items():
-                if "equity_curve" in results and results["equity_curve"]:
+                if "equity_curve" in results and results["equity_curve"] is not None and len(results.get("equity_curve", [])) > 0:
                     equity_data = results["equity_curve"]
 
                     # Normalize equity curve to percentage gains from starting point
-                    if equity_data and len(equity_data) > 0:
+                    if equity_data is not None and len(equity_data) > 0:
                         starting_value = equity_data[0] if isinstance(equity_data[0], (int, float)) else equity_data[0].get("equity", 10000)
 
                         curve_points = []
@@ -2380,223 +2443,52 @@ class ScenarioReporter:
                                if curve.get("data") and curve["data"][-1].get("percentage_gain", 0) > 0)
         total_scenarios = len(equity_curves)
 
-        if total_scenarios > 0:
-            positive_rate = (positive_scenarios / total_scenarios) * 100
-            insights.append(f"Positive scenarios: {positive_scenarios}/{total_scenarios} ({positive_rate:.1f}%)")
+    def _is_valid_result_data(self, result_data: Any) -> bool:
+        """
+        Safely validate result data to prevent DataFrame comparison errors.
 
-        return insights
+        Args:
+            result_data: The result data to validate
 
-    def _analyze_trade_count_distribution(self, scenario_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze trade count distribution across scenarios."""
-        trade_counts = {}
+        Returns:
+            True if the result data is valid for processing, False otherwise
+        """
+        try:
+            # Check if result_data is None
+            if result_data is None:
+                return False
 
-        for scenario, results in scenario_results.items():
-            trade_count = results.get("total_trades", 0)
-            trade_counts[scenario] = trade_count
+            # Check if it's a dictionary with expected structure
+            if not isinstance(result_data, dict):
+                return False
 
-        if trade_counts:
-            avg_trades = statistics.mean(trade_counts.values())
-            max_trades = max(trade_counts.values())
-            min_trades = min(trade_counts.values())
+            # Check if it has performance_metrics
+            performance_metrics = result_data.get("performance_metrics")
+            if not performance_metrics or not isinstance(performance_metrics, dict):
+                return False
 
-            return {
-                "distribution_type": "trade_count",
-                "data": trade_counts,
-                "statistics": {
-                    "average": round(avg_trades, 1),
-                    "maximum": max_trades,
-                    "minimum": min_trades,
-                    "range": max_trades - min_trades
-                },
-                "most_active_scenario": max(trade_counts.items(), key=lambda x: x[1])[0],
-                "least_active_scenario": min(trade_counts.items(), key=lambda x: x[1])[0]
-            }
+            # Check if total_return exists and is a valid number
+            total_return = performance_metrics.get("total_return")
+            if total_return is None:
+                return False
 
-        return {"distribution_type": "trade_count", "data": {}, "error": "No trade count data available"}
+            # Ensure total_return is a scalar number, not a DataFrame or Series
+            if hasattr(total_return, 'empty'):  # pandas DataFrame/Series check
+                return False
 
-    def _analyze_win_loss_distribution(self, scenario_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze win/loss distribution across scenarios."""
-        win_rates = {}
+            # Check if it's a valid numeric type
+            if not isinstance(total_return, (int, float)):
+                return False
 
-        for scenario, results in scenario_results.items():
-            win_rate = results.get("win_rate", 0) * 100  # Convert to percentage
-            win_rates[scenario] = win_rate
+            # Additional validation for other expected fields
+            expected_fields = ["win_rate", "profit_factor", "max_drawdown", "sharpe_ratio"]
+            for field in expected_fields:
+                value = performance_metrics.get(field)
+                if value is not None and hasattr(value, 'empty'):  # DataFrame/Series check
+                    return False
 
-        if win_rates:
-            avg_win_rate = statistics.mean(win_rates.values())
-            max_win_rate = max(win_rates.values())
-            min_win_rate = min(win_rates.values())
+            return True
 
-            return {
-                "distribution_type": "win_loss",
-                "data": win_rates,
-                "statistics": {
-                    "average_win_rate": round(avg_win_rate, 1),
-                    "maximum_win_rate": round(max_win_rate, 1),
-                    "minimum_win_rate": round(min_win_rate, 1),
-                    "win_rate_range": round(max_win_rate - min_win_rate, 1)
-                },
-                "best_win_rate_scenario": max(win_rates.items(), key=lambda x: x[1])[0],
-                "worst_win_rate_scenario": min(win_rates.items(), key=lambda x: x[1])[0]
-            }
-
-        return {"distribution_type": "win_loss", "data": {}, "error": "No win/loss data available"}
-
-    def _analyze_trade_duration_distribution(self, scenario_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze trade duration distribution across scenarios."""
-        durations = {}
-
-        for scenario, results in scenario_results.items():
-            duration = results.get("avg_trade_duration_hours", 0)
-            durations[scenario] = duration
-
-        if durations:
-            avg_duration = statistics.mean(durations.values())
-            max_duration = max(durations.values())
-            min_duration = min(durations.values())
-
-            return {
-                "distribution_type": "trade_duration",
-                "data": durations,
-                "statistics": {
-                    "average_duration_hours": round(avg_duration, 1),
-                    "maximum_duration_hours": round(max_duration, 1),
-                    "minimum_duration_hours": round(min_duration, 1),
-                    "duration_range_hours": round(max_duration - min_duration, 1)
-                },
-                "longest_duration_scenario": max(durations.items(), key=lambda x: x[1])[0],
-                "shortest_duration_scenario": min(durations.items(), key=lambda x: x[1])[0]
-            }
-
-        return {"distribution_type": "trade_duration", "data": {}, "error": "No duration data available"}
-
-    def _analyze_profit_loss_distribution(self, scenario_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze profit/loss distribution across scenarios."""
-        returns = {}
-
-        for scenario, results in scenario_results.items():
-            total_return = results.get("total_return_pct", 0)
-            returns[scenario] = total_return
-
-        if returns:
-            avg_return = statistics.mean(returns.values())
-            max_return = max(returns.values())
-            min_return = min(returns.values())
-            positive_scenarios = sum(1 for r in returns.values() if r > 0)
-
-            return {
-                "distribution_type": "profit_loss",
-                "data": returns,
-                "statistics": {
-                    "average_return": round(avg_return, 2),
-                    "maximum_return": round(max_return, 2),
-                    "minimum_return": round(min_return, 2),
-                    "return_range": round(max_return - min_return, 2),
-                    "positive_scenarios": positive_scenarios,
-                    "negative_scenarios": len(returns) - positive_scenarios,
-                    "positive_scenario_rate": round((positive_scenarios / len(returns)) * 100, 1)
-                },
-                "best_return_scenario": max(returns.items(), key=lambda x: x[1])[0],
-                "worst_return_scenario": min(returns.items(), key=lambda x: x[1])[0]
-            }
-
-        return {"distribution_type": "profit_loss", "data": {}, "error": "No return data available"}
-
-    def _generate_distribution_insights(self, distribution_analysis: Dict[str, Dict]) -> List[str]:
-        """Generate insights from distribution analysis."""
-        insights = []
-
-        # Trade count insights
-        trade_count_data = distribution_analysis.get("trade_count_distribution", {})
-        if "statistics" in trade_count_data:
-            stats = trade_count_data["statistics"]
-            insights.append(f"Average trades per scenario: {stats.get('average', 0)}")
-
-            if stats.get("range", 0) > stats.get("average", 1):
-                insights.append("High variation in trading activity across scenarios")
-
-        # Win rate insights
-        win_loss_data = distribution_analysis.get("win_loss_distribution", {})
-        if "statistics" in win_loss_data:
-            stats = win_loss_data["statistics"]
-            avg_win_rate = stats.get("average_win_rate", 0)
-            insights.append(f"Average win rate across scenarios: {avg_win_rate}%")
-
-            if avg_win_rate > 60:
-                insights.append("Consistently high win rates across scenarios")
-            elif avg_win_rate < 40:
-                insights.append("Low win rates across scenarios - strategy may need refinement")
-
-        # Return insights
-        profit_loss_data = distribution_analysis.get("profit_loss_distribution", {})
-        if "statistics" in profit_loss_data:
-            stats = profit_loss_data["statistics"]
-            positive_rate = stats.get("positive_scenario_rate", 0)
-            insights.append(f"Profitable in {positive_rate}% of scenarios")
-
-            if positive_rate >= 75:
-                insights.append("Strong robustness - profitable in most scenarios")
-            elif positive_rate < 50:
-                insights.append("Poor robustness - loses money in majority of scenarios")
-
-        return insights
-
-    def _get_scenario_characteristics(self, scenario: str) -> Dict[str, Any]:
-        """Get characteristics and description for a scenario."""
-        characteristics = {
-            "bull_market": {
-                "trend_direction": "Upward",
-                "volatility_level": "Moderate",
-                "market_sentiment": "Optimistic",
-                "description": "Sustained upward price movement with occasional corrections"
-            },
-            "bear_market": {
-                "trend_direction": "Downward",
-                "volatility_level": "High",
-                "market_sentiment": "Pessimistic",
-                "description": "Sustained downward price movement with occasional rallies"
-            },
-            "sideways_market": {
-                "trend_direction": "Sideways",
-                "volatility_level": "Low",
-                "market_sentiment": "Neutral",
-                "description": "Price oscillates within a defined range without clear trend"
-            },
-            "high_volatility": {
-                "trend_direction": "Mixed",
-                "volatility_level": "Very High",
-                "market_sentiment": "Uncertain",
-                "description": "Large price swings in both directions with high uncertainty"
-            },
-            "low_volatility": {
-                "trend_direction": "Stable",
-                "volatility_level": "Very Low",
-                "market_sentiment": "Complacent",
-                "description": "Minimal price movement with low trading activity"
-            },
-            "choppy_market": {
-                "trend_direction": "Erratic",
-                "volatility_level": "High",
-                "market_sentiment": "Confused",
-                "description": "Frequent direction changes creating whipsaw conditions"
-            },
-            "gap_heavy": {
-                "trend_direction": "Discontinuous",
-                "volatility_level": "Extreme",
-                "market_sentiment": "News-driven",
-                "description": "Frequent price gaps due to external news and events"
-            },
-            "real_data": {
-                "trend_direction": "Historical",
-                "volatility_level": "Actual",
-                "market_sentiment": "Market-based",
-                "description": "Real historical market data with actual price movements"
-            }
-        }
-
-        return characteristics.get(scenario, {
-            "trend_direction": "Unknown",
-            "volatility_level": "Unknown",
-            "market_sentiment": "Unknown",
-            "description": "Custom scenario characteristics"
-        })
+        except Exception as e:
+            logger.warning(f"Error validating result data: {e}")
+            return False

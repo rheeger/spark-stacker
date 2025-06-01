@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 from core.config_manager import ConfigManager
-from core.data_manager import DataManager
+from core.data_manager import DataFetchError, DataManager
 
 
 class TestConfigDataIntegration:
@@ -156,9 +156,9 @@ class TestConfigDataIntegration:
     @patch('core.data_manager.HyperliquidConnector')
     def test_multi_timeframe_data_fetching(self, mock_connector, config_manager, data_manager, sample_market_data):
         """Test fetching data for multiple timeframes required by a strategy."""
-        # Mock the connector
+        # Mock the HyperliquidConnector
         mock_instance = MagicMock()
-        mock_instance.get_historical_data.return_value = sample_market_data
+        mock_instance.get_historical_candles.return_value = sample_market_data.to_dict('records')
         mock_connector.return_value = mock_instance
 
         strategy_config = config_manager.get_strategy_config("eth_momentum_strategy")
@@ -167,6 +167,9 @@ class TestConfigDataIntegration:
         timeframes = set([strategy_config["timeframe"]])
         for indicator_config in strategy_config["indicators"].values():
             timeframes.add(indicator_config["timeframe"])
+
+        # Set the mock connector on the data manager for test context
+        data_manager._mock_connector = mock_instance
 
         # Fetch data for each timeframe
         data_dict = {}
@@ -186,7 +189,7 @@ class TestConfigDataIntegration:
         assert all(data is not None for data in data_dict.values())
 
         # Verify connector was called for each timeframe
-        assert mock_instance.get_historical_data.call_count == 2
+        assert mock_instance.get_historical_candles.call_count == 2
 
     def test_exchange_validation_integration(self, config_manager, data_manager):
         """Test that data manager validates exchanges from config manager."""
@@ -277,7 +280,7 @@ class TestConfigDataIntegration:
         assert strategy_config is None
 
         # Try to get data with invalid exchange
-        with pytest.raises(ValueError):
+        with pytest.raises(DataFetchError):
             data_manager.fetch_real_data(
                 market="ETH-USD",
                 exchange="invalid_exchange",

@@ -378,7 +378,13 @@ class BacktestOrchestrator:
             enable_resource_monitoring: Enable resource monitoring
         """
         self.config_manager = config_manager or ConfigManager()
-        self.data_manager = data_manager or DataManager()
+
+        # Create DataManager with configuration if not provided
+        if data_manager is None:
+            config = self.config_manager.load_config()
+            self.data_manager = DataManager(config=config)
+        else:
+            self.data_manager = data_manager
         self.enable_timeout_handling = enable_timeout_handling
         self.default_job_timeout_seconds = default_job_timeout_seconds
         self.enable_resource_monitoring = enable_resource_monitoring

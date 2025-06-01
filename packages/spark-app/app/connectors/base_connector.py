@@ -6,6 +6,7 @@ import time
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.core.symbol_converter import convert_symbol_for_exchange
 from app.metrics.decorators import track_api_latency, update_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -468,18 +469,26 @@ class BaseConnector(abc.ABC):
 
     def translate_symbol(self, symbol: str) -> str:
         """
-        Translate composite symbols like 'ETH-USD' to simple form ('ETH').
+        Translate composite symbols like 'ETH-USD' to exchange-specific format.
 
-        This is a base implementation that doesn't modify the symbol.
-        Exchange-specific connectors should override this if they need
-        a different symbol format.
+        This method now uses the centralized symbol converter to ensure consistency
+        across all connectors and exchanges.
 
         Args:
             symbol: Original symbol string (e.g., 'ETH-USD')
 
         Returns:
             str: Translated symbol suitable for the exchange API
+
+        Examples:
+            For Hyperliquid: 'ETH-USD' -> 'ETH'
+            For Coinbase: 'ETH-USD' -> 'ETH-USD'
+            For Kraken: 'ETH-USD' -> 'ETHUSD'
         """
-        # Base implementation just returns the original symbol
-        # Subclasses should override this if they need different logic
-        return symbol
+        try:
+            # Use centralized symbol converter with this connector's exchange type
+            return convert_symbol_for_exchange(symbol, self.exchange_type)
+        except Exception as e:
+            # Fallback to original symbol if conversion fails
+            logger.warning(f"Symbol conversion failed for {symbol} on {self.exchange_type}: {e}")
+            return symbol

@@ -97,7 +97,7 @@ def unified_compare(ctx, items: str, comparison_type: str, days: int, scenarios:
 
     # Determine output directory
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -227,7 +227,7 @@ def cross_type_compare(ctx, strategies: Optional[str], indicators: Optional[str]
 
     # Determine output directory
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -400,7 +400,7 @@ def benchmark_compare(ctx, items: str, benchmark_type: str, custom_benchmarks: O
 
     # Determine output directory
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     os.makedirs(output_dir, exist_ok=True)
 

@@ -100,14 +100,29 @@ class CoinbaseConnector(BaseConnector):
         self._markets_cache_ttl = 3600  # 1 hour in seconds
 
     def _get_product_id(self, symbol: str) -> str:
-        """Convert our standard symbol to Coinbase product ID."""
-        if symbol in self.symbol_map:
-            return self.symbol_map[symbol]
-        return symbol if "-" in symbol else f"{symbol}-USD"
+        """Convert our standard symbol to Coinbase product ID using centralized converter."""
+        try:
+            # Use centralized symbol converter for consistency
+            from app.core.symbol_converter import convert_symbol_for_exchange
+            return convert_symbol_for_exchange(symbol, "coinbase")
+        except Exception as e:
+            # Fallback to legacy logic for backward compatibility
+            logger.warning(f"Centralized symbol conversion failed for {symbol}: {e}")
+            if symbol in self.symbol_map:
+                return self.symbol_map[symbol]
+            return symbol if "-" in symbol else f"{symbol}-USD"
 
     def _get_symbol(self, product_id: str) -> str:
-        """Convert Coinbase product ID to our standard symbol."""
-        return self.reverse_symbol_map.get(product_id, product_id.split("-")[0])
+        """Convert Coinbase product ID to our standard symbol using centralized converter."""
+        try:
+            # For reverse conversion, we need to handle Coinbase format specially
+            # Since Coinbase uses standard format, this is mostly a pass-through
+            from app.core.symbol_converter import convert_symbol_from_exchange
+            return convert_symbol_from_exchange(product_id, "coinbase")
+        except Exception as e:
+            # Fallback to legacy logic for backward compatibility
+            logger.warning(f"Centralized symbol reverse conversion failed for {product_id}: {e}")
+            return self.reverse_symbol_map.get(product_id, product_id.split("-")[0])
 
     def _debug_response(self, response, name: str = "Response"):
         """
@@ -649,8 +664,21 @@ class CoinbaseConnector(BaseConnector):
                     continue
 
                 if available > 0:
+                    # Convert currency to standardized symbol format
+                    try:
+                        from app.core.symbol_converter import \
+                            convert_symbol_from_exchange
+
+                        # For Coinbase positions, convert currency to standard format
+                        # account.currency is just "ETH", we need to make it "ETH-USD"
+                        standard_symbol = convert_symbol_from_exchange(account.currency, "coinbase", "USD")
+                    except Exception as e:
+                        # Fallback to currency-USD format
+                        logger.warning(f"Symbol conversion failed for {account.currency}: {e}")
+                        standard_symbol = f"{account.currency}-USD"
+
                     position = {
-                        "symbol": account.currency,
+                        "symbol": standard_symbol,
                         "size": available,
                         "entry_price": 0.0,  # Not available in the API
                         "mark_price": 0.0,  # Not available in the API
@@ -792,7 +820,7 @@ class CoinbaseConnector(BaseConnector):
                 order_details = {
                     "order_id": order_id,
                     "client_order_id": client_order_id,
-                    "symbol": symbol,
+                    "symbol": product_id,  # Return standardized format instead of input symbol
                     "side": side.value,
                     "order_type": order_type.value,
                     "price": price if price else 0.0,
@@ -1336,37 +1364,64 @@ class CoinbaseConnector(BaseConnector):
             if not self.client:
                 self.connect()
 
-            # Convert our interval format to Coinbase's granularity (in seconds)
+            # Convert our interval format to Coinbase's granularity
             granularity = self._convert_interval_to_granularity(interval)
 
-            # Convert milliseconds to ISO 8601 if provided
-            start_iso = None
-            end_iso = None
+            # Convert milliseconds to Unix timestamps (seconds) if provided
+            start_unix = None
+            end_unix = None
 
             if start_time:
-                start_iso = self._milliseconds_to_iso(start_time)
+                start_unix = int(start_time // 1000)  # Convert ms to seconds
             if end_time:
-                end_iso = self._milliseconds_to_iso(end_time)
+                end_unix = int(end_time // 1000)  # Convert ms to seconds
 
             product_id = self._get_product_id(symbol)
 
-            # Fetch the candles using the get_candles method
+            # Fetch the candles using the get_public_candles method
             candles = self.client.get_public_candles(
                 product_id=product_id,
                 granularity=granularity,
-                start=start_iso,
-                end=end_iso,
+                start=start_unix,
+                end=end_unix,
             )
 
             # Format the response
             result = []
             if hasattr(candles, "candles"):
                 for candle in candles.candles[:limit]:
+                    # Handle different timestamp formats
+                    timestamp_ms = None
+
+                    if hasattr(candle, 'start'):
+                        if hasattr(candle.start, 'timestamp'):
+                            # DateTime object with timestamp method
+                            timestamp_ms = int(candle.start.timestamp() * 1000)
+                        elif isinstance(candle.start, str):
+                            # String timestamp - parse ISO format or Unix timestamp
+                            try:
+                                if 'T' in candle.start or 'Z' in candle.start:
+                                    # ISO format
+                                    from datetime import datetime
+                                    dt = datetime.fromisoformat(candle.start.replace('Z', '+00:00'))
+                                    timestamp_ms = int(dt.timestamp() * 1000)
+                                else:
+                                    # Unix timestamp string
+                                    timestamp_ms = int(float(candle.start) * 1000)
+                            except Exception as parse_err:
+                                logger.warning(f"Failed to parse timestamp '{candle.start}': {parse_err}")
+                                continue
+                        else:
+                            # Numeric timestamp
+                            timestamp_ms = int(float(candle.start) * 1000)
+
+                    if timestamp_ms is None:
+                        logger.warning(f"Could not extract timestamp from candle")
+                        continue
+
                     result.append(
                         {
-                            "timestamp": int(
-                                candle.start.timestamp() * 1000
-                            ),  # Convert to milliseconds
+                            "timestamp": timestamp_ms,
                             "open": float(candle.open),
                             "high": float(candle.high),
                             "low": float(candle.low),
@@ -1396,14 +1451,15 @@ class CoinbaseConnector(BaseConnector):
         # Map our intervals to Coinbase granularities
         granularity_map = {
             "1m": "ONE_MINUTE",
-            "5m": "FIVE_MINUTES",
-            "15m": "FIFTEEN_MINUTES",
+            "5m": "FIVE_MINUTE",
+            "15m": "FIFTEEN_MINUTE",
             "1h": "ONE_HOUR",
-            "6h": "SIX_HOURS",
+            "4h": "SIX_HOUR",  # Use SIX_HOUR for 4h (closest available, no native 4h support)
+            "6h": "SIX_HOUR",
             "1d": "ONE_DAY",
         }
 
-        return granularity_map.get(interval, "ONE_MINUTE")  # Default to 1m if not found
+        return granularity_map.get(interval, "ONE_HOUR")  # Default to 1h if not found
 
     def convert_interval_to_granularity(self, interval: str) -> int:
         """

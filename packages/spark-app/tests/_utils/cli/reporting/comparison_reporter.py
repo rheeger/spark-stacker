@@ -46,7 +46,18 @@ class ComparisonReporter:
         self.config_manager = config_manager
         self.comparison_manager = comparison_manager
         # Initialize ScenarioReporter for cross-scenario analysis
-        self.scenario_reporter = ScenarioReporter(config_manager)
+        # Create a mock scenario manager for testing purposes
+        try:
+            from core.scenario_manager import ScenarioManager
+            scenario_manager = ScenarioManager(config_manager)
+        except:
+            # If ScenarioManager is not available, create a mock
+            class MockScenarioManager:
+                def __init__(self, config_manager):
+                    self.config_manager = config_manager
+            scenario_manager = MockScenarioManager(config_manager)
+
+        self.scenario_reporter = ScenarioReporter(config_manager, scenario_manager)
 
     def generate_strategy_comparison_report(
         self,

@@ -25,10 +25,11 @@ sys.path.insert(0, cli_dir)
 
 # Import app-level components directly
 from app.backtesting.backtest_engine import BacktestEngine
+from app.backtesting.data_manager import DataManager as AppDataManager
 from app.backtesting.indicator_backtest_manager import IndicatorBacktestManager
 # Now use absolute imports from the CLI modules that are available
 from core.config_manager import ConfigManager
-from core.data_manager import DataManager
+from core.data_manager import DataManager as CLIDataManager
 from core.scenario_manager import ScenarioManager
 # Import managers directly since they're not in __init__.py yet
 from managers.comparison_manager import ComparisonManager
@@ -126,9 +127,14 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
     # Initialize managers and components with error handling
     try:
         config_manager = _initialize_config_manager(ctx)
-        data_manager = DataManager()
+        config = config_manager.load_config()
+
+        # Create both data managers - app's for BacktestEngine, CLI's for strategy manager
+        app_data_manager = AppDataManager()  # App's DataManager for BacktestEngine
+        cli_data_manager = CLIDataManager(config=config)  # CLI's DataManager for data fetching
+
         strategy_validator = StrategyValidator(config_manager)
-        backtest_engine = BacktestEngine(data_manager)
+        backtest_engine = BacktestEngine(app_data_manager)
     except Exception as e:
         raise ConfigurationError(
             f"Failed to initialize backtesting components: {str(e)}",
@@ -149,7 +155,7 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
 
     # Initialize strategy backtest manager with enhanced error handling
     strategy_manager = _initialize_strategy_manager(
-        backtest_engine, config_manager, data_manager,
+        backtest_engine, config_manager, cli_data_manager,  # Use CLI data manager
         strategy_validator, output_path
     )
 
@@ -174,7 +180,7 @@ def strategy(ctx, strategy_name: str, days: int, scenarios: str, scenario_only: 
     # Execute backtesting with appropriate error handling
     _execute_strategy_backtest(
         strategy_manager, strategy_name, days, scenario_list,
-        config_manager, data_manager, output_path, export_data, sensitivity_analysis
+        config_manager, cli_data_manager, output_path, export_data, sensitivity_analysis
     )
 
 
@@ -183,22 +189,33 @@ def _initialize_config_manager(ctx) -> ConfigManager:
     """Initialize configuration manager with error handling."""
     config_path = ctx.obj.get('config_path')
 
-    if not config_path:
+    # Allow None config_path - ConfigManager has fallback logic to find default configs
+    try:
+        config_manager = ConfigManager(config_path)
+        # Test if we can actually load the config to validate the setup
+        config_manager.load_config()
+        return config_manager
+    except Exception as e:
+        # If config loading fails, provide helpful error message
         raise ConfigurationError(
-            "No configuration path provided",
+            f"Failed to load configuration: {str(e)}",
             fix_suggestions=[
+                "Ensure config.json exists in the shared directory",
                 "Provide --config option with path to config.json",
-                "Ensure config.json exists in expected location"
-            ]
+                "Check config.json format and validity",
+                "Verify file permissions for config files"
+            ],
+            context={
+                "attempted_config_path": config_path or "default fallback paths",
+                "working_dir": os.getcwd()
+            }
         )
-
-    return ConfigManager(config_path)
 
 
 def _setup_output_directory(output_dir: Optional[str]) -> Path:
     """Setup and validate output directory."""
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     output_path = Path(output_dir)
 
@@ -596,18 +613,40 @@ def _execute_single_scenario_backtest(strategy_manager, strategy_name, days, con
     """Execute single scenario backtest."""
     click.echo("\n🚀 Running single real data backtest...")
 
-    result = strategy_manager.backtest_strategy(
-        days=days,
-        use_real_data=True,
-        leverage=1.0
-    )
+    try:
+        result = strategy_manager.backtest_strategy(
+            days=days,
+            use_real_data=True,
+            leverage=1.0
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "Unable to fetch data" in error_msg and "from any source" in error_msg:
+            click.echo("❌ Failed to fetch real market data. No exchange connectors are available.")
+            click.echo("\n💡 To use real data, you need to:")
+            click.echo("   1. Set exchange credentials in environment variables:")
+            click.echo("      - For Hyperliquid: WALLET_ADDRESS, PRIVATE_KEY")
+            click.echo("      - For Coinbase: COINBASE_API_KEY, COINBASE_API_SECRET")
+            click.echo("      - For Kraken: KRAKEN_API_KEY, KRAKEN_API_SECRET")
+            click.echo("   2. Or run with synthetic data scenarios instead:")
+            click.echo(f"      python cli/main.py strategy --strategy-name {strategy_name} --scenarios bull,bear,sideways")
+            raise click.ClickException("Cannot run real data backtest without exchange credentials")
+        else:
+            raise
 
     # Generate strategy report
-    strategy_reporter = StrategyReporter(config_manager, output_path)
-    report_path = strategy_reporter.generate_strategy_report(
+    strategy_reporter = StrategyReporter(config_manager)
+
+    # Create a report filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_filename = f"strategy_report_{strategy_name}_{timestamp}.json"
+    report_path = output_path / report_filename
+
+    # Generate the report with the output path
+    report_data = strategy_reporter.generate_strategy_report(
         strategy_name=strategy_name,
-        backtest_result=result,
-        output_format='html'
+        backtest_results=result,
+        output_path=report_path
     )
 
     click.echo(f"✅ Backtest completed successfully!")
@@ -622,6 +661,17 @@ def _execute_single_scenario_backtest(strategy_manager, strategy_name, days, con
 def _execute_multi_scenario_backtest(strategy_manager, strategy_name, days, scenario_list,
                                    config_manager, data_manager, output_path):
     """Execute multi-scenario backtest."""
+    # Check if real data is available
+    if "real" in scenario_list:
+        # Check if any connectors are available in the DataManager
+        if not hasattr(data_manager, '_connectors') or not data_manager._connectors:
+            click.echo("⚠️  No exchange connectors available - removing 'real' scenario from test")
+            click.echo("💡 To enable real data scenarios, set exchange credentials in environment variables")
+            scenario_list = [s for s in scenario_list if s != "real"]
+            if not scenario_list:
+                click.echo("⚠️  No scenarios remaining after removing 'real'. Adding synthetic scenarios.")
+                scenario_list = ["bull", "bear", "sideways"]
+
     click.echo(f"\n🚀 Running multi-scenario backtest across {len(scenario_list)} scenarios...")
 
     # Initialize scenario manager and scenario backtest manager
@@ -640,10 +690,12 @@ def _execute_multi_scenario_backtest(strategy_manager, strategy_name, days, scen
     )
 
     # Run scenario testing
+    include_real_data = "real" in scenario_list
     scenario_results = scenario_backtest_manager.run_strategy_scenarios(
         strategy_name=strategy_name,
         days=days,
-        scenario_filter=scenario_list
+        scenario_filter=scenario_list,
+        include_real_data=include_real_data
     )
 
     # Generate scenario report
@@ -726,11 +778,18 @@ def compare_strategies(ctx, strategy_names: Optional[str], all_strategies: bool,
     try:
         # Initialize managers and components
         config_manager = ConfigManager(ctx.obj.get('config_path'))
-        data_manager = DataManager()
+        config = config_manager.load_config()
+
+        # Create both data managers - app's for BacktestEngine, CLI's for scenario manager
+        app_data_manager = AppDataManager()  # App's DataManager for BacktestEngine
+        cli_data_manager = CLIDataManager(config=config)  # CLI's DataManager for data fetching
+
+        strategy_validator = StrategyValidator(config_manager)
+        backtest_engine = BacktestEngine(app_data_manager)
 
         # Determine output directory
         if not output_dir:
-            output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+            output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -783,6 +842,17 @@ def compare_strategies(ctx, strategy_names: Optional[str], all_strategies: bool,
                 f"Valid scenarios: {', '.join(valid_scenarios)}"
             )
 
+        # Check if real data is available
+        if "real" in scenario_list:
+            # Check if any connectors are available in the DataManager
+            if not hasattr(cli_data_manager, '_connectors') or not cli_data_manager._connectors:
+                click.echo("⚠️  No exchange connectors available - removing 'real' scenario from comparison")
+                click.echo("💡 To enable real data scenarios, set exchange credentials in environment variables")
+                scenario_list = [s for s in scenario_list if s != "real"]
+                if not scenario_list:
+                    click.echo("⚠️  No scenarios remaining after removing 'real'. Using synthetic scenarios.")
+                    scenario_list = ["bull", "bear", "sideways", "volatile"]
+
         # Display comparison setup
         click.echo(f"🔍 Comparing {len(strategies_to_compare)} strategies:")
         for i, strategy in enumerate(strategies_to_compare, 1):
@@ -799,7 +869,7 @@ def compare_strategies(ctx, strategy_names: Optional[str], all_strategies: bool,
         # Initialize comparison manager
         comparison_manager = ComparisonManager(
             config_manager=config_manager,
-            data_manager=data_manager,
+            data_manager=cli_data_manager,
             output_dir=output_path
         )
 

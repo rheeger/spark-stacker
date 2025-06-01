@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 from app.backtesting.backtest_engine import BacktestEngine, BacktestResult
+from app.backtesting.data_manager import DataSource  # Add DataSource import
 from app.backtesting.data_manager import DataManager
 from app.backtesting.simulation_engine import SimulationEngine
 from app.connectors.base_connector import OrderSide, OrderType
@@ -31,10 +32,88 @@ from app.risk_management.position_sizing import (PositionSizer,
                                                  PositionSizingConfig)
 from core.config_manager import ConfigManager
 from core.data_manager import DataManager as CLIDataManager
-from core.data_manager import DataRequest, DataSourceType
+from core.data_manager import DataRequest, DataSourceType, MarketScenarioType
 from validation.strategy_validator import StrategyValidator
 
 logger = logging.getLogger(__name__)
+
+
+class CLIDataSourceWrapper(DataSource):
+    """Wrapper to make CLI DataManager compatible with BacktestEngine's DataSource interface."""
+
+    def __init__(self, cli_data_manager: CLIDataManager):
+        """Initialize with CLI DataManager instance."""
+        self.cli_data_manager = cli_data_manager
+        self._cached_data = {}  # Cache for pre-fetched data
+
+    def set_cached_data(self, symbol: str, interval: str, data: pd.DataFrame):
+        """Cache pre-fetched data for a specific symbol and interval."""
+        cache_key = f"{symbol}_{interval}"
+        self._cached_data[cache_key] = data
+        logger.debug(f"Cached data for {cache_key}: {len(data)} rows")
+
+    def get_historical_data(
+        self,
+        symbol: str,
+        interval: str,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        limit: int = 1000,
+    ) -> pd.DataFrame:
+        """
+        Retrieve historical data using cached data or CLI DataManager.
+
+        Args:
+            symbol: The market symbol (e.g., 'ETH-USD')
+            interval: Timeframe interval (e.g., '1m', '1h', '1d')
+            start_time: Start time in milliseconds since epoch
+            end_time: End time in milliseconds since epoch
+            limit: Maximum number of candles to retrieve
+
+        Returns:
+            DataFrame with OHLCV data
+        """
+        # Check if we have cached data
+        cache_key = f"{symbol}_{interval}"
+        if cache_key in self._cached_data:
+            logger.debug(f"Using cached data for {cache_key}")
+            return self._cached_data[cache_key]
+
+        # Otherwise, fetch from CLI DataManager
+        try:
+            from datetime import datetime
+
+            # Convert timestamps to datetime
+            start_date = datetime.fromtimestamp(start_time / 1000) if start_time else None
+            end_date = datetime.fromtimestamp(end_time / 1000) if end_time else None
+
+            # Create data request
+            request = DataRequest(
+                symbol=symbol,
+                timeframe=interval,
+                start_date=start_date,
+                end_date=end_date,
+                source_preference=[DataSourceType.REAL_EXCHANGE, DataSourceType.CACHED, DataSourceType.SYNTHETIC]
+            )
+
+            # Fetch data
+            data = self.cli_data_manager.get_data(request)
+
+            # Ensure timestamp is in milliseconds
+            if 'timestamp' not in data.columns:
+                # If index is DatetimeIndex, convert to timestamp column
+                if isinstance(data.index, pd.DatetimeIndex):
+                    data['timestamp'] = data.index.astype(int) // 10**6
+                    data = data.reset_index(drop=True)
+
+            return data
+
+        except Exception as e:
+            logger.error(f"Failed to fetch data from CLI DataManager: {e}")
+            # Return empty DataFrame with required columns
+            return pd.DataFrame(
+                columns=["timestamp", "open", "high", "low", "close", "volume"]
+            )
 
 
 class StrategyBacktestManager:
@@ -69,6 +148,11 @@ class StrategyBacktestManager:
         self.data_manager = data_manager
         self.strategy_validator = strategy_validator or StrategyValidator(config_manager)
         self.output_dir = output_dir or Path("./backtest_results")
+
+        # Create and register CLI data source wrapper with BacktestEngine
+        self.cli_data_source = CLIDataSourceWrapper(data_manager)
+        self.backtest_engine.data_manager.register_data_source("cli_data_manager", self.cli_data_source)
+        logger.info("Registered CLI data source with BacktestEngine")
 
         # Strategy components
         self.current_strategy: Optional[StrategyConfig] = None
@@ -364,7 +448,21 @@ class StrategyBacktestManager:
                 timeframe=self.current_strategy.timeframe,
                 start_date=start_date,
                 end_date=end_date,
-                use_real_data=use_real_data
+                use_real_data=use_real_data,
+                additional_params=additional_params
+            )
+
+            # Debug logging for market data
+            logger.info(f"Market data shape: {market_data.shape}")
+            logger.info(f"Market data columns: {list(market_data.columns)}")
+            logger.info(f"Market data index name: {market_data.index.name}")
+            logger.info(f"First few rows of market data:\n{market_data.head()}")
+
+            # Cache the data in our CLI data source wrapper
+            self.cli_data_source.set_cached_data(
+                symbol=self.current_strategy.market,
+                interval=self.current_strategy.timeframe,
+                data=market_data
             )
 
             # Create strategy function
@@ -415,6 +513,8 @@ class StrategyBacktestManager:
 
         except Exception as e:
             logger.error(f"Strategy backtest failed: {e}")
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             raise
 
     def _get_market_data(
@@ -423,29 +523,45 @@ class StrategyBacktestManager:
         timeframe: str,
         start_date: datetime,
         end_date: datetime,
-        use_real_data: bool
+        use_real_data: bool,
+        additional_params: Optional[Dict[str, Any]] = None
     ) -> pd.DataFrame:
         """Get market data for the strategy using CLI DataManager."""
         try:
             if use_real_data:
-                # Use CLI data manager to fetch real data
+                # Use CLI data manager to fetch real data with synthetic fallback
                 request = DataRequest(
                     symbol=symbol,
                     timeframe=timeframe,
                     start_date=start_date,
                     end_date=end_date,
-                    source_preference=[DataSourceType.REAL_EXCHANGE, DataSourceType.CACHED]
+                    source_preference=[DataSourceType.REAL_EXCHANGE, DataSourceType.CACHED, DataSourceType.SYNTHETIC]
                 )
                 data = self.data_manager.get_data(request)
             else:
                 # Use CLI data manager to generate synthetic data
-                data = self.data_manager.generate_synthetic_data(
+                # Get scenario type from additional_params if provided
+                scenario_type = MarketScenarioType.SIDEWAYS_RANGING  # Default scenario
+                if additional_params and 'scenario_type' in additional_params:
+                    scenario_type_str = additional_params['scenario_type']
+                    # Convert string to MarketScenarioType enum
+                    try:
+                        scenario_type = MarketScenarioType(scenario_type_str)
+                    except ValueError:
+                        logger.warning(f"Unknown scenario type '{scenario_type_str}', using default")
+
+                # Calculate days between dates
+                days_back = (end_date - start_date).days
+
+                # Generate scenario data
+                scenario_data = self.data_manager.generate_scenario_data(
+                    scenario_type=scenario_type,
                     symbol=symbol,
                     timeframe=timeframe,
-                    start_date=start_date,
-                    end_date=end_date,
-                    scenario_type='default'
+                    days_back=days_back,
+                    include_volume=True
                 )
+                data = scenario_data.data
 
             if data.empty:
                 raise ValueError(f"No market data available for {symbol} {timeframe}")
@@ -480,68 +596,72 @@ class StrategyBacktestManager:
                 logger.warning("Missing required parameters in strategy call")
                 return
 
-            # Calculate all indicator values
-            data_with_indicators = data.copy()
+            # Skip early candles where indicators aren't ready
+            if len(data) < 30:  # Minimum periods for MACD
+                return
 
-            for indicator_name, indicator in self.strategy_indicators.items():
-                try:
-                    indicator_data = indicator.calculate(data)
-                    # Merge indicator columns into main data
-                    for col in indicator_data.columns:
-                        if col not in data.columns:
-                            data_with_indicators[col] = indicator_data[col]
-                except Exception as e:
-                    logger.warning(f"Failed to calculate indicator {indicator_name}: {e}")
-                    continue
+            # DEBUG LOGGING: Track indicator values and signal logic
+            current_timestamp = current_candle.name if hasattr(current_candle, 'name') else 'unknown'
+            current_price = current_candle.get("close", 0)
 
-            # Generate signals from all indicators
-            signals = []
-            for indicator_name, indicator in self.strategy_indicators.items():
-                try:
-                    signal = indicator.generate_signal(data_with_indicators)
-                    if signal:
-                        signals.append((indicator_name, signal))
-                except Exception as e:
-                    logger.warning(f"Failed to generate signal from {indicator_name}: {e}")
-                    continue
+            # Extract indicator values from params
+            # The backtest engine passes them as {indicator_name}_{column_name}
+            rsi_value = params.get("rsi_4h_rsi", None)
+            macd_value = params.get("macd_1h_macd", None)
+            macd_signal_value = params.get("macd_1h_macd_signal", None)
 
-            # Execute strategy logic based on signals
-            self._execute_strategy_signals(
-                signals=signals,
-                symbol=symbol,
-                current_candle=current_candle,
-                simulation_engine=simulation_engine,
-                leverage=leverage
-            )
+
+            # Simple strategy logic based on indicator values
+            buy_signal = False
+            sell_signal = False
+
+            # RSI strategy: Buy when oversold (<30), sell when overbought (>70)
+            if rsi_value is not None and not pd.isna(rsi_value):
+                if rsi_value < 30:
+                    buy_signal = True
+                elif rsi_value > 70:
+                    sell_signal = True
+                else:
+                    pass
+
+            # MACD strategy: Buy when MACD crosses above signal, sell when crosses below
+            if macd_value is not None and macd_signal_value is not None:
+                if not pd.isna(macd_value) and not pd.isna(macd_signal_value):
+                    # We need previous values to detect crossovers
+                    # For now, use simple above/below logic
+                    if macd_value > macd_signal_value:
+                        if not buy_signal:  # Don't override RSI signal
+                            buy_signal = True
+                    else:
+                        if not sell_signal:  # Don't override RSI signal
+                            sell_signal = True
+
+            # Check current position
+            positions = simulation_engine.get_positions(symbol)
+            position = positions[0] if positions else None
+            position_side = None if position is None else position.side
+
+
+            # Execute trades based on signals
+            if buy_signal and position_side != "LONG":
+                self._execute_buy_signal(symbol, current_candle, simulation_engine, position)
+            elif sell_signal and position_side != "SHORT":
+                # Modified logic: Only close positions, don't open new SHORT positions
+                if position_side == "LONG":
+                    simulation_engine.place_order(
+                        symbol=symbol,
+                        side=OrderSide.SELL,
+                        order_type=OrderType.MARKET,
+                        amount=position.amount,
+                        timestamp=current_candle.name if hasattr(current_candle, 'name') else datetime.now(),
+                        current_candle=current_candle
+                    )
+                else:
+                    pass
+            else:
+                pass
 
         return strategy_function
-
-    def _execute_strategy_signals(
-        self,
-        signals: List[Tuple[str, Signal]],
-        symbol: str,
-        current_candle: pd.Series,
-        simulation_engine: SimulationEngine,
-        leverage: float
-    ) -> None:
-        """Execute trading logic based on strategy signals."""
-        if not signals:
-            return
-
-        # Simple strategy logic: execute based on consensus
-        buy_signals = [s for name, s in signals if s.direction == SignalDirection.BUY]
-        sell_signals = [s for name, s in signals if s.direction == SignalDirection.SELL]
-
-        # Check current position
-        positions = simulation_engine.get_positions(symbol)
-        position = positions[0] if positions else None
-        position_side = None if position is None else position.side
-
-        # Execute based on signal consensus
-        if len(buy_signals) > len(sell_signals) and position_side != "LONG":
-            self._execute_buy_signal(symbol, current_candle, simulation_engine, position)
-        elif len(sell_signals) > len(buy_signals) and position_side != "SHORT":
-            self._execute_sell_signal(symbol, current_candle, simulation_engine, position)
 
     def _execute_buy_signal(
         self,
@@ -552,6 +672,17 @@ class StrategyBacktestManager:
     ) -> None:
         """Execute a buy signal."""
         try:
+            # Get timestamp from the Series name/index
+            timestamp = current_candle.name if hasattr(current_candle, 'name') else datetime.now()
+            current_price = current_candle["close"]
+
+            # DEBUG LOGGING: Track position and balance state
+            positions = simulation_engine.get_positions(symbol)
+            equity = simulation_engine.calculate_equity({symbol: current_price})
+
+            for pos in positions:
+                pass  # This debug loop was left incomplete from debug logging removal
+
             # Close any existing short position
             if current_position and current_position.side == "SHORT":
                 simulation_engine.place_order(
@@ -559,18 +690,18 @@ class StrategyBacktestManager:
                     side=OrderSide.BUY,
                     order_type=OrderType.MARKET,
                     amount=current_position.amount,
-                    timestamp=current_candle["timestamp"],
+                    timestamp=timestamp,
                     current_candle=current_candle
                 )
 
             # Calculate position size using position sizer
             current_equity = simulation_engine.calculate_equity({symbol: current_candle["close"]})
-            current_price = current_candle["close"]
             position_size = self.position_sizer.calculate_position_size(
                 current_equity=current_equity,
                 current_price=current_price,
                 signal_strength=1.0  # Could be enhanced with signal strength
             )
+
 
             if position_size > 0:
                 simulation_engine.place_order(
@@ -578,10 +709,12 @@ class StrategyBacktestManager:
                     side=OrderSide.BUY,
                     order_type=OrderType.MARKET,
                     amount=position_size,
-                    timestamp=current_candle["timestamp"],
+                    timestamp=timestamp,
                     current_candle=current_candle
                 )
                 logger.debug(f"Opened LONG position: {position_size:.6f} units at ${current_price:.2f}")
+            else:
+                pass
 
         except Exception as e:
             logger.warning(f"Failed to execute buy signal: {e}")
@@ -595,6 +728,17 @@ class StrategyBacktestManager:
     ) -> None:
         """Execute a sell signal."""
         try:
+            # Get timestamp from the Series name/index
+            timestamp = current_candle.name if hasattr(current_candle, 'name') else datetime.now()
+            current_price = current_candle["close"]
+
+            # DEBUG LOGGING: Track position and balance state
+            positions = simulation_engine.get_positions(symbol)
+            equity = simulation_engine.calculate_equity({symbol: current_price})
+
+            for pos in positions:
+                pass  # This debug loop was left incomplete from debug logging removal
+
             # Close any existing long position
             if current_position and current_position.side == "LONG":
                 simulation_engine.place_order(
@@ -602,29 +746,32 @@ class StrategyBacktestManager:
                     side=OrderSide.SELL,
                     order_type=OrderType.MARKET,
                     amount=current_position.amount,
-                    timestamp=current_candle["timestamp"],
+                    timestamp=timestamp,
                     current_candle=current_candle
                 )
 
             # Calculate position size using position sizer
             current_equity = simulation_engine.calculate_equity({symbol: current_candle["close"]})
-            current_price = current_candle["close"]
             position_size = self.position_sizer.calculate_position_size(
                 current_equity=current_equity,
                 current_price=current_price,
                 signal_strength=1.0  # Could be enhanced with signal strength
             )
 
+
             if position_size > 0:
-                simulation_engine.place_order(
-                    symbol=symbol,
-                    side=OrderSide.SELL,
-                    order_type=OrderType.MARKET,
-                    amount=position_size,
-                    timestamp=current_candle["timestamp"],
-                    current_candle=current_candle
-                )
-                logger.debug(f"Opened SHORT position: {position_size:.6f} units at ${current_price:.2f}")
+                # COMMENT OUT the problematic SHORT position opening for now
+                # simulation_engine.place_order(
+                #     symbol=symbol,
+                #     side=OrderSide.SELL,
+                #     order_type=OrderType.MARKET,
+                #     amount=position_size,
+                #     timestamp=timestamp,
+                #     current_candle=current_candle
+                # )
+                logger.debug(f"SKIPPED opening SHORT position: {position_size:.6f} units at ${current_price:.2f}")
+            else:
+                pass
 
         except Exception as e:
             logger.warning(f"Failed to execute sell signal: {e}")

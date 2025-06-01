@@ -508,3 +508,34 @@ plugins/
 ---
 
 **Need Help?** Check the troubleshooting section above or refer to the comprehensive test suite in `test_modules/` for usage examples.
+
+# CLI Testing Utilities
+
+This directory contains command-line utilities for testing indicators and strategies with both synthetic and real market data.
+
+## Environment Setup
+
+### Required Environment Variables for Real Data
+
+To fetch real market data, you need to set the appropriate environment variables for your exchange:
+
+```bash
+# For Hyperliquid (default exchange)
+export WALLET_ADDRESS="your_wallet_address"
+export PRIVATE_KEY="your_private_key"
+export HYPERLIQUID_TESTNET="true"  # Set to "false" for mainnet
+
+# For Coinbase
+export COINBASE_API_KEY="your_api_key"
+export COINBASE_API_SECRET="your_api_secret"
+export COINBASE_USE_SANDBOX="true"  # Set to "false" for production
+
+# For Kraken
+export KRAKEN_API_KEY="your_api_key"
+export KRAKEN_API_SECRET="your_api_secret"
+export KRAKEN_USE_SANDBOX="true"  # Set to "false" for production
+```
+
+**Note**: If these environment variables are not set, the CLI will fall back to synthetic data generation.
+
+## Usage

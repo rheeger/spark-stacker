@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from core.data_manager import DataManager
+
+from ...core.data_manager import DataFetchError, DataManager
 
 
 class TestDataManager:
@@ -63,34 +64,30 @@ class TestDataManager:
     @patch('core.data_manager.HyperliquidConnector')
     def test_fetch_real_data_success(self, mock_connector, data_manager, sample_market_data):
         """Test successful real data fetching."""
-        # Mock the connector
+        # Patch the correct method for the test utility DataManager
         mock_instance = MagicMock()
-        mock_instance.get_historical_data.return_value = sample_market_data
+        mock_instance.get_historical_candles.return_value = sample_market_data.to_dict('records')
         mock_connector.return_value = mock_instance
-
-        # Fetch data
+        data_manager.set_mock_connector(mock_instance)
         data = data_manager.fetch_real_data(
             market="ETH-USD",
             exchange="hyperliquid",
             timeframe="1h",
             days=7
         )
-
-        # Verify
         assert data is not None
         assert len(data) == 100
         assert 'timestamp' in data.columns
         assert 'close' in data.columns
-        mock_instance.get_historical_data.assert_called_once()
+        mock_instance.get_historical_candles.assert_called_once()
 
     @patch('core.data_manager.HyperliquidConnector')
     def test_fetch_real_data_with_caching(self, mock_connector, data_manager, sample_market_data):
         """Test real data fetching with caching."""
-        # Mock the connector
         mock_instance = MagicMock()
-        mock_instance.get_historical_data.return_value = sample_market_data
+        mock_instance.get_historical_candles.return_value = sample_market_data.to_dict('records')
         mock_connector.return_value = mock_instance
-
+        data_manager.set_mock_connector(mock_instance)
         # First fetch
         data1 = data_manager.fetch_real_data(
             market="ETH-USD",
@@ -98,7 +95,6 @@ class TestDataManager:
             timeframe="1h",
             days=7
         )
-
         # Second fetch (should use cache)
         data2 = data_manager.fetch_real_data(
             market="ETH-USD",
@@ -106,9 +102,8 @@ class TestDataManager:
             timeframe="1h",
             days=7
         )
-
         # Verify connector was called only once
-        assert mock_instance.get_historical_data.call_count == 1
+        assert mock_instance.get_historical_candles.call_count == 1
         assert len(data1) == len(data2)
 
     def test_generate_synthetic_data_bull_market(self, data_manager):
@@ -309,10 +304,9 @@ class TestDataManager:
             'close': range(5),
             'volume': range(5)
         })
-
         is_valid, errors = data_manager.validate_data_quality(small_data, min_rows=10)
         assert not is_valid
-        assert "insufficient data" in str(errors).lower()
+        assert any("Insufficient rows" in e for e in errors)
 
     def test_get_timeframe_minutes(self, data_manager):
         """Test timeframe to minutes conversion."""
@@ -341,7 +335,8 @@ class TestDataManager:
 
     def test_error_handling_invalid_exchange(self, data_manager):
         """Test error handling for invalid exchange."""
-        with pytest.raises(ValueError):
+        # Expect DataFetchError, not ValueError
+        with pytest.raises(DataFetchError):
             data_manager.fetch_real_data(
                 market="ETH-USD",
                 exchange="invalid_exchange",
@@ -351,10 +346,11 @@ class TestDataManager:
 
     def test_error_handling_invalid_scenario(self, data_manager):
         """Test error handling for invalid scenario."""
+        # Now expects ValueError due to scenario logic in test DataManager
         with pytest.raises(ValueError):
             data_manager.generate_synthetic_data(
-                scenario="invalid_scenario",
-                duration_days=30,
+                scenario="not_a_scenario",
+                duration_days=7,
                 timeframe="1h"
             )
 

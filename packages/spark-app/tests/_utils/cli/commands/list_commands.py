@@ -7,9 +7,16 @@ This module contains CLI commands for listing and displaying information:
 """
 
 import logging
+import os
+import sys
 from typing import Any, Dict, List, Optional
 
 import click
+
+# Add the CLI directory to the path for proper imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+cli_dir = os.path.dirname(current_dir)
+sys.path.insert(0, cli_dir)
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +57,9 @@ def list_strategies(ctx, filter_exchange: Optional[str], filter_market: Optional
         python cli/main.py list-strategies --sort-by timeframe
     """
     # Import configuration and utility functions from main module
-    from ..main import display_strategy_info
-    from ..main import list_strategies as list_strategies_func
-    from ..main import load_config
+    from main import display_strategy_info
+    from main import list_strategies as list_strategies_func
+    from main import load_config
 
     # Load configuration
     config = load_config(ctx.obj.get('config_path'))
@@ -208,7 +215,7 @@ def list_indicators(ctx, filter_strategy: Optional[str], filter_market: Optional
         python cli/main.py list-indicators --show-strategies
     """
     # Import configuration loading from main module
-    from ..main import load_config
+    from main import load_config
 
     # Load configuration
     config = load_config(ctx.obj.get('config_path'))

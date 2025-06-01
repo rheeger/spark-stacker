@@ -78,6 +78,13 @@ class ConfigManager:
 
         logger.debug(f"ConfigManager initialized with caching={'enabled' if enable_caching else 'disabled'}")
 
+        # Load config during initialization and store as attribute
+        try:
+            self.config = self.load_config()
+        except Exception as e:
+            # Re-raise the exception so tests can catch FileNotFoundError, etc.
+            raise
+
     def load_config(self, force_reload: bool = False) -> Dict[str, Any]:
         """
         Load configuration with caching and fallback logic.
@@ -133,7 +140,7 @@ class ConfigManager:
         logger.info("Forcing configuration reload")
         return self.load_config(force_reload=True)
 
-    def validate_config(self, config: Optional[Dict[str, Any]] = None) -> List[str]:
+    def validate_config(self, config: Optional[Dict[str, Any]] = None) -> Tuple[bool, List[str]]:
         """
         Comprehensive configuration validation.
 
@@ -141,7 +148,7 @@ class ConfigManager:
             config: Optional configuration to validate. If None, loads current config.
 
         Returns:
-            List of validation error messages (empty if valid)
+            Tuple of (is_valid, list_of_validation_error_messages)
         """
         if config is None:
             config = self.load_config()
@@ -172,12 +179,14 @@ class ConfigManager:
         reference_errors = self._validate_cross_references(config)
         errors.extend(reference_errors)
 
+        is_valid = len(errors) == 0
+
         if errors:
             logger.warning(f"Configuration validation found {len(errors)} issues")
         else:
             logger.info("Configuration validation passed")
 
-        return errors
+        return is_valid, errors
 
     def get_strategy_config(self, strategy_name: str,
                            config: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
@@ -194,14 +203,24 @@ class ConfigManager:
         if config is None:
             config = self.load_config()
 
-        # Find the strategy
+        # Try both 'strategies' and 'strategy_configs' sections for backward compatibility
         strategies = config.get('strategies', [])
+        strategy_configs = config.get('strategy_configs', {})
+
         strategy = None
 
+        # First try the strategies list format
         for strat in strategies:
             if strat.get('name') == strategy_name:
                 strategy = strat.copy()
                 break
+
+        # If not found, try the strategy_configs dict format
+        if not strategy and strategy_name in strategy_configs:
+            strategy = strategy_configs[strategy_name].copy()
+            # Add the name if it's missing
+            if 'name' not in strategy:
+                strategy['name'] = strategy_name
 
         if not strategy:
             return None
@@ -210,6 +229,36 @@ class ConfigManager:
         merged_strategy = self._merge_strategy_config(strategy, config)
 
         return merged_strategy
+
+    def get_exchange_config(self, exchange_name: str,
+                           config: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get configuration for a specific exchange.
+
+        Args:
+            exchange_name: Name of the exchange to retrieve
+            config: Optional configuration dict. If None, loads current config.
+
+        Returns:
+            Exchange configuration, or None if not found
+        """
+        if config is None:
+            config = self.load_config()
+
+        # Try both 'exchanges' and 'exchange_configs' sections
+        exchanges = config.get('exchanges', [])
+        exchange_configs = config.get('exchange_configs', {})
+
+        # First try the exchanges list format
+        for exchange in exchanges:
+            if exchange.get('name', '').lower() == exchange_name.lower():
+                return exchange.copy()
+
+        # If not found, try the exchange_configs dict format
+        if exchange_name.lower() in exchange_configs:
+            return exchange_configs[exchange_name.lower()].copy()
+
+        return None
 
     def list_strategies(self, config: Optional[Dict[str, Any]] = None,
                        filter_exchange: Optional[str] = None,
@@ -230,10 +279,26 @@ class ConfigManager:
         if config is None:
             config = self.load_config()
 
+        # Handle both list format (strategies) and dict format (strategy_configs)
         strategies = config.get('strategies', [])
+        strategy_configs = config.get('strategy_configs', {})
+
+        # Combine strategies from both formats
+        all_strategies = []
+
+        # Add from list format
+        all_strategies.extend(strategies)
+
+        # Add from dict format
+        for name, strategy_config in strategy_configs.items():
+            strategy_entry = strategy_config.copy()
+            if 'name' not in strategy_entry:
+                strategy_entry['name'] = name
+            all_strategies.append(strategy_entry)
+
         filtered_strategies = []
 
-        for strategy in strategies:
+        for strategy in all_strategies:
             # Apply filters
             if filter_enabled is not None and strategy.get('enabled', True) != filter_enabled:
                 continue
@@ -418,7 +483,7 @@ class ConfigManager:
             if os.path.exists(self.config_path):
                 return os.path.abspath(self.config_path)
             else:
-                raise ConfigurationError(f"Specified config file not found: {self.config_path}")
+                raise FileNotFoundError(f"Specified config file not found: {self.config_path}")
 
         # Try relative path to shared config first
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -437,7 +502,7 @@ class ConfigManager:
             return local_config_path
 
         # If no config found, raise error
-        raise ConfigurationError(
+        raise FileNotFoundError(
             f"Configuration file not found. Tried: {shared_config_path}, {local_config_path}"
         )
 
@@ -483,9 +548,11 @@ class ConfigManager:
         var_name = match.group(1)
         default_value = None
 
-        # Support ${VAR:-default} syntax
+        # Support both ${VAR:default} and ${VAR:-default} syntax
         if ':-' in var_name:
             var_name, default_value = var_name.split(':-', 1)
+        elif ':' in var_name:
+            var_name, default_value = var_name.split(':', 1)
 
         value = os.environ.get(var_name, default_value)
         if value is None:
@@ -683,22 +750,57 @@ class ConfigManager:
     def _validate_sections(self, config: Dict[str, Any]) -> List[str]:
         """Validate required configuration sections."""
         errors = []
-        required_sections = ['strategies', 'indicators', 'exchanges']
 
-        for section in required_sections:
-            if section not in config:
-                errors.append(f"Missing required section: '{section}'")
-            elif not isinstance(config[section], list):
-                errors.append(f"Section '{section}' must be a list")
+        # Check for strategies in either format
+        has_strategies = 'strategies' in config or 'strategy_configs' in config
+        if not has_strategies:
+            errors.append("Missing required section: 'strategies' or 'strategy_configs'")
+        else:
+            # Validate format if present
+            if 'strategies' in config and not isinstance(config['strategies'], list):
+                errors.append("Section 'strategies' must be a list")
+            if 'strategy_configs' in config and not isinstance(config['strategy_configs'], dict):
+                errors.append("Section 'strategy_configs' must be a dictionary")
+
+        # Check for exchanges in either format
+        has_exchanges = 'exchanges' in config or 'exchange_configs' in config
+        if not has_exchanges:
+            errors.append("Missing required section: 'exchanges' or 'exchange_configs'")
+        else:
+            # Validate format if present
+            if 'exchanges' in config and not isinstance(config['exchanges'], list):
+                errors.append("Section 'exchanges' must be a list")
+            if 'exchange_configs' in config and not isinstance(config['exchange_configs'], dict):
+                errors.append("Section 'exchange_configs' must be a dictionary")
+
+        # Indicators are optional - only validate format if present
+        if 'indicators' in config and not isinstance(config['indicators'], list):
+            errors.append("Section 'indicators' must be a list")
 
         return errors
 
     def _validate_strategies(self, config: Dict[str, Any]) -> List[str]:
         """Validate strategy configurations."""
         errors = []
-        strategies = config.get('strategies', [])
 
-        for i, strategy in enumerate(strategies):
+        # Handle both list format (strategies) and dict format (strategy_configs)
+        strategies = config.get('strategies', [])
+        strategy_configs = config.get('strategy_configs', {})
+
+        # Combine strategies from both formats for validation
+        all_strategies = []
+
+        # Add from list format
+        all_strategies.extend(strategies)
+
+        # Add from dict format
+        for name, strategy_config in strategy_configs.items():
+            strategy_entry = strategy_config.copy()
+            if 'name' not in strategy_entry:
+                strategy_entry['name'] = name
+            all_strategies.append(strategy_entry)
+
+        for i, strategy in enumerate(all_strategies):
             prefix = f"Strategy {i+1} ({strategy.get('name', 'unnamed')})"
 
             # Required fields
@@ -753,13 +855,32 @@ class ConfigManager:
     def _validate_exchanges(self, config: Dict[str, Any]) -> List[str]:
         """Validate exchange configurations."""
         errors = []
-        exchanges = config.get('exchanges', [])
 
-        if not any(ex.get('enabled', False) for ex in exchanges):
+        # Handle both list format (exchanges) and dict format (exchange_configs)
+        exchanges = config.get('exchanges', [])
+        exchange_configs = config.get('exchange_configs', {})
+
+        # Combine exchanges from both formats for validation
+        all_exchanges = []
+
+        # Add from list format
+        all_exchanges.extend(exchanges)
+
+        # Add from dict format
+        for name, exchange_config in exchange_configs.items():
+            exchange_entry = exchange_config.copy()
+            if 'name' not in exchange_entry:
+                exchange_entry['name'] = name
+            # Assume enabled=True for exchanges in exchange_configs format
+            if 'enabled' not in exchange_entry:
+                exchange_entry['enabled'] = True
+            all_exchanges.append(exchange_entry)
+
+        if not any(ex.get('enabled', False) for ex in all_exchanges):
             errors.append("No exchanges are enabled")
 
         exchange_names = set()
-        for i, exchange in enumerate(exchanges):
+        for i, exchange in enumerate(all_exchanges):
             prefix = f"Exchange {i+1} ({exchange.get('name', 'unnamed')})"
 
             if 'name' not in exchange:
@@ -776,18 +897,43 @@ class ConfigManager:
         """Validate cross-references between strategies, indicators, and exchanges."""
         errors = []
 
-        # Get available names
+        # Get available indicator names (indicators are optional)
         indicator_names = {ind.get('name') for ind in config.get('indicators', [])}
-        exchange_names = {ex.get('name') for ex in config.get('exchanges', [])}
+
+        # Get available exchange names from both formats
+        exchange_names = set()
+
+        # From list format
+        for ex in config.get('exchanges', []):
+            if ex.get('name'):
+                exchange_names.add(ex['name'])
+
+        # From dict format
+        for name in config.get('exchange_configs', {}):
+            exchange_names.add(name)
+
+        # Get all strategies from both formats
+        all_strategies = []
+        all_strategies.extend(config.get('strategies', []))
+
+        for name, strategy_config in config.get('strategy_configs', {}).items():
+            strategy_entry = strategy_config.copy()
+            if 'name' not in strategy_entry:
+                strategy_entry['name'] = name
+            all_strategies.append(strategy_entry)
 
         # Validate strategy references
-        strategies = config.get('strategies', [])
-        for strategy in strategies:
+        for strategy in all_strategies:
             strategy_name = strategy.get('name', 'unnamed')
 
-            # Check indicator references
-            for indicator_name in strategy.get('indicators', []):
-                if indicator_name not in indicator_names:
+            # Check indicator references (only if indicators are specified)
+            strategy_indicators = strategy.get('indicators', [])
+            if isinstance(strategy_indicators, dict):
+                # Handle dict format (like in test fixture)
+                strategy_indicators = list(strategy_indicators.keys())
+
+            for indicator_name in strategy_indicators:
+                if indicator_names and indicator_name not in indicator_names:
                     errors.append(f"Strategy '{strategy_name}': "
                                 f"Referenced indicator '{indicator_name}' not found")
 

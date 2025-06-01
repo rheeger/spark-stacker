@@ -30,6 +30,8 @@ def register_utility_commands(cli_group):
     cli_group.add_command(diagnose)
     cli_group.add_command(clean_cache)
     cli_group.add_command(export_examples)
+    cli_group.add_command(test_real_data)
+    cli_group.add_command(diagnose_data_issues)
 
 
 @click.command("validate-config")
@@ -460,8 +462,8 @@ def diagnose(ctx, component: str, output_report: Optional[str]):
         data_issues = []
 
         # Check data directories
-        tests_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        results_dir = os.path.join(tests_dir, "results")
+        tests_dir = os.path.dirname(os.path.dirname(__file__))
+        results_dir = os.path.join(tests_dir, "__test_results__")
 
         if os.path.exists(results_dir):
             click.echo(f"   ✅ Results directory exists: {results_dir}")
@@ -577,7 +579,7 @@ def clean_cache(ctx, cache_type: str, dry_run: bool, force: bool):
     click.echo(f"🔍 Mode: {'Dry run' if dry_run else 'Live cleaning'}")
     click.echo()
 
-    tests_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    tests_dir = os.path.dirname(os.path.dirname(__file__))
 
     files_to_remove = []
     total_size = 0
@@ -729,7 +731,7 @@ def export_examples(ctx, example_type: str, output_dir: Optional[str], overwrite
     """
     # Determine output directory
     if not output_dir:
-        tests_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        tests_dir = os.path.dirname(os.path.dirname(__file__))
         output_dir = os.path.join(tests_dir, "examples")
 
     os.makedirs(output_dir, exist_ok=True)
@@ -987,3 +989,201 @@ For more information, see the main documentation.
     else:
         click.echo("\n⚠️  No files created (all examples already exist)")
         click.echo("   Use --overwrite to replace existing examples")
+
+
+@click.command()
+@click.option('--exchange', help='Test specific exchange (hyperliquid, coinbase, kraken)')
+@click.option('--symbol', default='ETH-USD', help='Symbol to test data fetching for')
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
+@click.pass_context
+def test_real_data(ctx, exchange: Optional[str], symbol: str, verbose: bool):
+    """Test real data connectivity and diagnose issues."""
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    click.echo("🔍 Testing Real Data Connectivity...")
+    click.echo("=" * 50)
+
+    try:
+        from tests._utils.test_real_data_isolation import (
+            load_environment_variables, test_config_based_initialization,
+            test_connector_creation_isolated, test_real_data_fetching)
+
+        # Load and check environment variables
+        click.echo("\n📋 Checking Environment Variables...")
+        load_environment_variables()
+
+        # Test connector creation
+        click.echo("\n🔧 Testing Connector Creation...")
+        connectors = test_connector_creation_isolated()
+
+        if exchange and exchange in connectors:
+            # Test specific exchange
+            specific_connectors = {exchange: connectors[exchange]}
+            click.echo(f"\n📊 Testing {exchange.upper()} Data Fetching...")
+            results = test_real_data_fetching(specific_connectors)
+        elif connectors:
+            # Test all available connectors
+            click.echo(f"\n📊 Testing Data Fetching for {len(connectors)} connectors...")
+            results = test_real_data_fetching(connectors)
+        else:
+            click.echo("\n❌ No connectors available for testing")
+            click.echo("\nTo set up real data access, create a .env file with exchange credentials:")
+            click.echo("- packages/shared/.env (recommended)")
+            click.echo("- packages/spark-app/.env")
+
+            click.echo("\nRequired environment variables:")
+            click.echo("HYPERLIQUID: WALLET_ADDRESS, PRIVATE_KEY")
+            click.echo("COINBASE: COINBASE_API_KEY, COINBASE_API_SECRET")
+            click.echo("KRAKEN: KRAKEN_API_KEY, KRAKEN_API_SECRET")
+            return
+
+        # Display results
+        click.echo("\n📈 Data Fetching Results:")
+        for exchange_name, exchange_results in results.items():
+            click.echo(f"\n{exchange_name.upper()}:")
+            for key, value in exchange_results.items():
+                if 'error' in key:
+                    click.echo(f"  ❌ {key}: {value}")
+                else:
+                    click.echo(f"  ✅ {key}: {value} candles")
+
+        # Test config-based initialization
+        click.echo("\n⚙️  Testing Config-Based Initialization...")
+        config_connectors = test_config_based_initialization()
+
+        if config_connectors:
+            click.echo(f"✅ Config-based initialization successful: {len(config_connectors)} connectors")
+        else:
+            click.echo("❌ Config-based initialization failed")
+
+        # Summary
+        click.echo("\n📊 Summary:")
+        click.echo(f"Direct connectors: {len(connectors)}")
+        click.echo(f"Config connectors: {len(config_connectors)}")
+
+        if connectors or config_connectors:
+            click.echo("✅ Real data collection is working!")
+
+            # Provide CLI usage hint
+            click.echo("\n💡 To use real data in CLI commands:")
+            click.echo("python tests/_utils/cli/main.py real-data RSI --symbol ETH-USD --days 7")
+        else:
+            click.echo("❌ Real data collection needs setup")
+
+    except Exception as e:
+        click.echo(f"❌ Test failed: {e}")
+        if verbose:
+            import traceback
+            click.echo(traceback.format_exc())
+
+
+@click.command()
+@click.option('--check-env', is_flag=True, help='Check environment variables only')
+@click.option('--check-config', is_flag=True, help='Check configuration only')
+@click.option('--check-connectors', is_flag=True, help='Check connector creation only')
+@click.pass_context
+def diagnose_data_issues(ctx, check_env: bool, check_config: bool, check_connectors: bool):
+    """Diagnose common data fetching issues."""
+    click.echo("🔬 Diagnosing Data Fetching Issues...")
+    click.echo("=" * 40)
+
+    if not any([check_env, check_config, check_connectors]):
+        # Run all checks by default
+        check_env = check_config = check_connectors = True
+
+    try:
+        if check_env:
+            click.echo("\n📋 Environment Variables Check:")
+            env_vars = {
+                'WALLET_ADDRESS': 'Hyperliquid wallet address',
+                'PRIVATE_KEY': 'Hyperliquid private key',
+                'COINBASE_API_KEY': 'Coinbase API key',
+                'COINBASE_API_SECRET': 'Coinbase API secret',
+                'KRAKEN_API_KEY': 'Kraken API key',
+                'KRAKEN_API_SECRET': 'Kraken API secret'
+            }
+
+            missing_vars = []
+            for var, description in env_vars.items():
+                value = os.environ.get(var, '')
+                if value:
+                    click.echo(f"  ✅ {var}: Set ({len(value)} chars)")
+                else:
+                    click.echo(f"  ❌ {var}: Not set ({description})")
+                    missing_vars.append(var)
+
+            if missing_vars:
+                click.echo(f"\n⚠️  Missing {len(missing_vars)} environment variables")
+                click.echo("   These are needed for real data fetching")
+
+        if check_config:
+            click.echo("\n⚙️  Configuration Check:")
+            try:
+                from pathlib import Path
+                config_path = Path(__file__).parents[4] / "shared" / "config.json"
+
+                if config_path.exists():
+                    click.echo(f"  ✅ Config file found: {config_path}")
+
+                    import json
+                    with open(config_path) as f:
+                        config = json.load(f)
+
+                    exchanges = config.get('exchanges', [])
+                    enabled_exchanges = [ex for ex in exchanges if ex.get('enabled', False)]
+
+                    click.echo(f"  📊 Total exchanges configured: {len(exchanges)}")
+                    click.echo(f"  ✅ Enabled exchanges: {len(enabled_exchanges)}")
+
+                    for ex in enabled_exchanges:
+                        click.echo(f"    - {ex.get('name', 'unknown')}: {ex.get('exchange_type', 'unknown')}")
+
+                    if not enabled_exchanges:
+                        click.echo("  ⚠️  No exchanges are enabled in config")
+                        click.echo("     Set 'enabled': true for at least one exchange")
+                else:
+                    click.echo(f"  ❌ Config file not found: {config_path}")
+
+            except Exception as e:
+                click.echo(f"  ❌ Config check failed: {e}")
+
+        if check_connectors:
+            click.echo("\n🔧 Connector Creation Check:")
+            try:
+                from app.connectors.connector_factory import ConnectorFactory
+                available_types = ConnectorFactory.get_available_connectors()
+                click.echo(f"  📋 Available connector types: {', '.join(available_types)}")
+
+                # Test creating connectors without credentials
+                for exchange_type in available_types:
+                    try:
+                        connector = ConnectorFactory.create_connector(
+                            exchange_type=exchange_type,
+                            name=f"test_{exchange_type}",
+                            wallet_address="test",
+                            private_key="test",
+                            api_key="test",
+                            api_secret="test",
+                            testnet=True
+                        )
+                        if connector:
+                            click.echo(f"  ✅ {exchange_type}: Connector creation possible")
+                        else:
+                            click.echo(f"  ❌ {exchange_type}: Connector creation failed")
+                    except Exception as e:
+                        click.echo(f"  ⚠️  {exchange_type}: {str(e)[:50]}...")
+
+            except Exception as e:
+                click.echo(f"  ❌ Connector check failed: {e}")
+
+        # Provide recommendations
+        click.echo("\n💡 Recommendations:")
+        click.echo("1. Create .env file with exchange credentials")
+        click.echo("2. Enable at least one exchange in config.json")
+        click.echo("3. Use testnet/sandbox credentials for testing")
+        click.echo("4. Run 'test-real-data' command to verify setup")
+
+    except Exception as e:
+        click.echo(f"❌ Diagnosis failed: {e}")

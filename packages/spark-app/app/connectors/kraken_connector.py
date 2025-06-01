@@ -1554,19 +1554,36 @@ class KrakenConnector(BaseConnector):
             if not self.client:
                 self.connect()
 
-            # Convert BTC to XBT for Kraken API if needed
-            kraken_symbol = symbol
-            if symbol == 'BTC':
-                kraken_symbol = 'XBT'
+            # Convert symbol to Kraken's pair format
+            product_id = None
 
-            # Get the right Kraken symbol format
-            if kraken_symbol == 'XBT':
-                product_id = 'XXBTZUSD'
-            elif kraken_symbol == 'ETH':
-                product_id = 'XETHZUSD'
+            # Handle standard symbol formats like ETH-USD, BTC-USD, SOL-USD
+            if symbol.endswith('-USD'):
+                base_symbol = symbol.replace('-USD', '')
+                if base_symbol == 'BTC':
+                    product_id = 'XXBTZUSD'  # Kraken's format for BTC/USD
+                elif base_symbol == 'ETH':
+                    product_id = 'XETHZUSD'  # Kraken's format for ETH/USD
+                elif base_symbol == 'SOL':
+                    product_id = 'SOLUSD'    # Kraken's format for SOL/USD
+                else:
+                    # For other symbols, try common patterns
+                    product_id = f"{base_symbol}USD"
             else:
-                # Try to get from symbol map or construct
-                product_id = self.symbol_map.get(symbol, f"{symbol}USD")
+                # Handle direct symbol mapping (BTC, ETH, SOL)
+                if symbol == 'BTC':
+                    product_id = 'XXBTZUSD'
+                elif symbol == 'ETH':
+                    product_id = 'XETHZUSD'
+                elif symbol == 'SOL':
+                    product_id = 'SOLUSD'
+                else:
+                    # Try to get from symbol map or construct
+                    if symbol in self.symbol_map:
+                        product_id = self.symbol_map[symbol]
+                    else:
+                        # Default fallback
+                        product_id = f"{symbol}USD"
 
             # Convert interval to minutes
             interval_minutes = self._convert_interval_to_minutes(interval)
@@ -1600,11 +1617,11 @@ class KrakenConnector(BaseConnector):
                 if len(candle) >= 8:
                     candles.append({
                         'timestamp': int(candle[0]) * 1000,  # Convert to ms
-                        'open': candle[1],
-                        'high': candle[2],
-                        'low': candle[3],
-                        'close': candle[4],
-                        'volume': candle[6]
+                        'open': float(candle[1]),
+                        'high': float(candle[2]),
+                        'low': float(candle[3]),
+                        'close': float(candle[4]),
+                        'volume': float(candle[6])
                     })
 
             return candles
@@ -1621,71 +1638,62 @@ class KrakenConnector(BaseConnector):
         end_time: Optional[int] = None,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        """Get historical candles for futures markets"""
+        """Get historical candles from futures markets."""
         try:
-            # Convert our interval to Kraken futures interval format
-            interval_map = {
-                "1m": 60,
-                "5m": 300,
-                "15m": 900,
-                "30m": 1800,
-                "1h": 3600,
-                "4h": 14400,
-                "1d": 86400,
-            }
+            if not self.client:
+                self.connect()
 
-            kraken_interval = interval_map.get(interval)
-            if not kraken_interval:
-                logger.error(f"Unsupported interval for futures: {interval}")
-                return []
-
-            # Get the futures symbol
+            # Convert symbol to Kraken's pair format
             product_id = self._get_product_id(symbol, MarketType.PERPETUAL)
 
-            # Prepare parameters
+            # Convert interval to minutes
+            interval_minutes = self._convert_interval_to_minutes(interval)
+
+            # Prepare request params
             params = {
-                'symbol': product_id,
-                'resolution': kraken_interval,
+                'pair': product_id,
+                'interval': interval_minutes
             }
 
+            # Add start/end times if provided
             if start_time:
-                params['from'] = int(start_time / 1000)  # Convert to seconds
-            if end_time:
-                params['to'] = int(end_time / 1000)  # Convert to seconds
-            if limit:
-                params['limit'] = limit
+                params['since'] = start_time // 1000  # Convert from ms to seconds
 
-            # Make the API call
-            response = self._make_futures_request('GET', 'history/candles', params)
+            # Call the OHLC endpoint
+            response = self.client.query_public('OHLC', params)
 
             if 'error' in response and response['error']:
                 logger.error(f"Error fetching futures candles: {response['error']}")
                 return []
 
+            # Process candles
+            candles_data = response.get('result', {}).get(product_id, [])
+            if not candles_data:
+                logger.warning(f"No candles data found for {product_id}")
+                return []
+
             candles = []
-            for candle in response.get('candles', []):
-                try:
+            for candle in candles_data[:limit]:
+                # Kraken format: [time, open, high, low, close, vwap, volume, count]
+                if len(candle) >= 8:
                     candles.append({
-                        "timestamp": int(candle['timestamp'] * 1000),  # Convert to milliseconds
-                        "open": float(candle['open']),
-                        "high": float(candle['high']),
-                        "low": float(candle['low']),
-                        "close": float(candle['close']),
-                        "volume": float(candle['volume']),
+                        'timestamp': int(candle[0]) * 1000,  # Convert to ms
+                        'open': float(candle[1]),
+                        'high': float(candle[2]),
+                        'low': float(candle[3]),
+                        'close': float(candle[4]),
+                        'volume': float(candle[6])
                     })
-                except (KeyError, ValueError) as e:
-                    logger.error(f"Error processing futures candle: {e}")
-                    continue
 
             return candles
 
         except Exception as e:
-            logger.error(f"Error fetching futures historical candles: {e}")
+            logger.error(f"Error getting futures historical candles for {symbol}: {e}")
             return []
 
     def _convert_interval_to_minutes(self, interval: str) -> int:
         """
-        Convert our standard interval format to Kraken interval in minutes.
+        Convert our standard interval format to minutes.
 
         Args:
             interval: Time interval (e.g., '1m', '5m', '1h', '1d')
@@ -1702,124 +1710,17 @@ class KrakenConnector(BaseConnector):
             "1h": 60,
             "4h": 240,
             "6h": 360,
-            "12h": 720,
             "1d": 1440,
-            "3d": 4320,
-            "1w": 10080,
-            "2w": 20160,
-            "1M": 43200,
         }
 
-        return minutes_map.get(interval, 1)  # Default to 1m if not found
-
-    def get_funding_rate(self, symbol: str) -> Dict[str, Any]:
-        """
-        Get funding rate for a perpetual market.
-
-        Args:
-            symbol: The market symbol (e.g., 'BTC')
-
-        Returns:
-            Dict with funding rate info
-        """
-        try:
-            # Check if the symbol is a futures/perpetual symbol
-            if symbol not in self.futures_symbol_map:
-                return {
-                    "symbol": symbol,
-                    "rate": 0.0,
-                    "next_funding_time": None,
-                    "message": "Spot markets do not have funding rates",
-                }
-
-            # For futures/perpetual markets, get the funding rate
-            product_id = self._get_product_id(symbol, MarketType.PERPETUAL)
-
-            # This is a placeholder for a real implementation
-            # In a real implementation, we would use the Futures API
-            # to fetch funding rates
-
-            logger.warning("Futures funding rate not fully implemented")
-
-            # Return placeholder funding rate
-            return {
-                "symbol": symbol,
-                "rate": 0.0001,  # Placeholder
-                "next_funding_time": int(time.time() * 1000) + 3600000,  # Placeholder (1 hour from now)
-                "message": "Funding rate information (placeholder)",
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting funding rate for {symbol}: {e}")
-            return {
-                "symbol": symbol,
-                "rate": 0.0,
-                "next_funding_time": None,
-                "message": f"Error fetching funding rate: {e}",
-            }
-
-    def get_leverage_tiers(self, symbol: str) -> List[Dict[str, Any]]:
-        """
-        Get information about leverage tiers and limits.
-
-        Args:
-            symbol: The market symbol (e.g., 'BTC')
-
-        Returns:
-            List[Dict[str, Any]]: Information about leverage tiers
-        """
-        try:
-            # Check if the symbol is a futures/perpetual symbol
-            if symbol not in self.futures_symbol_map:
-                # Return empty list for spot markets
-                return []
-
-            # For futures/perpetual markets, get the leverage tiers
-            # This is a placeholder for a real implementation
-
-            # Return placeholder leverage tiers
-            return [
-                {
-                    "tier": 1,
-                    "min_notional": 0,
-                    "max_notional": 50000,
-                    "max_leverage": 5.0,
-                    "maintenance_margin_rate": 0.01,
-                    "initial_margin_rate": 0.02,
-                },
-                {
-                    "tier": 2,
-                    "min_notional": 50000,
-                    "max_notional": 250000,
-                    "max_leverage": 4.0,
-                    "maintenance_margin_rate": 0.025,
-                    "initial_margin_rate": 0.05,
-                },
-                {
-                    "tier": 3,
-                    "min_notional": 250000,
-                    "max_notional": 1000000,
-                    "max_leverage": 3.0,
-                    "maintenance_margin_rate": 0.05,
-                    "initial_margin_rate": 0.1,
-                },
-                {
-                    "tier": 4,
-                    "min_notional": 1000000,
-                    "max_notional": 10000000,
-                    "max_leverage": 2.0,
-                    "maintenance_margin_rate": 0.1,
-                    "initial_margin_rate": 0.15,
-                },
-            ]
-
-        except Exception as e:
-            logger.error(f"Error getting leverage tiers for {symbol}: {e}")
-            return []
+        return minutes_map.get(interval, 60)  # Default to 1h if not found
 
     def set_leverage(self, symbol: str, leverage: float) -> Dict[str, Any]:
         """
         Set leverage for a symbol.
+
+        For Kraken spot trading, leverage is typically limited.
+        For futures/perpetual trading, this would adjust the leverage.
 
         Args:
             symbol: The market symbol (e.g., 'BTC')
@@ -1829,229 +1730,69 @@ class KrakenConnector(BaseConnector):
             Dict[str, Any]: Result of setting leverage
         """
         try:
-            # Check if the symbol is a futures/perpetual symbol
-            if symbol not in self.futures_symbol_map:
-                logger.info(f"Ignoring set_leverage request for spot trading symbol {symbol}")
+            if not self.client:
+                self.connect()
+
+            # Check if we're dealing with spot or futures/perpetual markets
+            if MarketType.SPOT in self.market_types and leverage > 5.0:
+                logger.warning(f"High leverage ({leverage}x) requested for spot market. Kraken spot leverage is limited.")
+
+            # For spot markets, leverage settings are different than futures
+            if MarketType.SPOT in self.market_types:
+                # Spot leverage in Kraken is handled differently
+                # For now, return success but note limitation
                 return {
-                    "success": False,
-                    "message": f"Leverage trading is not supported for spot trading. Symbol: {symbol}, Requested leverage: {leverage}",
+                    "success": True,
+                    "message": f"Leverage setting acknowledged for spot trading. Kraken spot leverage is limited.",
                     "symbol": symbol,
-                    "leverage": 1.0,  # Always 1.0 for spot trading
+                    "leverage": min(leverage, 5.0),  # Cap at 5x for spot
                 }
 
-            # For futures/perpetual markets, set the leverage
-            product_id = self._get_product_id(symbol, MarketType.PERPETUAL)
+            # For futures/perpetual markets
+            if MarketType.PERPETUAL in self.market_types or MarketType.FUTURES in self.market_types:
+                # Use futures API to set leverage
+                product_id = self._get_product_id(symbol, MarketType.PERPETUAL)
 
-            # This is a placeholder for a real implementation
-            # In a real implementation, we would use the Futures API
-            # to set leverage
+                # Make request to set leverage on futures
+                response = self._make_futures_request(
+                    'POST',
+                    'leverage',
+                    {
+                        'symbol': product_id,
+                        'leverage': leverage
+                    },
+                    auth=True
+                )
 
-            logger.warning(f"Setting leverage for {symbol} to {leverage} (placeholder implementation)")
+                if 'error' in response:
+                    return {
+                        "success": False,
+                        "message": f"Failed to set leverage: {response['error']}",
+                        "symbol": symbol,
+                        "leverage": leverage,
+                    }
 
-            # Return success response
+                return {
+                    "success": True,
+                    "message": f"Leverage set to {leverage}x for {symbol}",
+                    "symbol": symbol,
+                    "leverage": leverage,
+                }
+
+            # If no supported market types
             return {
-                "success": True,
-                "message": f"Leverage set to {leverage} for {symbol}",
+                "success": False,
+                "message": f"Leverage setting not supported for current market types",
                 "symbol": symbol,
                 "leverage": leverage,
             }
 
         except Exception as e:
-            logger.error(f"Error setting leverage for {symbol}: {e}")
+            error_msg = f"Error setting leverage for {symbol}: {e}"
+            logger.error(error_msg)
             return {
                 "success": False,
-                "message": f"Error setting leverage: {e}",
+                "message": error_msg,
                 "symbol": symbol,
-                "leverage": 1.0,
-            }
-
-    def cleanup(self) -> bool:
-        """
-        Clean up resources when shutting down.
-
-        This method ensures that all resources are properly released
-        when the application is shutting down.
-
-        Returns:
-            bool: True if cleanup was successful, False otherwise
-        """
-        try:
-            logger.info("Cleaning up Kraken connector resources...")
-
-            # First try to disconnect if connected
-            if self.client:
-                self.disconnect()
-
-            return True
-        except Exception as e:
-            logger.error(f"Error during Kraken connector cleanup: {e}")
-            return False
-
-    def create_hedge_position(
-        self, symbol: str, amount: float, reference_price: float = None
-    ) -> Dict[str, Any]:
-        """
-        Create a hedge position for a given position on another exchange.
-
-        Args:
-            symbol: The market symbol (e.g., 'BTC')
-            amount: The amount to hedge (negative for short hedge, positive for long hedge)
-            reference_price: Optional reference price for limit orders
-
-        Returns:
-            Dict with hedge operation result
-        """
-        try:
-            if not self.client:
-                self.connect()
-
-            # Convert negative amount to positive for order size
-            order_amount = abs(amount)
-
-            # Determine if we need to buy or sell based on hedge direction
-            # Negative amount means we want a short hedge (sell on Kraken)
-            # Positive amount means we want a long hedge (buy on Kraken)
-            side = OrderSide.SELL if amount < 0 else OrderSide.BUY
-
-            self.orders_logger.info(
-                f"Creating hedge position for {symbol}: {side.value} {order_amount} at " +
-                (f"reference price ~{reference_price}" if reference_price else "market price")
-            )
-
-            # If reference price is provided, we'll try to place a limit order
-            # with a small buffer to increase fill probability
-            if reference_price:
-                # Add a small buffer to ensure fill (0.2%)
-                buffer = 0.002
-                if side == OrderSide.BUY:
-                    # For buy orders, willing to pay slightly more than reference
-                    limit_price = reference_price * (1 + buffer)
-                else:
-                    # For sell orders, willing to accept slightly less than reference
-                    limit_price = reference_price * (1 - buffer)
-
-                order_result = self.place_order(
-                    symbol=symbol,
-                    side=side,
-                    order_type=OrderType.LIMIT,
-                    amount=order_amount,
-                    leverage=1.0,  # Default leverage
-                    price=limit_price,
-                )
-            else:
-                # Without reference price, use market order for immediate execution
-                order_result = self.place_order(
-                    symbol=symbol,
-                    side=side,
-                    order_type=OrderType.MARKET,
-                    amount=order_amount,
-                    leverage=1.0,  # Default leverage
-                )
-
-            # Check if order placement was successful
-            if "error" in order_result:
-                self.orders_logger.error(f"Failed to create hedge position: {order_result['error']}")
-                return {
-                    "success": False,
-                    "message": f"Hedge creation failed: {order_result['error']}",
-                    "hedge_amount": 0.0,
-                    "hedge_direction": side.value,
-                }
-
-            # Return successful hedge result
-            self.orders_logger.info(f"Successfully created hedge position with order ID: {order_result['order_id']}")
-            return {
-                "success": True,
-                "message": f"Hedge position created with {side.value} order",
-                "order": order_result,
-                "hedge_amount": order_amount,
-                "hedge_direction": side.value,
-            }
-
-        except Exception as e:
-            error_msg = f"Error creating hedge position for {symbol}: {e}"
-            self.orders_logger.error(error_msg)
-            logger.error(error_msg)
-            return {
-                "success": False,
-                "message": error_msg,
-                "hedge_amount": 0.0,
-                "hedge_direction": OrderSide.BUY.value if amount > 0 else OrderSide.SELL.value,
-            }
-
-    def adjust_hedge_position(
-        self, symbol: str, target_amount: float, current_position: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
-        """
-        Adjust an existing hedge position to match a target amount.
-
-        Args:
-            symbol: The market symbol (e.g., 'BTC')
-            target_amount: The new target hedge amount (negative for short, positive for long)
-            current_position: Optional dict with current position details
-
-        Returns:
-            Dict with hedge adjustment result
-        """
-        try:
-            if not self.client:
-                self.connect()
-
-            # Get current position if not provided
-            if current_position is None:
-                # For spot markets, we need to get the current balance
-                balances = self.get_account_balance()
-                current_amount = balances.get(symbol, 0.0)
-
-                # For a proper hedge, we need to determine if this is a long or short hedge
-                # We'll assume long position (positive amount) by default
-                current_position = {
-                    "symbol": symbol,
-                    "size": current_amount,
-                    "side": "LONG",  # Spot positions are always long
-                }
-            else:
-                # Extract position details from the provided dict
-                current_amount = current_position.get("size", 0.0)
-                if current_position.get("side", "LONG") == "SHORT":
-                    # If it's a short position, use negative amount
-                    current_amount = -current_amount
-
-            # Calculate adjustment needed
-            adjustment = target_amount - current_amount
-
-            # If adjustment is very small, skip
-            if abs(adjustment) < 0.001:
-                self.orders_logger.info(
-                    f"Hedge position for {symbol} already at target amount (within tolerance)"
-                )
-                return {
-                    "success": True,
-                    "message": "No adjustment needed",
-                    "hedge_amount": current_amount,
-                    "target_amount": target_amount,
-                    "adjustment": 0.0,
-                }
-
-            # Create hedge for the adjustment amount
-            result = self.create_hedge_position(symbol, adjustment)
-
-            # Add additional context to the result
-            if result["success"]:
-                result["previous_amount"] = current_amount
-                result["target_amount"] = target_amount
-                result["adjustment"] = adjustment
-
-            return result
-
-        except Exception as e:
-            error_msg = f"Error adjusting hedge position for {symbol}: {e}"
-            self.orders_logger.error(error_msg)
-            logger.error(error_msg)
-            return {
-                "success": False,
-                "message": error_msg,
-                "previous_amount": 0.0,
-                "target_amount": target_amount,
-                "adjustment": 0.0,
+                "leverage": leverage,
             }

@@ -144,7 +144,7 @@ def demo(ctx, indicator: str, symbol: str, timeframe: str, days: int,
 
     # Determine output directory
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -171,7 +171,8 @@ def demo(ctx, indicator: str, symbol: str, timeframe: str, days: int,
 
         # Initialize components
         config_manager = ConfigManager(ctx.obj.get('config_path'))
-        data_manager = CLIDataManager()
+        config = config_manager.load_config()
+        data_manager = CLIDataManager(config=config)
         backtest_engine = BacktestEngine()
 
         # Create indicator backtest manager
@@ -268,7 +269,7 @@ def real_data(ctx, indicator: str, symbol: str, timeframe: str, days: int, outpu
 
     # Determine output directory
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -296,7 +297,8 @@ def real_data(ctx, indicator: str, symbol: str, timeframe: str, days: int, outpu
         # Initialize components
         config_path = ctx.obj.get('config_path')
         config_manager = ConfigManager(config_path)
-        data_manager = CLIDataManager()
+        config = config_manager.load_config()
+        data_manager = CLIDataManager(config=config)
         backtest_engine = BacktestEngine()
 
         # Create indicator backtest manager
@@ -407,7 +409,7 @@ def compare(ctx, indicators: str, symbol: str, timeframe: str, days: int,
 
     # Determine output directory
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -464,7 +466,7 @@ def compare_popular(ctx, symbol: str, timeframe: str, days: int,
 
     # Determine output directory
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "results")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "__test_results__")
 
     os.makedirs(output_dir, exist_ok=True)
 

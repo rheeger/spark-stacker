@@ -2110,10 +2110,8 @@ class HyperliquidConnector(BaseConnector):
         """
         Convert composite symbols like 'ETH-USD' to base asset 'ETH' for Hyperliquid API.
 
-        IMPORTANT: This method is used throughout the connector to ensure compatibility
-        between the application's symbol format (ETH-USD) and Hyperliquid's format (ETH).
-        All methods that need to lookup symbols in Hyperliquid should use this translation.
-        The method will always return the symbol in uppercase for consistency with Hyperliquid API.
+        This method now uses the centralized symbol converter while maintaining
+        Hyperliquid-specific validation and error handling.
 
         Args:
             symbol: Trading symbol that may contain a separator (e.g., 'ETH-USD')
@@ -2128,33 +2126,47 @@ class HyperliquidConnector(BaseConnector):
             logger.error("Received empty or None symbol for translation")
             raise ValueError("Symbol cannot be None or empty")
 
-        # Strip whitespace and convert to uppercase first
-        cleaned_symbol = symbol.strip().upper()
+        # Strip whitespace first
+        cleaned_symbol = symbol.strip()
 
         if not cleaned_symbol:
             logger.error("Symbol contains only whitespace")
             raise ValueError("Symbol cannot be only whitespace")
 
-        # Check for invalid characters
-        valid_chars = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
-        invalid_chars = set(cleaned_symbol) - valid_chars
-        if invalid_chars:
-            logger.error(f"Symbol contains invalid characters: {invalid_chars}")
-            raise ValueError(f"Symbol contains invalid characters: {invalid_chars}")
+        try:
+            # Use centralized symbol converter for consistency
+            from app.core.symbol_converter import convert_symbol_for_exchange
+            translated_symbol = convert_symbol_for_exchange(cleaned_symbol, "hyperliquid")
 
-        original_symbol = cleaned_symbol
-        translated_symbol = original_symbol.split('-')[0] if '-' in original_symbol else original_symbol
+            # Log the translation with structured data
+            log_data = {
+                "original_symbol": cleaned_symbol,
+                "translated_symbol": translated_symbol,
+                "has_separator": '-' in cleaned_symbol,
+                "method": "translate_symbol"
+            }
+            logger.debug(f"Symbol translation: {json.dumps(log_data)}")
 
-        # Log the translation with structured data
-        log_data = {
-            "original_symbol": original_symbol,
-            "translated_symbol": translated_symbol,
-            "has_separator": '-' in original_symbol,
-            "method": "translate_symbol"
-        }
-        logger.debug(f"Symbol translation: {json.dumps(log_data)}")
+            return translated_symbol
 
-        return translated_symbol
+        except Exception as e:
+            # If centralized converter fails, fall back to simple parsing
+            # for backward compatibility
+            logger.warning(f"Centralized symbol conversion failed for {symbol}: {e}")
+
+            # Check for invalid characters in fallback
+            valid_chars = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+            invalid_chars = set(cleaned_symbol.upper()) - valid_chars
+            if invalid_chars:
+                logger.error(f"Symbol contains invalid characters: {invalid_chars}")
+                raise ValueError(f"Symbol contains invalid characters: {invalid_chars}")
+
+            # Simple fallback parsing
+            original_symbol = cleaned_symbol.upper()
+            translated_symbol = original_symbol.split('-')[0] if '-' in original_symbol else original_symbol
+
+            logger.debug(f"Fallback symbol translation: {original_symbol} -> {translated_symbol}")
+            return translated_symbol
 
     def get_leverage_tiers(self, symbol: str) -> List[Dict[str, Any]]:
         """

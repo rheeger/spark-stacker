@@ -158,11 +158,15 @@ class ComparisonManager:
         # Include scenario-based comparison if requested
         scenario_results = {}
         if include_scenarios and self.scenario_manager:
+            include_real_data = test_params.get('use_real_data', True)
+            scenario_filter = test_params.get('scenario_filter', None)
             for strategy_name in strategy_names:
                 scenario_results[strategy_name] = self.scenario_manager.run_strategy_scenarios(
                     strategy_name=strategy_name,
                     days=test_params.get('days', 30),
-                    parallel_execution=True
+                    parallel_execution=True,
+                    scenario_filter=scenario_filter,
+                    include_real_data=include_real_data
                 )
 
         # Generate comparison analysis
@@ -725,3 +729,56 @@ class ComparisonManager:
             'comparison_results': len(self.comparison_results),
             'total_memory_usage': f"{len(str(self.cached_backtests)) + len(str(self.comparison_results))} chars"
         }
+
+    def run_strategy_comparison(
+        self,
+        strategy_names: List[str],
+        scenarios: List[str],
+        days: int = 30
+    ) -> ComparisonResult:
+        """
+        Run strategy comparison with specific scenarios.
+
+        This method provides a convenient interface for running strategy comparisons
+        with scenario-based testing, matching the expected interface from strategy commands.
+
+        Args:
+            strategy_names: List of strategy names to compare
+            scenarios: List of scenario names to test (e.g., ["bull", "bear", "real"])
+            days: Number of days to test (default: 30)
+
+        Returns:
+            ComparisonResult with strategy comparison data including scenario results
+        """
+        # Determine if real data scenario is included
+        include_real_data = "real" in scenarios
+
+        # Set up test parameters
+        test_params = {
+            'days': days,
+            'use_real_data': include_real_data,
+            'scenario_filter': scenarios
+        }
+
+        # Initialize scenario manager if not already done
+        if not self.scenario_manager and scenarios:
+            from cli.core.scenario_manager import ScenarioManager
+            self.scenario_manager = ScenarioBacktestManager(
+                config_manager=self.config_manager,
+                data_manager=self.data_manager,
+                scenario_manager=ScenarioManager(
+                    data_manager=self.data_manager,
+                    config_manager=self.config_manager,
+                    default_duration_days=days
+                ),
+                strategy_manager=self.strategy_manager,
+                output_dir=self.output_dir
+            )
+
+        # Run the comparison with scenarios
+        return self.compare_strategies(
+            strategy_names=strategy_names,
+            test_params=test_params,
+            metrics=self.STANDARD_METRICS,
+            include_scenarios=True if scenarios else False
+        )

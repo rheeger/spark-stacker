@@ -10,15 +10,9 @@ from io import StringIO
 from unittest.mock import ANY, MagicMock, PropertyMock, patch
 
 import pytest
-
-from app.connectors.base_connector import (
-    BaseConnector,
-    MarketType,
-    OrderSide,
-    OrderStatus,
-    OrderType,
-    TimeInForce,
-)
+from app.connectors.base_connector import (BaseConnector, MarketType,
+                                           OrderSide, OrderStatus, OrderType,
+                                           TimeInForce)
 from app.connectors.coinbase_connector import CoinbaseConnector
 
 
@@ -299,7 +293,7 @@ def test_get_positions(coinbase_connector, mock_rest_client):
 
     positions = coinbase_connector.get_positions()
     assert len(positions) == 1
-    assert positions[0]["symbol"] == "ETH"
+    assert positions[0]["symbol"] == "ETH-USD"
     assert positions[0]["size"] == 5.0
     assert positions[0]["leverage"] == 1.0  # Spot is always 1x leverage
 
@@ -333,7 +327,7 @@ def test_place_market_order(coinbase_connector, mock_rest_client):
 
     assert order["order_id"] == "test-order-id"
     assert order["status"] == OrderStatus.OPEN.value
-    assert order["symbol"] == "ETH"
+    assert order["symbol"] == "ETH-USD"
 
 
 def test_place_limit_order(coinbase_connector, mock_rest_client):
@@ -361,7 +355,7 @@ def test_place_limit_order(coinbase_connector, mock_rest_client):
 
     assert order["order_id"] == "test-order-id"
     assert order["status"] == OrderStatus.OPEN.value
-    assert order["symbol"] == "ETH"
+    assert order["symbol"] == "ETH-USD"
     assert float(order["price"]) == 2600.0
 
 
@@ -413,7 +407,7 @@ def test_get_order(coinbase_connector, mock_rest_client):
     order = coinbase_connector.get_order("test-order-id")
 
     assert order["order_id"] == "test-order-id"
-    assert order["symbol"] == "ETH"
+    assert order["symbol"] == "ETH-USD"
     assert order["status"] == OrderStatus.OPEN.value
     assert order["side"] == "BUY"
     assert float(order["price"]) == 2500.0

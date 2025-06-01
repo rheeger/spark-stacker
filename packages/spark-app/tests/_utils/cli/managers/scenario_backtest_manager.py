@@ -266,12 +266,38 @@ class ScenarioBacktestManager:
         all_scenarios = list(self.scenario_manager.scenario_configs.values())
 
         if scenario_filter:
-            scenarios = [s for s in all_scenarios if s.name in scenario_filter]
+            # Map simple names to ScenarioType values for matching
+            name_mapping = {
+                "bull": ScenarioType.BULL,
+                "bear": ScenarioType.BEAR,
+                "sideways": ScenarioType.SIDEWAYS,
+                "volatile": ScenarioType.HIGH_VOLATILITY,
+                "high_volatility": ScenarioType.HIGH_VOLATILITY,
+                "low-vol": ScenarioType.LOW_VOLATILITY,
+                "low_volatility": ScenarioType.LOW_VOLATILITY,
+                "choppy": ScenarioType.CHOPPY,
+                "gaps": ScenarioType.GAP_HEAVY,
+                "gap_heavy": ScenarioType.GAP_HEAVY,
+                "real": ScenarioType.REAL_DATA,
+                "real_data": ScenarioType.REAL_DATA
+            }
+
+            # Convert filter names to scenario types
+            requested_types = []
+            for name in scenario_filter:
+                scenario_type = name_mapping.get(name.lower())
+                if scenario_type:
+                    requested_types.append(scenario_type)
+                else:
+                    logger.warning(f"Unknown scenario name: {name}")
+
+            # Filter scenarios by type
+            scenarios = [s for s in all_scenarios if s.scenario_type in requested_types]
         else:
             scenarios = [s for s in all_scenarios if s.enabled]
 
-        # Add real data scenario if requested
-        if include_real_data:
+        # Add real data scenario if requested and not already in list
+        if include_real_data and not any(s.scenario_type == ScenarioType.REAL_DATA for s in scenarios):
             real_data_scenario = ScenarioConfig(
                 scenario_type=ScenarioType.REAL_DATA,
                 name="real_data",
@@ -402,13 +428,26 @@ class ScenarioBacktestManager:
         """Run a strategy backtest for a specific scenario."""
         use_real_data = scenario_config.scenario_type == ScenarioType.REAL_DATA
 
-        # For synthetic scenarios, we would generate appropriate data
-        # For now, we'll use the basic backtest functionality
+        # Map ScenarioType to MarketScenarioType for compatibility
+        scenario_type_mapping = {
+            ScenarioType.BULL: "bull_market",
+            ScenarioType.BEAR: "bear_market",
+            ScenarioType.SIDEWAYS: "sideways_ranging",
+            ScenarioType.HIGH_VOLATILITY: "high_volatility",
+            ScenarioType.LOW_VOLATILITY: "low_volatility",
+            ScenarioType.CHOPPY: "choppy_whipsaw",
+            ScenarioType.GAP_HEAVY: "gap_heavy",
+            ScenarioType.REAL_DATA: "real_data"
+        }
+
+        scenario_type_str = scenario_type_mapping.get(scenario_config.scenario_type, "sideways_ranging")
+
+        # For synthetic scenarios, pass the scenario type to generate appropriate data
         result = self.strategy_manager.backtest_strategy(
             days=days,
             use_real_data=use_real_data,
             additional_params={
-                'scenario_type': scenario_config.scenario_type.value,
+                'scenario_type': scenario_type_str,
                 'scenario_name': scenario_config.name
             }
         )

@@ -303,13 +303,20 @@ class ScenarioManager:
             return None
 
         try:
-            # Use DataManager to fetch real market data
-            return self.data_manager.fetch_market_data(
+            # Import DataRequest from data_manager module
+            from cli.core.data_manager import DataRequest, DataSourceType
+
+            # Create a data request for real data
+            request = DataRequest(
                 symbol=symbol,
                 timeframe=timeframe,
-                days=days,
-                source="live"
+                days_back=days,
+                source_preference=[DataSourceType.REAL_EXCHANGE, DataSourceType.CACHED]
             )
+
+            # Use DataManager to fetch real market data
+            df = self.data_manager.get_data(request)
+            return df
         except Exception as e:
             logger.error(f"Failed to fetch real data: {e}")
             return None

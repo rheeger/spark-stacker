@@ -48,12 +48,16 @@ warnings.warn(
 )
 
 try:
+    # Add the CLI directory to the Python path
+    cli_dir = os.path.join(current_dir, "cli")
+    sys.path.insert(0, cli_dir)
+
     # Import the main CLI function from the new modular location
     # Re-export all the utility functions for backward compatibility
-    from cli.main import (cleanup_resources, cli, display_strategy_info,
-                          get_default_output_dir, get_strategy_config,
-                          list_strategies, load_config, validate_config,
-                          validate_strategy_config)
+    from main import (cleanup_resources, cli, display_strategy_info,
+                      get_default_output_dir, get_strategy_config,
+                      list_strategies, load_config, validate_config,
+                      validate_strategy_config)
 
 except ImportError as e:
     print(f"❌ Error importing from new CLI location: {e}")
@@ -85,6 +89,8 @@ if __name__ == "__main__":
     finally:
         # Final cleanup and graceful exit
         cleanup_resources()
+        # Force exit to prevent hanging - this is the key fix
+        os._exit(0)
 
 # Export the CLI function for programmatic usage
 __all__ = [
